@@ -1,6 +1,8 @@
 """FTP synchronization service for 3GPP documents (P1-01)."""
 
+import asyncio
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from ftplib import FTP
 from typing import Callable
@@ -11,6 +13,17 @@ from analyzer.providers.storage_client import StorageClient
 
 # Contribution number pattern: e.g., S2-2401234, R1-2312345
 CONTRIBUTION_PATTERN = re.compile(r"^([A-Z]\d-\d{6,7})")
+
+
+@dataclass
+class DirectoryEntry:
+    """Represents a file or directory entry in FTP listing."""
+
+    name: str
+    entry_type: str  # "directory" or "file"
+    size: int | None = None  # Only for files
+    synced: bool = False  # Only for directories
+    synced_count: int | None = None  # Only for directories
 
 
 class FTPSyncService:
@@ -25,6 +38,38 @@ class FTPSyncService:
     FTP structure: ftp.3gpp.org/Meetings/{WG}/{meeting}/Docs/
     """
 
+    # Mock data for development when FTP is unavailable
+    MOCK_DIRECTORIES: dict[str, list[tuple[str, str, int | None]]] = {
+        "/": [
+            ("Meetings", "directory", None),
+            ("Specs", "directory", None),
+            ("Information", "directory", None),
+            ("readme.txt", "file", 1024),
+        ],
+        "/Meetings": [
+            ("SA2", "directory", None),
+            ("SA3", "directory", None),
+            ("RAN1", "directory", None),
+            ("RAN2", "directory", None),
+            ("CT1", "directory", None),
+        ],
+        "/Meetings/SA2": [
+            ("SA2_163", "directory", None),
+            ("SA2_162", "directory", None),
+            ("SA2_161", "directory", None),
+        ],
+        "/Meetings/SA2/SA2_163": [
+            ("Docs", "directory", None),
+            ("Agenda", "directory", None),
+        ],
+        "/Meetings/SA2/SA2_163/Docs": [
+            ("S2-2401001.zip", "file", 102400),
+            ("S2-2401002.zip", "file", 204800),
+            ("S2-2401003.doc", "file", 51200),
+            ("S2-2401004.docx", "file", 76800),
+        ],
+    }
+
     def __init__(
         self,
         firestore: FirestoreClient,
@@ -33,6 +78,7 @@ class FTPSyncService:
         user: str = "anonymous",
         password: str = "",
         base_path: str = "/Meetings",
+        mock_mode: bool = False,
     ):
         """
         Initialize FTP sync service.
@@ -44,6 +90,7 @@ class FTPSyncService:
             user: FTP username.
             password: FTP password.
             base_path: Base path on FTP server.
+            mock_mode: Use mock data instead of real FTP (for development).
         """
         self.firestore = firestore
         self.storage = storage
@@ -51,12 +98,115 @@ class FTPSyncService:
         self.user = user
         self.password = password
         self.base_path = base_path
+        self.mock_mode = mock_mode
 
     def _connect(self) -> FTP:
         """Establish FTP connection."""
         ftp = FTP(self.host)
         ftp.login(self.user, self.password)
         return ftp
+
+    def _list_directory_sync(self, path: str) -> list[tuple[str, str, int | None]]:
+        """
+        Synchronous FTP directory listing (runs in thread pool).
+
+        Returns list of (name, type, size) tuples.
+        """
+        if self.mock_mode:
+            return self.MOCK_DIRECTORIES.get(path, [])
+
+        ftp = self._connect()
+        try:
+            ftp.cwd(path)
+            result = []
+
+            for entry in ftp.mlsd():
+                name, facts = entry
+                if name in (".", ".."):
+                    continue
+
+                entry_type = facts.get("type", "")
+                if entry_type == "dir":
+                    result.append((name, "directory", None))
+                elif entry_type == "file":
+                    size = int(facts.get("size", 0))
+                    result.append((name, "file", size))
+
+            return result
+        finally:
+            ftp.quit()
+
+    async def list_directory(self, path: str = "/") -> dict:
+        """
+        List contents of a directory on the FTP server.
+
+        Args:
+            path: Directory path to list (e.g., "/" or "/Meetings/SA2")
+
+        Returns:
+            Dict with path, parent, and entries list.
+        """
+        # Run blocking FTP operation in thread pool
+        raw_entries = await asyncio.to_thread(self._list_directory_sync, path)
+
+        entries: list[DirectoryEntry] = []
+        for name, entry_type, size in raw_entries:
+            if entry_type == "directory":
+                full_path = f"{path.rstrip('/')}/{name}"
+                synced_count = await self._count_synced_documents(full_path)
+                entries.append(
+                    DirectoryEntry(
+                        name=name,
+                        entry_type="directory",
+                        synced=synced_count > 0,
+                        synced_count=synced_count if synced_count > 0 else None,
+                    )
+                )
+            else:
+                entries.append(
+                    DirectoryEntry(
+                        name=name,
+                        entry_type="file",
+                        size=size,
+                    )
+                )
+
+        # Sort: directories first, then alphabetically
+        entries.sort(key=lambda e: (e.entry_type != "directory", e.name.lower()))
+
+        # Compute parent path
+        parent = None
+        if path != "/":
+            parts = path.rstrip("/").rsplit("/", 1)
+            parent = parts[0] if parts[0] else "/"
+
+        return {
+            "path": path,
+            "parent": parent,
+            "entries": entries,
+        }
+
+    async def _count_synced_documents(self, directory_path: str) -> int:
+        """
+        Count documents synced from a given FTP directory path.
+
+        Checks if any documents have source_file.ftp_path starting with this directory.
+        """
+        # We need to query Firestore for documents with ftp_path starting with this path
+        # Since Firestore doesn't support startsWith directly, we use range query
+        path_prefix = f"{directory_path.rstrip('/')}/"
+
+        try:
+            query = (
+                self.firestore.client.collection(FirestoreClient.DOCUMENTS_COLLECTION)
+                .where("source_file.ftp_path", ">=", path_prefix)
+                .where("source_file.ftp_path", "<", path_prefix + "\uffff")
+            )
+            count_query = query.count()
+            results = count_query.get()
+            return results[0][0].value
+        except Exception:
+            return 0
 
     def _parse_contribution_number(self, filename: str) -> str | None:
         """Extract contribution number from filename."""
@@ -84,6 +234,72 @@ class FTPSyncService:
             )
         return None
 
+    def _download_file_sync(self, ftp_path: str) -> bytes:
+        """
+        Synchronous file download from FTP (runs in thread pool).
+
+        Returns file contents as bytes.
+        """
+        ftp = self._connect()
+        data = bytearray()
+
+        try:
+            ftp.retrbinary(f"RETR {ftp_path}", data.extend)
+        finally:
+            ftp.quit()
+
+        return bytes(data)
+
+    def _list_meeting_files_sync(self, meeting_path: str) -> list[dict]:
+        """
+        Synchronous listing of meeting files (runs in thread pool).
+
+        Returns list of file info dicts.
+        """
+        if self.mock_mode:
+            mock_entries = self.MOCK_DIRECTORIES.get(meeting_path, [])
+            files = []
+            for name, entry_type, size in mock_entries:
+                if entry_type == "file" and name.lower().endswith((".doc", ".docx", ".zip")):
+                    files.append(
+                        {
+                            "filename": name,
+                            "size_bytes": size or 0,
+                            "modified_at": datetime.utcnow(),
+                            "ftp_path": f"{meeting_path}/{name}",
+                        }
+                    )
+            return files
+
+        files = []
+        ftp = self._connect()
+
+        try:
+            ftp.cwd(meeting_path)
+
+            for entry in ftp.mlsd():
+                name, facts = entry
+                if facts.get("type") == "file":
+                    if name.lower().endswith((".doc", ".docx", ".zip")):
+                        modify_str = facts.get("modify", "")
+                        if modify_str:
+                            modified_at = datetime.strptime(modify_str, "%Y%m%d%H%M%S")
+                        else:
+                            modified_at = datetime.utcnow()
+
+                        files.append(
+                            {
+                                "filename": name,
+                                "size_bytes": int(facts.get("size", 0)),
+                                "modified_at": modified_at,
+                                "ftp_path": f"{meeting_path}/{name}",
+                            }
+                        )
+        finally:
+            ftp.quit()
+
+        return files
+
     async def list_meeting_files(
         self,
         meeting_path: str,
@@ -97,35 +313,7 @@ class FTPSyncService:
         Returns:
             List of file info dicts with filename, size, modified_at.
         """
-        files = []
-        ftp = self._connect()
-
-        try:
-            ftp.cwd(meeting_path)
-
-            # Use MLSD for detailed file listing
-            for entry in ftp.mlsd():
-                name, facts = entry
-                if facts.get("type") == "file":
-                    # Filter for document files
-                    if name.lower().endswith((".doc", ".docx", ".zip")):
-                        # Parse modification time
-                        modify_str = facts.get("modify", "")
-                        if modify_str:
-                            modified_at = datetime.strptime(modify_str, "%Y%m%d%H%M%S")
-                        else:
-                            modified_at = datetime.utcnow()
-
-                        files.append({
-                            "filename": name,
-                            "size_bytes": int(facts.get("size", 0)),
-                            "modified_at": modified_at,
-                            "ftp_path": f"{meeting_path}/{name}",
-                        })
-        finally:
-            ftp.quit()
-
-        return files
+        return await asyncio.to_thread(self._list_meeting_files_sync, meeting_path)
 
     async def sync_meeting(
         self,
@@ -193,10 +381,13 @@ class FTPSyncService:
                     # Update if file has changed
                     existing_modified = existing.get("source_file", {}).get("modified_at")
                     if existing_modified != file_info["modified_at"].isoformat():
-                        await self.firestore.update_document(doc_id, {
-                            "source_file": source_file.model_dump(mode="json"),
-                            "updated_at": datetime.utcnow().isoformat(),
-                        })
+                        await self.firestore.update_document(
+                            doc_id,
+                            {
+                                "source_file": source_file.model_dump(mode="json"),
+                                "updated_at": datetime.utcnow().isoformat(),
+                            },
+                        )
                         result["documents_updated"] += 1
                 else:
                     # Create new document with metadata only
@@ -239,20 +430,17 @@ class FTPSyncService:
             raise ValueError(f"Document has no FTP path: {document_id}")
 
         # Update status
-        await self.firestore.update_document(document_id, {
-            "status": DocumentStatus.DOWNLOADING.value,
-            "updated_at": datetime.utcnow().isoformat(),
-        })
+        await self.firestore.update_document(
+            document_id,
+            {
+                "status": DocumentStatus.DOWNLOADING.value,
+                "updated_at": datetime.utcnow().isoformat(),
+            },
+        )
 
         try:
-            # Download from FTP
-            ftp = self._connect()
-            data = bytearray()
-
-            try:
-                ftp.retrbinary(f"RETR {ftp_path}", data.extend)
-            finally:
-                ftp.quit()
+            # Download from FTP (run in thread pool)
+            data = await asyncio.to_thread(self._download_file_sync, ftp_path)
 
             # Upload to GCS
             meeting_id = doc_data.get("meeting", {}).get("id", "unknown")
@@ -262,18 +450,24 @@ class FTPSyncService:
             await self.storage.upload_bytes(bytes(data), gcs_path)
 
             # Update document with GCS path
-            await self.firestore.update_document(document_id, {
-                "source_file.gcs_original_path": gcs_path,
-                "status": DocumentStatus.DOWNLOADED.value,
-                "updated_at": datetime.utcnow().isoformat(),
-            })
+            await self.firestore.update_document(
+                document_id,
+                {
+                    "source_file.gcs_original_path": gcs_path,
+                    "status": DocumentStatus.DOWNLOADED.value,
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+            )
 
             return gcs_path
 
         except Exception as e:
-            await self.firestore.update_document(document_id, {
-                "status": DocumentStatus.ERROR.value,
-                "error_message": f"Download failed: {e}",
-                "updated_at": datetime.utcnow().isoformat(),
-            })
+            await self.firestore.update_document(
+                document_id,
+                {
+                    "status": DocumentStatus.ERROR.value,
+                    "error_message": f"Download failed: {e}",
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+            )
             raise

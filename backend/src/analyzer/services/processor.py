@@ -76,12 +76,14 @@ class ProcessorService:
 
         def emit_status(status: DocumentStatus, progress: float, message: str | None = None):
             if status_callback:
-                status_callback(StatusUpdate(
-                    document_id=document_id,
-                    status=status,
-                    progress=progress,
-                    message=message,
-                ))
+                status_callback(
+                    StatusUpdate(
+                        document_id=document_id,
+                        status=status,
+                        progress=progress,
+                        message=message,
+                    )
+                )
 
         try:
             # Step 1: Ensure file is downloaded
@@ -149,12 +151,14 @@ class ProcessorService:
                 error_message=str(e),
             )
             if status_callback:
-                status_callback(StatusUpdate(
-                    document_id=document_id,
-                    status=DocumentStatus.ERROR,
-                    progress=0.0,
-                    error=str(e),
-                ))
+                status_callback(
+                    StatusUpdate(
+                        document_id=document_id,
+                        status=DocumentStatus.ERROR,
+                        progress=0.0,
+                        error=str(e),
+                    )
+                )
             raise
 
     async def process_document_stream(
@@ -180,9 +184,7 @@ class ProcessorService:
             update_event.set()
 
         # Start processing in background
-        task = asyncio.create_task(
-            self.process_document(document_id, force, callback)
-        )
+        task = asyncio.create_task(self.process_document(document_id, force, callback))
 
         # Yield updates as they come
         try:

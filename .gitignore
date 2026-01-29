@@ -66,8 +66,7 @@ dmypy.json
 # Ruff
 .ruff_cache/
 
-# uv
-uv.lock
+# uv cache (but keep uv.lock for reproducible builds)
 
 # =============================================================================
 # Node.js / Frontend

@@ -76,10 +76,13 @@ class NormalizerService:
             return gcs_normalized
 
         # Update status
-        await firestore.update_document(document_id, {
-            "status": DocumentStatus.NORMALIZING.value,
-            "updated_at": datetime.utcnow().isoformat(),
-        })
+        await firestore.update_document(
+            document_id,
+            {
+                "status": DocumentStatus.NORMALIZING.value,
+                "updated_at": datetime.utcnow().isoformat(),
+            },
+        )
 
         try:
             # If already docx, just copy to normalized location
@@ -89,28 +92,32 @@ class NormalizerService:
                 await self.storage.upload_bytes(content, gcs_normalized)
 
             elif self._needs_conversion(filename):
-                gcs_normalized = await self._convert_doc_to_docx(
-                    gcs_original, meeting_id, filename
-                )
+                gcs_normalized = await self._convert_doc_to_docx(gcs_original, meeting_id, filename)
 
             else:
                 raise ValueError(f"Unsupported file format: {filename}")
 
             # Update document with normalized path
-            await firestore.update_document(document_id, {
-                "source_file.gcs_normalized_path": gcs_normalized,
-                "status": DocumentStatus.NORMALIZED.value,
-                "updated_at": datetime.utcnow().isoformat(),
-            })
+            await firestore.update_document(
+                document_id,
+                {
+                    "source_file.gcs_normalized_path": gcs_normalized,
+                    "status": DocumentStatus.NORMALIZED.value,
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+            )
 
             return gcs_normalized
 
         except Exception as e:
-            await firestore.update_document(document_id, {
-                "status": DocumentStatus.ERROR.value,
-                "error_message": f"Normalization failed: {e}",
-                "updated_at": datetime.utcnow().isoformat(),
-            })
+            await firestore.update_document(
+                document_id,
+                {
+                    "status": DocumentStatus.ERROR.value,
+                    "error_message": f"Normalization failed: {e}",
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+            )
             raise
 
     async def _convert_doc_to_docx(

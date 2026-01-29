@@ -141,10 +141,7 @@ async def index_document(
         # Re-index with fresh embeddings
         from analyzer.models.chunk import Chunk
 
-        chunk_objects = [
-            Chunk.from_firestore(c["id"], c)
-            for c in chunks
-        ]
+        chunk_objects = [Chunk.from_firestore(c["id"], c) for c in chunks]
 
         count = await vectorizer.reindex_document(
             request.document_id,

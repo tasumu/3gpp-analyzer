@@ -136,16 +136,18 @@ class HeadingBasedChunking(ChunkingStrategy):
         # Check if we need to split
         if len(full_content) <= self.max_chars:
             # Single chunk
-            return [self._create_chunk(
-                content=full_content,
-                document_id=document_id,
-                contribution_number=contribution_number,
-                meeting_id=meeting_id,
-                clause_number=clause_number,
-                clause_title=clause_title,
-                heading_hierarchy=heading_hierarchy,
-                structure_type=self._get_primary_structure_type(section),
-            )]
+            return [
+                self._create_chunk(
+                    content=full_content,
+                    document_id=document_id,
+                    contribution_number=contribution_number,
+                    meeting_id=meeting_id,
+                    clause_number=clause_number,
+                    clause_title=clause_title,
+                    heading_hierarchy=heading_hierarchy,
+                    structure_type=self._get_primary_structure_type(section),
+                )
+            ]
 
         # Split into multiple chunks
         return self._split_large_section(
@@ -180,7 +182,42 @@ class HeadingBasedChunking(ChunkingStrategy):
             if element_length > self.max_chars:
                 # Flush current content
                 if current_content:
-                    chunks.append(self._create_chunk(
+                    chunks.append(
+                        self._create_chunk(
+                            content="\n\n".join(current_content),
+                            document_id=document_id,
+                            contribution_number=contribution_number,
+                            meeting_id=meeting_id,
+                            clause_number=clause_number,
+                            clause_title=clause_title,
+                            heading_hierarchy=heading_hierarchy,
+                            structure_type=element.structure_type,
+                        )
+                    )
+                    current_content = []
+                    current_length = 0
+
+                # Split the large element
+                for part in self._split_text(element.content):
+                    chunks.append(
+                        self._create_chunk(
+                            content=part,
+                            document_id=document_id,
+                            contribution_number=contribution_number,
+                            meeting_id=meeting_id,
+                            clause_number=clause_number,
+                            clause_title=clause_title,
+                            heading_hierarchy=heading_hierarchy,
+                            structure_type=element.structure_type,
+                        )
+                    )
+                continue
+
+            # Check if adding this element exceeds limit
+            if current_length + element_length > self.max_chars and current_content:
+                # Flush current content
+                chunks.append(
+                    self._create_chunk(
                         content="\n\n".join(current_content),
                         document_id=document_id,
                         contribution_number=contribution_number,
@@ -188,38 +225,11 @@ class HeadingBasedChunking(ChunkingStrategy):
                         clause_number=clause_number,
                         clause_title=clause_title,
                         heading_hierarchy=heading_hierarchy,
-                        structure_type=element.structure_type,
-                    ))
-                    current_content = []
-                    current_length = 0
-
-                # Split the large element
-                for part in self._split_text(element.content):
-                    chunks.append(self._create_chunk(
-                        content=part,
-                        document_id=document_id,
-                        contribution_number=contribution_number,
-                        meeting_id=meeting_id,
-                        clause_number=clause_number,
-                        clause_title=clause_title,
-                        heading_hierarchy=heading_hierarchy,
-                        structure_type=element.structure_type,
-                    ))
-                continue
-
-            # Check if adding this element exceeds limit
-            if current_length + element_length > self.max_chars and current_content:
-                # Flush current content
-                chunks.append(self._create_chunk(
-                    content="\n\n".join(current_content),
-                    document_id=document_id,
-                    contribution_number=contribution_number,
-                    meeting_id=meeting_id,
-                    clause_number=clause_number,
-                    clause_title=clause_title,
-                    heading_hierarchy=heading_hierarchy,
-                    structure_type=self._get_primary_structure_type_from_content(current_content),
-                ))
+                        structure_type=self._get_primary_structure_type_from_content(
+                            current_content
+                        ),
+                    )
+                )
                 current_content = []
                 current_length = 0
 
@@ -228,16 +238,18 @@ class HeadingBasedChunking(ChunkingStrategy):
 
         # Flush remaining content
         if current_content:
-            chunks.append(self._create_chunk(
-                content="\n\n".join(current_content),
-                document_id=document_id,
-                contribution_number=contribution_number,
-                meeting_id=meeting_id,
-                clause_number=clause_number,
-                clause_title=clause_title,
-                heading_hierarchy=heading_hierarchy,
-                structure_type=StructureType.PARAGRAPH,
-            ))
+            chunks.append(
+                self._create_chunk(
+                    content="\n\n".join(current_content),
+                    document_id=document_id,
+                    contribution_number=contribution_number,
+                    meeting_id=meeting_id,
+                    clause_number=clause_number,
+                    clause_title=clause_title,
+                    heading_hierarchy=heading_hierarchy,
+                    structure_type=StructureType.PARAGRAPH,
+                )
+            )
 
         return chunks
 

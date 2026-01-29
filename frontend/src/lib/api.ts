@@ -7,11 +7,13 @@ import type {
   DocumentListResponse,
   DocumentStatus,
   DownloadResponse,
+  FTPBrowseResponse,
   MeetingsResponse,
   ProcessRequest,
 } from "./types";
 
 const API_BASE = "/api";
+const API_BASE_DIRECT = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 class ApiError extends Error {
   constructor(
@@ -103,12 +105,36 @@ export function createStatusStream(
   documentId: string,
   force = false,
 ): EventSource {
-  const url = `${API_BASE}/documents/${documentId}/status/stream?force=${force}`;
+  // SSE needs direct connection to backend
+  const url = `${API_BASE_DIRECT}/documents/${documentId}/status/stream?force=${force}`;
   return new EventSource(url);
 }
 
 export function createStatusWatcher(documentId: string): EventSource {
-  const url = `${API_BASE}/documents/${documentId}/status/watch`;
+  // SSE needs direct connection to backend
+  const url = `${API_BASE_DIRECT}/documents/${documentId}/status/watch`;
+  return new EventSource(url);
+}
+
+// FTP Browser APIs
+
+export async function browseFTP(path: string = "/"): Promise<FTPBrowseResponse> {
+  return fetchApi<FTPBrowseResponse>(`/ftp/browse?path=${encodeURIComponent(path)}`);
+}
+
+export async function startFTPSync(
+  path: string,
+  pathPattern?: string,
+): Promise<{ sync_id: string }> {
+  return fetchApi<{ sync_id: string }>("/ftp/sync", {
+    method: "POST",
+    body: JSON.stringify({ path, path_pattern: pathPattern }),
+  });
+}
+
+export function createFTPSyncStream(syncId: string): EventSource {
+  // SSE needs direct connection to backend (Next.js rewrites don't handle streaming well)
+  const url = `${API_BASE_DIRECT}/ftp/sync/${syncId}/stream`;
   return new EventSource(url);
 }
 

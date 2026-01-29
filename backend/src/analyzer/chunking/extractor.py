@@ -162,8 +162,7 @@ class DocxExtractor:
 
         # Get current heading hierarchy
         parent_headings = [
-            self._current_headings[level]
-            for level in sorted(self._current_headings.keys())
+            self._current_headings[level] for level in sorted(self._current_headings.keys())
         ]
 
         return StructureElement(

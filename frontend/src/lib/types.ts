@@ -127,3 +127,31 @@ export function formatDate(dateString: string): string {
     minute: "2-digit",
   });
 }
+
+// FTP Browser types
+
+export interface FTPDirectoryEntry {
+  name: string;
+  type: "directory" | "file";
+  size: number | null;
+  synced: boolean;
+  synced_count: number | null;
+}
+
+export interface FTPBrowseResponse {
+  path: string;
+  parent: string | null;
+  entries: FTPDirectoryEntry[];
+}
+
+export interface FTPSyncProgress {
+  sync_id: string;
+  status: "pending" | "running" | "completed" | "error";
+  message: string | null;
+  current: number;
+  total: number;
+  documents_found: number;
+  documents_new: number;
+  documents_updated: number;
+  errors: string[];
+}

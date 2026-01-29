@@ -130,10 +130,13 @@ class VectorizerService:
             return 0
 
         # Update document status
-        await self.firestore.update_document(document_id, {
-            "status": DocumentStatus.INDEXING.value,
-            "updated_at": datetime.utcnow().isoformat(),
-        })
+        await self.firestore.update_document(
+            document_id,
+            {
+                "status": DocumentStatus.INDEXING.value,
+                "updated_at": datetime.utcnow().isoformat(),
+            },
+        )
 
         try:
             # Delete existing chunks for this document
@@ -172,11 +175,14 @@ class VectorizerService:
             if progress_callback:
                 progress_callback("Finalizing", 0.95)
 
-            await self.firestore.update_document(document_id, {
-                "status": DocumentStatus.INDEXED.value,
-                "chunk_count": count,
-                "updated_at": datetime.utcnow().isoformat(),
-            })
+            await self.firestore.update_document(
+                document_id,
+                {
+                    "status": DocumentStatus.INDEXED.value,
+                    "chunk_count": count,
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+            )
 
             if progress_callback:
                 progress_callback("Complete", 1.0)
@@ -184,11 +190,14 @@ class VectorizerService:
             return count
 
         except Exception as e:
-            await self.firestore.update_document(document_id, {
-                "status": DocumentStatus.ERROR.value,
-                "error_message": f"Indexing failed: {e}",
-                "updated_at": datetime.utcnow().isoformat(),
-            })
+            await self.firestore.update_document(
+                document_id,
+                {
+                    "status": DocumentStatus.ERROR.value,
+                    "error_message": f"Indexing failed: {e}",
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+            )
             raise
 
     async def reindex_document(

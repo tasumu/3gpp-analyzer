@@ -82,10 +82,7 @@ class DocumentService:
             offset=offset,
         )
 
-        documents = [
-            Document.from_firestore(d["id"], d)
-            for d in docs_data
-        ]
+        documents = [Document.from_firestore(d["id"], d) for d in docs_data]
 
         return documents, total
 
@@ -210,9 +207,7 @@ class DocumentService:
             return None
 
         path = (
-            doc.source_file.gcs_normalized_path
-            if normalized
-            else doc.source_file.gcs_original_path
+            doc.source_file.gcs_normalized_path if normalized else doc.source_file.gcs_original_path
         )
 
         if not path:

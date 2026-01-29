@@ -44,9 +44,7 @@ class SyncRequest(BaseModel):
     """Request to sync documents from FTP."""
 
     meeting_id: str = Field(..., description="Meeting identifier to sync")
-    path_pattern: str | None = Field(
-        None, description="Optional path pattern to filter files"
-    )
+    path_pattern: str | None = Field(None, description="Optional path pattern to filter files")
 
 
 class SyncResponse(BaseModel):
@@ -97,3 +95,47 @@ class StatusUpdate(BaseModel):
     progress: float = Field(default=0.0, ge=0.0, le=1.0, description="Progress percentage")
     message: str | None = None
     error: str | None = None
+
+
+# FTP Browser schemas
+
+
+class FTPDirectoryEntry(BaseModel):
+    """Entry in FTP directory listing."""
+
+    name: str
+    type: str = Field(..., description="'directory' or 'file'")
+    size: int | None = Field(None, description="File size in bytes (files only)")
+    synced: bool = Field(False, description="Whether documents have been synced (directories only)")
+    synced_count: int | None = Field(
+        None, description="Number of synced documents (directories only)"
+    )
+
+
+class FTPBrowseResponse(BaseModel):
+    """Response from FTP browse endpoint."""
+
+    path: str = Field(..., description="Current directory path")
+    parent: str | None = Field(None, description="Parent directory path")
+    entries: list[FTPDirectoryEntry] = Field(default_factory=list)
+
+
+class FTPSyncRequest(BaseModel):
+    """Request to sync documents from an FTP path."""
+
+    path: str = Field(..., description="FTP directory path to sync")
+    path_pattern: str | None = Field(None, description="Optional regex to filter files")
+
+
+class FTPSyncProgress(BaseModel):
+    """Progress update for FTP sync operation."""
+
+    sync_id: str
+    status: str = Field(..., description="'running', 'completed', or 'error'")
+    message: str | None = None
+    current: int = 0
+    total: int = 0
+    documents_found: int = 0
+    documents_new: int = 0
+    documents_updated: int = 0
+    errors: list[str] = Field(default_factory=list)

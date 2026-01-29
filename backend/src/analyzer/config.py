@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     ftp_user: str = "anonymous"
     ftp_password: str = ""
     ftp_base_path: str = "/Meetings"
+    ftp_mock_mode: bool = False  # Use mock data for development
 
     # Vertex AI / Embedding
     embedding_model: str = "text-embedding-004"

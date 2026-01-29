@@ -77,9 +77,7 @@ async def stream_document_status(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    return EventSourceResponse(
-        status_event_generator(document_id, processor, force)
-    )
+    return EventSourceResponse(status_event_generator(document_id, processor, force))
 
 
 async def watch_status_generator(
@@ -112,13 +110,15 @@ async def watch_status_generator(
 
             yield {
                 "event": "status",
-                "data": json.dumps({
-                    "document_id": doc.id,
-                    "status": doc.status.value,
-                    "chunk_count": doc.chunk_count,
-                    "error_message": doc.error_message,
-                    "updated_at": doc.updated_at.isoformat(),
-                }),
+                "data": json.dumps(
+                    {
+                        "document_id": doc.id,
+                        "status": doc.status.value,
+                        "chunk_count": doc.chunk_count,
+                        "error_message": doc.error_message,
+                        "updated_at": doc.updated_at.isoformat(),
+                    }
+                ),
             }
 
             # Stop watching if terminal state
@@ -146,6 +146,4 @@ async def watch_document_status(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    return EventSourceResponse(
-        watch_status_generator(document_id, document_service)
-    )
+    return EventSourceResponse(watch_status_generator(document_id, document_service))

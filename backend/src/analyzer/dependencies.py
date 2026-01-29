@@ -71,6 +71,7 @@ def get_ftp_sync_service(
         user=settings.ftp_user,
         password=settings.ftp_password,
         base_path=settings.ftp_base_path,
+        mock_mode=settings.ftp_mock_mode,
     )
 
 

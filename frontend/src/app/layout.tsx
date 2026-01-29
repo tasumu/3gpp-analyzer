@@ -29,6 +29,12 @@ export default function RootLayout({
                 >
                   Documents
                 </a>
+                <a
+                  href="/sync"
+                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Sync
+                </a>
               </nav>
             </div>
           </div>
