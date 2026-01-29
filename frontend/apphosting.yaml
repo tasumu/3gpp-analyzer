@@ -1,0 +1,9 @@
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  concurrency: 80
+
+# Environment variables - set via Firebase Console after backend deployment
+# env:
+#   - variable: NEXT_PUBLIC_API_URL
+#     value: https://3gpp-analyzer-api-xxxxx-an.a.run.app/api
