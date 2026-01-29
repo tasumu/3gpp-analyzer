@@ -1,0 +1,45 @@
+[project]
+name = "3gpp-analyzer"
+version = "0.1.0"
+description = "AI-powered document analysis system for 3GPP standardization documents"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "google-cloud-firestore>=2.16.0",
+    "google-cloud-storage>=2.14.0",
+    "firebase-admin>=6.5.0",
+    "google-genai>=1.0.0",
+    "python-docx>=1.1.0",
+    "python-dotenv>=1.0.0",
+    "sse-starlette>=2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.5.0",
+    "httpx>=0.27.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/analyzer"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

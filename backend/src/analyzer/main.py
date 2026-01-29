@@ -1,0 +1,56 @@
+"""FastAPI application entry point."""
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from analyzer.api.router import api_router, internal_router
+from analyzer.config import get_settings
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler."""
+    # Startup
+    settings = get_settings()
+    if settings.debug:
+        print(f"Starting {settings.app_name} in debug mode")
+    yield
+    # Shutdown
+    pass
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    settings = get_settings()
+
+    app = FastAPI(
+        title=settings.app_name,
+        version="0.1.0",
+        description="AI-powered document analysis system for 3GPP standardization documents",
+        lifespan=lifespan,
+    )
+
+    # CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Include routers
+    app.include_router(api_router, prefix=settings.api_prefix)
+    app.include_router(internal_router, prefix="/internal")
+
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint."""
+        return {"status": "healthy"}
+
+    return app
+
+
+app = create_app()

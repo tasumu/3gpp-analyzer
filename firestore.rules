@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Documents collection
+    match /documents/{documentId} {
+      // Allow read for authenticated users
+      allow read: if request.auth != null;
+
+      // Allow write only from backend (admin SDK)
+      allow write: if false;
+    }
+
+    // Chunks collection
+    match /chunks/{chunkId} {
+      // Allow read for authenticated users
+      allow read: if request.auth != null;
+
+      // Allow write only from backend (admin SDK)
+      allow write: if false;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
