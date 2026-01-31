@@ -102,9 +102,114 @@ class FTPSyncService:
 
     def _connect(self) -> FTP:
         """Establish FTP connection."""
-        ftp = FTP(self.host)
+        ftp = FTP(self.host, timeout=30)
         ftp.login(self.user, self.password)
+
+        # Patch makepasv to handle EPSV responses from servers like 3gpp.org
+        # Some servers return EPSV (229) response even for PASV command
+        original_makepasv = ftp.makepasv
+
+        def patched_makepasv() -> tuple[str, int]:
+            try:
+                return original_makepasv()
+            except Exception:
+                # Try EPSV and parse the response
+                resp = ftp.sendcmd("EPSV")
+                # Parse: 229 Extended Passive Mode Entered (|||port|)
+                match = re.search(r"\|\|\|(\d+)\|", resp)
+                if match:
+                    port = int(match.group(1))
+                    return (ftp.host, port)
+                raise ValueError(f"Cannot parse EPSV response: {resp}")
+
+        ftp.makepasv = patched_makepasv  # type: ignore[method-assign]
         return ftp
+
+    def _list_directory_with_fallback(self, ftp: FTP) -> list[tuple[str, dict]]:
+        """
+        List directory using MLSD, falling back to LIST if MLSD is not supported.
+
+        Some FTP servers (including 3gpp.org) don't support MLSD command.
+        This method tries MLSD first, then falls back to parsing LIST output.
+
+        Returns:
+            List of (name, facts) tuples in MLSD format.
+        """
+        try:
+            return list(ftp.mlsd())
+        except Exception:
+            # MLSD not supported, fall back to LIST
+            lines: list[str] = []
+            ftp.retrlines("LIST", lines.append)
+            return self._parse_list_output(lines)
+
+    def _parse_list_output(self, lines: list[str]) -> list[tuple[str, dict]]:
+        """
+        Parse LIST output into MLSD-compatible format.
+
+        Handles both Unix-style and Windows IIS-style listings:
+
+        Unix-style:
+        drwxr-xr-x  2 user group  4096 Jan 31 10:00 dirname
+        -rw-r--r--  1 user group 12345 Jan 31 10:00 filename.doc
+
+        Windows IIS-style (used by 3gpp.org):
+        02-21-19  10:39AM       <DIR>          dirname
+        01-31-26  10:00AM               12345 filename.doc
+
+        Returns:
+            List of (name, facts) tuples compatible with MLSD format.
+        """
+        result: list[tuple[str, dict]] = []
+
+        for line in lines:
+            if not line.strip():
+                continue
+
+            # Try Windows IIS format first (3gpp.org uses this)
+            # Format: MM-DD-YY  HH:MMAM/PM  <DIR>|size  name
+            iis_match = re.match(
+                r"(\d{2}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}[AP]M)\s+(<DIR>|\d+)\s+(.+)", line
+            )
+            if iis_match:
+                dir_or_size = iis_match.group(3)
+                name = iis_match.group(4).strip()
+
+                if name in (".", ".."):
+                    continue
+
+                if dir_or_size == "<DIR>":
+                    facts = {"type": "dir"}
+                else:
+                    facts = {"type": "file", "size": dir_or_size}
+
+                result.append((name, facts))
+                continue
+
+            # Fall back to Unix format
+            parts = line.split()
+            if len(parts) < 9:
+                continue
+
+            permissions = parts[0]
+            size = parts[4]
+            # Handle filenames with spaces by joining all parts from index 8
+            name = " ".join(parts[8:])
+
+            if name in (".", ".."):
+                continue
+
+            if permissions.startswith("d"):
+                facts = {"type": "dir"}
+            elif permissions.startswith("l"):
+                # Symbolic link - treat as directory for navigation
+                facts = {"type": "dir"}
+            else:
+                facts = {"type": "file", "size": size}
+
+            result.append((name, facts))
+
+        return result
 
     def _list_directory_sync(self, path: str) -> list[tuple[str, str, int | None]]:
         """
@@ -120,8 +225,7 @@ class FTPSyncService:
             ftp.cwd(path)
             result = []
 
-            for entry in ftp.mlsd():
-                name, facts = entry
+            for name, facts in self._list_directory_with_fallback(ftp):
                 if name in (".", ".."):
                     continue
 
@@ -277,8 +381,7 @@ class FTPSyncService:
         try:
             ftp.cwd(meeting_path)
 
-            for entry in ftp.mlsd():
-                name, facts = entry
+            for name, facts in self._list_directory_with_fallback(ftp):
                 if facts.get("type") == "file":
                     if name.lower().endswith((".doc", ".docx", ".zip")):
                         modify_str = facts.get("modify", "")
