@@ -3,7 +3,11 @@ runConfig:
   memoryMiB: 512
   concurrency: 80
 
-# Environment variables - set via Firebase Console after backend deployment
-# env:
-#   - variable: NEXT_PUBLIC_API_URL
-#     value: https://3gpp-analyzer-api-xxxxx-an.a.run.app/api
+# Environment variables
+# Note: Firebase SDK config (FIREBASE_WEBAPP_CONFIG) is set automatically by App Hosting
+env:
+  - variable: NEXT_PUBLIC_API_URL
+    secret: api-url  # Cloud Secret Manager secret name
+    availability:
+      - BUILD
+      - RUNTIME

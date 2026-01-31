@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AuthGuard } from "@/components/AuthGuard";
 import { DocumentList } from "@/components/DocumentList";
 import { MeetingSelector } from "@/components/MeetingSelector";
 import { useDocuments } from "@/lib/hooks/useDocuments";
@@ -30,6 +31,7 @@ export default function DocumentsPage() {
   const totalPages = Math.ceil(total / 50);
 
   return (
+    <AuthGuard>
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
@@ -162,5 +164,6 @@ export default function DocumentsPage() {
         </div>
       )}
     </div>
+    </AuthGuard>
   );
 }

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Query
 
-from analyzer.dependencies import DocumentServiceDep, ProcessorServiceDep
+from analyzer.dependencies import CurrentUserDep, DocumentServiceDep, ProcessorServiceDep
 from analyzer.models.api import (
     DocumentListResponse,
     DocumentResponse,
@@ -34,6 +34,7 @@ def document_to_response(doc: Document) -> DocumentResponse:
 
 @router.get("/documents", response_model=DocumentListResponse)
 async def list_documents(
+    current_user: CurrentUserDep,
     document_service: DocumentServiceDep,
     meeting_id: str | None = Query(None, description="Filter by meeting ID"),
     status: DocumentStatus | None = Query(None, description="Filter by status"),
@@ -63,6 +64,7 @@ async def list_documents(
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 async def get_document(
     document_id: str,
+    current_user: CurrentUserDep,
     document_service: DocumentServiceDep,
 ):
     """
@@ -80,6 +82,7 @@ async def get_document(
 @router.post("/documents/{document_id}/process", response_model=DocumentResponse)
 async def process_document(
     document_id: str,
+    current_user: CurrentUserDep,
     processor: ProcessorServiceDep,
     request: ProcessRequest | None = None,
 ):
@@ -103,6 +106,7 @@ async def process_document(
 @router.delete("/documents/{document_id}")
 async def delete_document(
     document_id: str,
+    current_user: CurrentUserDep,
     document_service: DocumentServiceDep,
 ):
     """
@@ -120,6 +124,7 @@ async def delete_document(
 @router.get("/documents/{document_id}/download")
 async def get_download_url(
     document_id: str,
+    current_user: CurrentUserDep,
     document_service: DocumentServiceDep,
     normalized: bool = Query(True, description="Download normalized (docx) or original"),
 ):
@@ -144,6 +149,7 @@ async def get_download_url(
 
 @router.get("/meetings")
 async def list_meetings(
+    current_user: CurrentUserDep,
     document_service: DocumentServiceDep,
 ):
     """

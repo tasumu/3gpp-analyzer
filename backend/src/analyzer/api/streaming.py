@@ -4,9 +4,10 @@ import asyncio
 import json
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from sse_starlette.sse import EventSourceResponse
 
+from analyzer.auth import verify_firebase_token
 from analyzer.dependencies import DocumentServiceDep, ProcessorServiceDep
 from analyzer.models.document import DocumentStatus
 
@@ -51,6 +52,7 @@ async def stream_document_status(
     document_id: str,
     processor: ProcessorServiceDep,
     document_service: DocumentServiceDep,
+    token: str = Query(..., description="Firebase ID token for SSE authentication"),
     force: bool = False,
 ):
     """
@@ -58,6 +60,7 @@ async def stream_document_status(
 
     Starts processing the document and streams status updates
     as events. Use this for real-time progress monitoring.
+    Requires token as query parameter since EventSource cannot set headers.
 
     Events:
     - status: StatusUpdate with progress info
@@ -65,13 +68,19 @@ async def stream_document_status(
 
     Example client code:
     ```javascript
-    const evtSource = new EventSource('/api/documents/S2-123/status/stream');
+    const token = await user.getIdToken();
+    const evtSource = new EventSource(
+        `/api/documents/S2-123/status/stream?token=${token}`
+    );
     evtSource.addEventListener('status', (e) => {
         const status = JSON.parse(e.data);
         console.log(status.progress, status.message);
     });
     ```
     """
+    # Verify authentication via query parameter (SSE cannot use headers)
+    await verify_firebase_token(token)
+
     # Verify document exists
     doc = await document_service.get(document_id)
     if not doc:
@@ -132,15 +141,20 @@ async def watch_status_generator(
 async def watch_document_status(
     document_id: str,
     document_service: DocumentServiceDep,
+    token: str = Query(..., description="Firebase ID token for SSE authentication"),
 ):
     """
     Watch document status changes via SSE (polling).
 
     Unlike the /stream endpoint, this does NOT trigger processing.
     It simply watches for status changes via polling.
+    Requires token as query parameter since EventSource cannot set headers.
 
     Use this to monitor a document being processed by another process.
     """
+    # Verify authentication via query parameter (SSE cannot use headers)
+    await verify_firebase_token(token)
+
     # Verify document exists
     doc = await document_service.get(document_id)
     if not doc:

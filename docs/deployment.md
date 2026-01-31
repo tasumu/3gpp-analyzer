@@ -43,6 +43,13 @@ gsutil mb -l asia-northeast1 gs://${PROJECT_ID}-3gpp-documents
 gcloud firestore databases create --location=asia-northeast1
 ```
 
+### 4. Firebase Authentication 設定
+
+1. [Firebase Console](https://console.firebase.google.com/) にアクセス
+2. プロジェクトを選択 → Authentication → 「始める」
+3. 「Sign-in method」タブで「Google」を有効化
+4. プロジェクトのサポートメールを設定して「保存」
+
 ## バックエンドデプロイ
 
 Cloud Run の継続的デプロイ機能を使用します。`cloudbuild.yaml` は不要で、Dockerfile のみで自動デプロイが可能です。
@@ -106,8 +113,13 @@ BACKEND_URL=$(gcloud run services describe 3gpp-analyzer-api \
 echo "Backend URL: $BACKEND_URL"
 ```
 
-Firebase Console → App Hosting → 環境変数で設定:
-- `NEXT_PUBLIC_API_URL`: `https://3gpp-analyzer-api-xxxxx-an.a.run.app/api`
+Cloud Secret Manager に API URL を設定:
+
+```bash
+# Firebase CLI でシークレット作成（権限も自動設定）
+firebase apphosting:secrets:set api-url
+# プロンプトで https://3gpp-analyzer-api-xxxxx-an.a.run.app/api を入力
+```
 
 ## デプロイフロー
 
