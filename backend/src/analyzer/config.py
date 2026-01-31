@@ -48,7 +48,14 @@ class Settings(BaseSettings):
 
     # API
     api_prefix: str = "/api"
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # CORS_ORIGINS env var should be comma-separated list of allowed origins
+    # e.g., "http://localhost:3000,https://example.com"
+    cors_origins_str: str = "http://localhost:3000"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Parse CORS origins from comma-separated string."""
+        return [origin.strip() for origin in self.cors_origins_str.split(",") if origin.strip()]
 
 
 @lru_cache
