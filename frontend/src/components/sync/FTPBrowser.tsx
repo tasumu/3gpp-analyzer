@@ -57,8 +57,8 @@ export function FTPBrowser() {
     try {
       const { sync_id } = await startFTPSync(selectedPath);
 
-      // Start SSE stream
-      const eventSource = createFTPSyncStream(sync_id);
+      // Start SSE stream (now async due to token retrieval)
+      const eventSource = await createFTPSyncStream(sync_id);
 
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data) as FTPSyncProgress;

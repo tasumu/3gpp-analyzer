@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 
+import firebase_admin
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,6 +17,12 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     if settings.debug:
         print(f"Starting {settings.app_name} in debug mode")
+
+    # Initialize Firebase Admin SDK (for auth token verification)
+    # Uses Application Default Credentials on Cloud Run
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app()
+
     yield
     # Shutdown
     pass

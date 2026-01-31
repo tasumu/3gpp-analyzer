@@ -1,7 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { AuthGuard } from "@/components/AuthGuard";
 
 export default function Home() {
   return (
+    <AuthGuard>
     <div className="py-12">
       <div className="text-center">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
@@ -92,5 +96,6 @@ export default function Home() {
         </div>
       </div>
     </div>
+    </AuthGuard>
   );
 }

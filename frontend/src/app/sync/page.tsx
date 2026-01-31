@@ -1,7 +1,11 @@
+"use client";
+
+import { AuthGuard } from "@/components/AuthGuard";
 import { FTPBrowser } from "@/components/sync/FTPBrowser";
 
 export default function SyncPage() {
   return (
+    <AuthGuard>
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">FTP Browser</h1>
@@ -12,5 +16,6 @@ export default function SyncPage() {
 
       <FTPBrowser />
     </div>
+    </AuthGuard>
   );
 }

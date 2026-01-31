@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { AuthGuard } from "@/components/AuthGuard";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
 import { deleteDocument, getDocument, getDownloadUrl } from "@/lib/api";
@@ -86,6 +87,7 @@ export default function DocumentDetailPage() {
   }
 
   return (
+    <AuthGuard>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -189,5 +191,6 @@ export default function DocumentDetailPage() {
         </div>
       </div>
     </div>
+    </AuthGuard>
   );
 }

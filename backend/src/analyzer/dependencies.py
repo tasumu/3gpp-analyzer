@@ -5,6 +5,11 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from analyzer.auth import (
+    AuthenticatedUser,
+    get_current_user,
+    get_current_user_from_query,
+)
 from analyzer.config import Settings, get_settings
 from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
@@ -124,3 +129,7 @@ FTPSyncServiceDep = Annotated[FTPSyncService, Depends(get_ftp_sync_service)]
 NormalizerServiceDep = Annotated[NormalizerService, Depends(get_normalizer_service)]
 VectorizerServiceDep = Annotated[VectorizerService, Depends(get_vectorizer_service)]
 ProcessorServiceDep = Annotated[ProcessorService, Depends(get_processor_service)]
+
+# Authentication dependencies
+CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
+CurrentUserQueryDep = Annotated[AuthenticatedUser, Depends(get_current_user_from_query)]

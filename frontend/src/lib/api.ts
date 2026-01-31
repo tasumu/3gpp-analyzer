@@ -11,9 +11,21 @@ import type {
   MeetingsResponse,
   ProcessRequest,
 } from "./types";
+import { getFirebaseAuth } from "./firebase";
 
 const API_BASE = "/api";
 const API_BASE_DIRECT = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+
+/**
+ * Get the current user's Firebase ID token.
+ * Returns null if not authenticated.
+ */
+async function getAuthToken(): Promise<string | null> {
+  const auth = getFirebaseAuth();
+  const user = auth.currentUser;
+  if (!user) return null;
+  return user.getIdToken();
+}
 
 class ApiError extends Error {
   constructor(
@@ -29,13 +41,32 @@ async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit,
 ): Promise<T> {
+  // Get authentication token
+  const token = await getAuthToken();
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((options?.headers as Record<string, string>) || {}),
+  };
+
+  // Add Authorization header if authenticated
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
+    headers,
   });
+
+  // Handle authentication errors
+  if (response.status === 401) {
+    // Redirect to login page
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+    throw new ApiError(401, "Authentication required");
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
@@ -101,18 +132,26 @@ export async function listMeetings(): Promise<MeetingsResponse> {
 
 // SSE helpers
 
-export function createStatusStream(
+export async function createStatusStream(
   documentId: string,
   force = false,
-): EventSource {
-  // SSE needs direct connection to backend
-  const url = `${API_BASE_DIRECT}/documents/${documentId}/status/stream?force=${force}`;
+): Promise<EventSource> {
+  // SSE needs direct connection to backend with token in query param
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error("Authentication required for SSE connection");
+  }
+  const url = `${API_BASE_DIRECT}/documents/${documentId}/status/stream?force=${force}&token=${encodeURIComponent(token)}`;
   return new EventSource(url);
 }
 
-export function createStatusWatcher(documentId: string): EventSource {
-  // SSE needs direct connection to backend
-  const url = `${API_BASE_DIRECT}/documents/${documentId}/status/watch`;
+export async function createStatusWatcher(documentId: string): Promise<EventSource> {
+  // SSE needs direct connection to backend with token in query param
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error("Authentication required for SSE connection");
+  }
+  const url = `${API_BASE_DIRECT}/documents/${documentId}/status/watch?token=${encodeURIComponent(token)}`;
   return new EventSource(url);
 }
 
@@ -132,9 +171,13 @@ export async function startFTPSync(
   });
 }
 
-export function createFTPSyncStream(syncId: string): EventSource {
-  // SSE needs direct connection to backend (Next.js rewrites don't handle streaming well)
-  const url = `${API_BASE_DIRECT}/ftp/sync/${syncId}/stream`;
+export async function createFTPSyncStream(syncId: string): Promise<EventSource> {
+  // SSE needs direct connection to backend with token in query param
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error("Authentication required for SSE connection");
+  }
+  const url = `${API_BASE_DIRECT}/ftp/sync/${syncId}/stream?token=${encodeURIComponent(token)}`;
   return new EventSource(url);
 }
 

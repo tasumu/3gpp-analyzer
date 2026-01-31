@@ -45,7 +45,7 @@ export function useDocumentStatus({
     }
   }, []);
 
-  const startProcessing = useCallback(() => {
+  const startProcessing = useCallback(async () => {
     // Close any existing connection
     stopWatching();
 
@@ -54,40 +54,45 @@ export function useDocumentStatus({
     setMessage(null);
     setError(null);
 
-    // Create new SSE connection
-    const eventSource = createStatusStream(documentId, force);
-    eventSourceRef.current = eventSource;
+    try {
+      // Create new SSE connection (now async due to token retrieval)
+      const eventSource = await createStatusStream(documentId, force);
+      eventSourceRef.current = eventSource;
 
-    eventSource.onopen = () => {
-      setIsConnected(true);
-    };
+      eventSource.onopen = () => {
+        setIsConnected(true);
+      };
 
-    eventSource.addEventListener("status", (event) => {
-      const update: StatusUpdate = JSON.parse(event.data);
-      setStatus(update.status);
-      setProgress(update.progress);
-      setMessage(update.message);
+      eventSource.addEventListener("status", (event) => {
+        const update: StatusUpdate = JSON.parse(event.data);
+        setStatus(update.status);
+        setProgress(update.progress);
+        setMessage(update.message);
 
-      if (update.status === "indexed") {
-        onComplete?.(update.status);
+        if (update.status === "indexed") {
+          onComplete?.(update.status);
+          stopWatching();
+        }
+      });
+
+      eventSource.addEventListener("error", (event) => {
+        // @ts-expect-error - SSE error event may have data
+        const data = event.data ? JSON.parse(event.data) : { error: "Connection error" };
+        setError(data.error);
+        onError?.(data.error);
         stopWatching();
-      }
-    });
+      });
 
-    eventSource.addEventListener("error", (event) => {
-      // @ts-expect-error - SSE error event may have data
-      const data = event.data ? JSON.parse(event.data) : { error: "Connection error" };
-      setError(data.error);
-      onError?.(data.error);
-      stopWatching();
-    });
-
-    eventSource.onerror = () => {
-      // Connection error
-      if (eventSource.readyState === EventSource.CLOSED) {
-        stopWatching();
-      }
-    };
+      eventSource.onerror = () => {
+        // Connection error
+        if (eventSource.readyState === EventSource.CLOSED) {
+          stopWatching();
+        }
+      };
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to connect");
+      onError?.(err instanceof Error ? err.message : "Failed to connect");
+    }
   }, [documentId, force, onComplete, onError, stopWatching]);
 
   // Auto-start if requested
@@ -131,32 +136,42 @@ export function useStatusWatcher({
   useEffect(() => {
     if (!enabled) return;
 
-    const eventSource = createStatusWatcher(documentId);
-    eventSourceRef.current = eventSource;
+    let eventSource: EventSource | null = null;
 
-    eventSource.onopen = () => {
-      setIsConnected(true);
-    };
+    const setupWatcher = async () => {
+      try {
+        eventSource = await createStatusWatcher(documentId);
+        eventSourceRef.current = eventSource;
 
-    eventSource.addEventListener("status", (event) => {
-      const data = JSON.parse(event.data);
-      setStatus(data.status);
-      onStatusChange?.(data.status);
+        eventSource.onopen = () => {
+          setIsConnected(true);
+        };
 
-      // Stop watching on terminal states
-      if (data.status === "indexed" || data.status === "error") {
-        eventSource.close();
+        eventSource.addEventListener("status", (event) => {
+          const data = JSON.parse(event.data);
+          setStatus(data.status);
+          onStatusChange?.(data.status);
+
+          // Stop watching on terminal states
+          if (data.status === "indexed" || data.status === "error") {
+            eventSource?.close();
+            setIsConnected(false);
+          }
+        });
+
+        eventSource.onerror = () => {
+          eventSource?.close();
+          setIsConnected(false);
+        };
+      } catch {
         setIsConnected(false);
       }
-    });
-
-    eventSource.onerror = () => {
-      eventSource.close();
-      setIsConnected(false);
     };
 
+    setupWatcher();
+
     return () => {
-      eventSource.close();
+      eventSource?.close();
     };
   }, [documentId, enabled, onStatusChange]);
 
