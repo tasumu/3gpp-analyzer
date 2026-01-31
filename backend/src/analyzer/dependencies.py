@@ -51,6 +51,8 @@ def get_evidence_provider(
     """Get EvidenceProvider instance."""
     return FirestoreEvidenceProvider(
         firestore=firestore,
+        project_id=settings.gcp_project_id,
+        location=settings.vertex_ai_location,
         embedding_model=settings.embedding_model,
     )
 
@@ -98,6 +100,8 @@ def get_vectorizer_service(
     """Get VectorizerService instance."""
     return VectorizerService(
         firestore=firestore,
+        project_id=settings.gcp_project_id,
+        location=settings.vertex_ai_location,
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
         batch_size=settings.embedding_batch_size,
@@ -106,6 +110,7 @@ def get_vectorizer_service(
 
 def get_processor_service(
     document_service: Annotated[DocumentService, Depends(get_document_service)],
+    ftp_sync: Annotated[FTPSyncService, Depends(get_ftp_sync_service)],
     normalizer: Annotated[NormalizerService, Depends(get_normalizer_service)],
     vectorizer: Annotated[VectorizerService, Depends(get_vectorizer_service)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -113,6 +118,7 @@ def get_processor_service(
     """Get ProcessorService instance."""
     return ProcessorService(
         document_service=document_service,
+        ftp_sync=ftp_sync,
         normalizer=normalizer,
         vectorizer=vectorizer,
         chunk_max_tokens=settings.chunk_max_tokens,

@@ -22,6 +22,8 @@ class VectorizerService:
     def __init__(
         self,
         firestore: FirestoreClient,
+        project_id: str,
+        location: str = "asia-northeast1",
         model: str = "text-embedding-004",
         dimensions: int = 768,
         batch_size: int = 100,
@@ -31,6 +33,8 @@ class VectorizerService:
 
         Args:
             firestore: Firestore client for chunk storage.
+            project_id: GCP project ID for Vertex AI.
+            location: GCP region for Vertex AI.
             model: Embedding model name.
             dimensions: Embedding vector dimensions.
             batch_size: Number of chunks to embed per API call.
@@ -39,7 +43,11 @@ class VectorizerService:
         self.model = model
         self.dimensions = dimensions
         self.batch_size = batch_size
-        self._client = genai.Client()
+        self._client = genai.Client(
+            vertexai=True,
+            project=project_id,
+            location=location,
+        )
 
     async def embed_text(self, text: str) -> list[float]:
         """

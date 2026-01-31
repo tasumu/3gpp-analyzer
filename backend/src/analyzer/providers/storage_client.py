@@ -156,6 +156,8 @@ class StorageClient:
         """
         Generate a signed URL for temporary access.
 
+        Uses IAM signing API when running on Cloud Run (no private key available).
+
         Args:
             gcs_path: File path in GCS.
             expiration_minutes: URL expiration time in minutes.
@@ -165,10 +167,22 @@ class StorageClient:
         """
         from datetime import timedelta
 
+        import google.auth
+        from google.auth.transport import requests
+
         blob = self._bucket.blob(gcs_path)
+
+        # Get default credentials and refresh to get the service account email
+        credentials, project = google.auth.default()
+        auth_request = requests.Request()
+        credentials.refresh(auth_request)
+
+        # Use IAM signing for Cloud Run (Compute Engine credentials)
         url = blob.generate_signed_url(
             version="v4",
             expiration=timedelta(minutes=expiration_minutes),
             method="GET",
+            service_account_email=credentials.service_account_email,
+            access_token=credentials.token,
         )
         return url
