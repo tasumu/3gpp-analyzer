@@ -100,27 +100,31 @@ class FTPSyncService:
         self.base_path = base_path
         self.mock_mode = mock_mode
 
-    def _connect(self) -> FTP:
+    def _connect(self, timeout: int = 60) -> FTP:
         """Establish FTP connection."""
-        ftp = FTP(self.host, timeout=30)
+        ftp = FTP(self.host, timeout=timeout)
         ftp.login(self.user, self.password)
 
         # Patch makepasv to handle EPSV responses from servers like 3gpp.org
         # Some servers return EPSV (229) response even for PASV command
-        original_makepasv = ftp.makepasv
+        host = ftp.host  # Capture host for closure
 
         def patched_makepasv() -> tuple[str, int]:
-            try:
-                return original_makepasv()
-            except Exception:
-                # Try EPSV and parse the response
-                resp = ftp.sendcmd("EPSV")
-                # Parse: 229 Extended Passive Mode Entered (|||port|)
-                match = re.search(r"\|\|\|(\d+)\|", resp)
-                if match:
-                    port = int(match.group(1))
-                    return (ftp.host, port)
-                raise ValueError(f"Cannot parse EPSV response: {resp}")
+            # Send PASV and check if we get an EPSV-style response
+            resp = ftp.sendcmd("PASV")
+            # Check for EPSV response format: 229 Extended Passive Mode Entered (|||port|)
+            epsv_match = re.search(r"\|\|\|(\d+)\|", resp)
+            if epsv_match:
+                port = int(epsv_match.group(1))
+                return (host, port)
+            # Standard PASV response: 227 Entering Passive Mode (h1,h2,h3,h4,p1,p2)
+            pasv_match = re.search(r"\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)", resp)
+            if pasv_match:
+                numbers = [int(x) for x in pasv_match.groups()]
+                pasv_host = ".".join(str(n) for n in numbers[:4])
+                port = (numbers[4] << 8) + numbers[5]
+                return (pasv_host, port)
+            raise ValueError(f"Cannot parse PASV response: {resp}")
 
         ftp.makepasv = patched_makepasv  # type: ignore[method-assign]
         return ftp
@@ -375,33 +379,68 @@ class FTPSyncService:
                     )
             return files
 
-        files = []
-        ftp = self._connect()
+        files: list[dict] = []
+        # Use longer timeout for recursive operations
+        ftp = self._connect(timeout=120)
 
         try:
-            ftp.cwd(meeting_path)
-
-            for name, facts in self._list_directory_with_fallback(ftp):
-                if facts.get("type") == "file":
-                    if name.lower().endswith((".doc", ".docx", ".zip")):
-                        modify_str = facts.get("modify", "")
-                        if modify_str:
-                            modified_at = datetime.strptime(modify_str, "%Y%m%d%H%M%S")
-                        else:
-                            modified_at = datetime.utcnow()
-
-                        files.append(
-                            {
-                                "filename": name,
-                                "size_bytes": int(facts.get("size", 0)),
-                                "modified_at": modified_at,
-                                "ftp_path": f"{meeting_path}/{name}",
-                            }
-                        )
+            self._collect_files_recursive(ftp, meeting_path, files)
         finally:
-            ftp.quit()
+            try:
+                ftp.quit()
+            except Exception:
+                pass  # Connection may already be closed
 
         return files
+
+    def _collect_files_recursive(self, ftp: FTP, path: str, files: list[dict]) -> None:
+        """
+        Recursively collect document files from FTP directory.
+
+        Args:
+            ftp: Active FTP connection.
+            path: Current directory path.
+            files: List to append found files to.
+        """
+        try:
+            ftp.cwd(path)
+        except Exception:
+            # Directory doesn't exist or access denied
+            return
+
+        entries = self._list_directory_with_fallback(ftp)
+
+        for name, facts in entries:
+            if name in (".", ".."):
+                continue
+
+            entry_type = facts.get("type", "")
+            full_path = f"{path.rstrip('/')}/{name}"
+
+            if entry_type == "dir":
+                # Recursively explore subdirectory
+                self._collect_files_recursive(ftp, full_path, files)
+                # Return to current directory after recursion
+                try:
+                    ftp.cwd(path)
+                except Exception:
+                    pass
+            elif entry_type == "file":
+                if name.lower().endswith((".doc", ".docx", ".zip")):
+                    modify_str = facts.get("modify", "")
+                    if modify_str:
+                        modified_at = datetime.strptime(modify_str, "%Y%m%d%H%M%S")
+                    else:
+                        modified_at = datetime.utcnow()
+
+                    files.append(
+                        {
+                            "filename": name,
+                            "size_bytes": int(facts.get("size", 0)),
+                            "modified_at": modified_at,
+                            "ftp_path": full_path,
+                        }
+                    )
 
     async def list_meeting_files(
         self,
