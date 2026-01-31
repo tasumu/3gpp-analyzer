@@ -13,8 +13,8 @@ import type {
 } from "./types";
 import { getFirebaseAuth } from "./firebase";
 
-const API_BASE = "/api";
-const API_BASE_DIRECT = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+// In production, use the direct API URL. In development, use proxy via /api
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 /**
  * Get the current user's Firebase ID token.
@@ -141,7 +141,7 @@ export async function createStatusStream(
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
-  const url = `${API_BASE_DIRECT}/documents/${documentId}/status/stream?force=${force}&token=${encodeURIComponent(token)}`;
+  const url = `${API_BASE}/documents/${documentId}/status/stream?force=${force}&token=${encodeURIComponent(token)}`;
   return new EventSource(url);
 }
 
@@ -151,7 +151,7 @@ export async function createStatusWatcher(documentId: string): Promise<EventSour
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
-  const url = `${API_BASE_DIRECT}/documents/${documentId}/status/watch?token=${encodeURIComponent(token)}`;
+  const url = `${API_BASE}/documents/${documentId}/status/watch?token=${encodeURIComponent(token)}`;
   return new EventSource(url);
 }
 
@@ -177,7 +177,7 @@ export async function createFTPSyncStream(syncId: string): Promise<EventSource> 
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
-  const url = `${API_BASE_DIRECT}/ftp/sync/${syncId}/stream?token=${encodeURIComponent(token)}`;
+  const url = `${API_BASE}/ftp/sync/${syncId}/stream?token=${encodeURIComponent(token)}`;
   return new EventSource(url);
 }
 
