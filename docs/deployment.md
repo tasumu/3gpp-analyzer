@@ -4,10 +4,12 @@
 
 GitHub への push をトリガーとして自動デプロイを行います。
 
-| コンポーネント | デプロイ先 | トリガー |
-|---------------|-----------|---------|
-| Backend (FastAPI) | Cloud Run | Cloud Build |
-| Frontend (Next.js) | Firebase App Hosting | Firebase |
+| コンポーネント | デプロイ先 | リージョン |
+|---------------|-----------|-----------|
+| Backend (FastAPI) | Cloud Run | asia-northeast1（東京） |
+| Frontend (Next.js) | Firebase App Hosting | 自動選択 |
+| Firestore | Firestore | asia-northeast1（東京） |
+| Cloud Storage | GCS | asia-northeast1（東京） |
 
 ## 事前準備
 
@@ -20,8 +22,8 @@ gcloud config set project $PROJECT_ID
 
 # 必要なAPIを有効化
 gcloud services enable \
-  cloudbuild.googleapis.com \
   run.googleapis.com \
+  cloudbuild.googleapis.com \
   artifactregistry.googleapis.com \
   firestore.googleapis.com \
   storage.googleapis.com \
@@ -29,22 +31,13 @@ gcloud services enable \
   secretmanager.googleapis.com
 ```
 
-### 2. Artifact Registry リポジトリ作成
-
-```bash
-gcloud artifacts repositories create 3gpp-analyzer \
-  --repository-format=docker \
-  --location=asia-northeast1 \
-  --description="3GPP Analyzer container images"
-```
-
-### 3. GCS バケット作成
+### 2. GCS バケット作成
 
 ```bash
 gsutil mb -l asia-northeast1 gs://${PROJECT_ID}-3gpp-documents
 ```
 
-### 4. Firestore データベース作成
+### 3. Firestore データベース作成
 
 ```bash
 gcloud firestore databases create --location=asia-northeast1
@@ -52,53 +45,39 @@ gcloud firestore databases create --location=asia-northeast1
 
 ## バックエンドデプロイ
 
-### Cloud Build トリガー設定
+Cloud Run の継続的デプロイ機能を使用します。`cloudbuild.yaml` は不要で、Dockerfile のみで自動デプロイが可能です。
 
-1. [Cloud Build トリガー](https://console.cloud.google.com/cloud-build/triggers) にアクセス
-2. 「リポジトリを接続」から GitHub リポジトリを接続
-3. 「トリガーを作成」:
-   - 名前: `deploy-backend`
-   - イベント: ブランチに push する
-   - ソース: `^main$`
-   - 構成: Cloud Build 構成ファイル
-   - 場所: `backend/cloudbuild.yaml`
-   - 含まれるファイル: `backend/**`
+### Cloud Run 継続的デプロイ設定
 
-または CLI で:
+1. [Cloud Run Console](https://console.cloud.google.com/run) にアクセス
+2. 「サービスを作成」→「リポジトリから継続的にデプロイする」を選択
+3. 「Cloud Build の設定」をクリック
+4. GitHub リポジトリを接続（初回のみ認証が必要）
+5. 設定:
+   - リポジトリ: `3gpp-analyzer`
+   - ブランチ: `^main$`
+   - ソースの場所: `/backend/Dockerfile`
+   - ビルドタイプ: Dockerfile
+6. サービス設定:
+   - サービス名: `3gpp-analyzer-api`
+   - リージョン: `asia-northeast1`
+   - 認証: 「未認証の呼び出しを許可」
+7. 「作成」をクリック
 
-```bash
-gcloud builds triggers create github \
-  --name="deploy-backend" \
-  --repo-owner="YOUR_GITHUB_USERNAME" \
-  --repo-name="3gpp-analyzer" \
-  --branch-pattern="^main$" \
-  --build-config="backend/cloudbuild.yaml" \
-  --included-files="backend/**"
-```
-
-### Cloud Build サービスアカウント権限
-
-```bash
-# プロジェクト番号取得
-PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
-
-# Cloud Run Admin 権限付与
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-  --role="roles/run.admin"
-
-# サービスアカウントユーザー権限付与
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-  --role="roles/iam.serviceAccountUser"
-```
+> **Note**: Artifact Registry リポジトリやサービスアカウント権限は自動的に設定されます。
 
 ### 環境変数設定（デプロイ後）
 
 ```bash
 gcloud run services update 3gpp-analyzer-api \
   --region asia-northeast1 \
+  --memory 1Gi \
+  --cpu 1 \
+  --timeout 300 \
+  --set-env-vars "GCP_PROJECT_ID=${PROJECT_ID}" \
   --set-env-vars "GCS_BUCKET_NAME=${PROJECT_ID}-3gpp-documents" \
+  --set-env-vars "USE_FIREBASE_EMULATOR=false" \
+  --set-env-vars "FTP_MOCK_MODE=false" \
   --set-env-vars "CORS_ORIGINS=[\"https://your-frontend-url.web.app\"]"
 ```
 
@@ -130,19 +109,6 @@ echo "Backend URL: $BACKEND_URL"
 Firebase Console → App Hosting → 環境変数で設定:
 - `NEXT_PUBLIC_API_URL`: `https://3gpp-analyzer-api-xxxxx-an.a.run.app/api`
 
-または Secret Manager を使用:
-
-```bash
-# シークレット作成
-echo -n "https://3gpp-analyzer-api-xxxxx-an.a.run.app/api" | \
-  gcloud secrets create BACKEND_API_URL --data-file=-
-
-# App Hosting からアクセス許可
-gcloud secrets add-iam-policy-binding BACKEND_API_URL \
-  --member="serviceAccount:firebase-app-hosting-compute@${PROJECT_ID}.iam.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor"
-```
-
 ## デプロイフロー
 
 ```
@@ -150,11 +116,10 @@ GitHub (main branch)
     │
     ├─── backend/** 変更
     │       ↓
-    │    Cloud Build Trigger
+    │    Cloud Run 継続的デプロイ
     │       ↓
-    │    1. Docker Build
-    │    2. Push to Artifact Registry
-    │    3. Deploy to Cloud Run
+    │    1. Docker Build（自動）
+    │    2. Deploy to Cloud Run
     │
     └─── frontend/** 変更
             ↓
@@ -171,7 +136,10 @@ GitHub (main branch)
 
 ```bash
 cd backend
-gcloud builds submit --config=cloudbuild.yaml
+gcloud run deploy 3gpp-analyzer-api \
+  --source . \
+  --region asia-northeast1 \
+  --allow-unauthenticated
 ```
 
 ### フロントエンド
@@ -183,18 +151,14 @@ firebase apphosting:rollouts:create --branch main
 
 ## トラブルシューティング
 
-### Cloud Build 失敗
+### Cloud Run ビルド・デプロイ失敗
 
 ```bash
-# ビルドログ確認
+# 最新のビルドログ確認
 gcloud builds list --limit=5
 gcloud builds log BUILD_ID
-```
 
-### Cloud Run 起動失敗
-
-```bash
-# ログ確認
+# サービスログ確認
 gcloud run services logs read 3gpp-analyzer-api --region asia-northeast1 --limit=50
 ```
 
