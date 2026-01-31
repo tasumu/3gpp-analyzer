@@ -152,6 +152,7 @@ export default function DocumentDetailPage() {
         <ProcessingProgress
           documentId={document.id}
           currentStatus={document.status}
+          chunkCount={document.chunk_count}
           onComplete={fetchDocument}
         />
       </div>
@@ -162,7 +163,9 @@ export default function DocumentDetailPage() {
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => handleDownload(false)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+            disabled={document.status === "metadata_only" || document.status === "downloading"}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={document.status === "metadata_only" || document.status === "downloading" ? "File not yet downloaded" : undefined}
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -171,7 +174,9 @@ export default function DocumentDetailPage() {
           </button>
           <button
             onClick={() => handleDownload(true)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+            disabled={!["normalized", "chunking", "chunked", "indexing", "indexed"].includes(document.status)}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={!["normalized", "chunking", "chunked", "indexing", "indexed"].includes(document.status) ? "Document not yet normalized" : undefined}
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

@@ -155,3 +155,35 @@ export interface FTPSyncProgress {
   documents_updated: number;
   errors: string[];
 }
+
+// Chunk types
+
+export interface ChunkMetadata {
+  document_id: string;
+  contribution_number: string;
+  meeting_id: string | null;
+  clause_number: string | null;
+  clause_title: string | null;
+  page_number: number | null;
+  structure_type: string;
+  heading_hierarchy: string[];
+}
+
+export interface Chunk {
+  id: string;
+  content: string;
+  metadata: ChunkMetadata;
+  token_count: number;
+  created_at: string;
+}
+
+export interface ChunkListResponse {
+  chunks: Chunk[];
+  total: number;
+}
+
+export interface GroupedChunks {
+  clause_number: string;
+  clause_title: string | null;
+  chunks: Chunk[];
+}

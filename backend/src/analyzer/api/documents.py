@@ -4,6 +4,9 @@ from fastapi import APIRouter, HTTPException, Query
 
 from analyzer.dependencies import CurrentUserDep, DocumentServiceDep, ProcessorServiceDep
 from analyzer.models.api import (
+    ChunkListResponse,
+    ChunkMetadataResponse,
+    ChunkResponse,
     DocumentListResponse,
     DocumentResponse,
     ProcessRequest,
@@ -145,6 +148,51 @@ async def get_download_url(
         )
 
     return {"download_url": url}
+
+
+@router.get("/documents/{document_id}/chunks", response_model=ChunkListResponse)
+async def get_document_chunks(
+    document_id: str,
+    current_user: CurrentUserDep,
+    document_service: DocumentServiceDep,
+    limit: int = Query(500, ge=1, le=1000, description="Maximum chunks to return"),
+):
+    """
+    Get chunks for a document.
+
+    Returns list of chunks with metadata. Available for indexed documents.
+    """
+    doc = await document_service.get(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    chunks_data = await document_service.firestore.get_chunks_by_document(
+        document_id, limit=limit
+    )
+
+    chunks = []
+    for chunk in chunks_data:
+        metadata = chunk.get("metadata", {})
+        chunks.append(
+            ChunkResponse(
+                id=chunk["id"],
+                content=chunk.get("content", ""),
+                metadata=ChunkMetadataResponse(
+                    document_id=metadata.get("document_id", ""),
+                    contribution_number=metadata.get("contribution_number", ""),
+                    meeting_id=metadata.get("meeting_id"),
+                    clause_number=metadata.get("clause_number"),
+                    clause_title=metadata.get("clause_title"),
+                    page_number=metadata.get("page_number"),
+                    structure_type=metadata.get("structure_type", "paragraph"),
+                    heading_hierarchy=metadata.get("heading_hierarchy", []),
+                ),
+                token_count=chunk.get("token_count", 0),
+                created_at=chunk.get("created_at"),
+            )
+        )
+
+    return ChunkListResponse(chunks=chunks, total=len(chunks))
 
 
 @router.get("/meetings")
