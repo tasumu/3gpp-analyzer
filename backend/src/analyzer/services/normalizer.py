@@ -2,6 +2,7 @@
 
 import subprocess
 import tempfile
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -37,6 +38,43 @@ class NormalizerService:
         """Check if file needs conversion to docx."""
         lower = filename.lower()
         return lower.endswith(".doc") and not lower.endswith(".docx")
+
+    def _is_zip(self, filename: str) -> bool:
+        """Check if file is a ZIP archive."""
+        return filename.lower().endswith(".zip")
+
+    def _extract_doc_from_zip(self, zip_path: Path, output_dir: Path) -> Path | None:
+        """
+        Extract the main document from a ZIP file.
+
+        Looks for .docx or .doc files in the ZIP, preferring .docx.
+
+        Args:
+            zip_path: Path to ZIP file.
+            output_dir: Directory to extract to.
+
+        Returns:
+            Path to extracted document, or None if no document found.
+        """
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            # Get list of doc/docx files
+            doc_files = [
+                f for f in zf.namelist()
+                if f.lower().endswith((".doc", ".docx"))
+                and not f.startswith("__MACOSX")
+                and not f.startswith(".")
+            ]
+
+            if not doc_files:
+                return None
+
+            # Prefer .docx over .doc
+            docx_files = [f for f in doc_files if f.lower().endswith(".docx")]
+            target = docx_files[0] if docx_files else doc_files[0]
+
+            # Extract the file
+            zf.extract(target, output_dir)
+            return output_dir / target
 
     async def normalize_document(
         self,
@@ -93,6 +131,11 @@ class NormalizerService:
 
             elif self._needs_conversion(filename):
                 gcs_normalized = await self._convert_doc_to_docx(gcs_original, meeting_id, filename)
+
+            elif self._is_zip(filename):
+                gcs_normalized = await self._normalize_from_zip(
+                    gcs_original, meeting_id, filename
+                )
 
             else:
                 raise ValueError(f"Unsupported file format: {filename}")
@@ -177,6 +220,88 @@ class NormalizerService:
 
             # Find converted file
             base_name = Path(filename).stem
+            local_docx = tmpdir_path / f"{base_name}.docx"
+
+            if not local_docx.exists():
+                raise RuntimeError(f"Converted file not found: {local_docx}")
+
+            # Upload to GCS
+            gcs_normalized = self.storage.get_normalized_path(meeting_id, filename)
+            await self.storage.upload_file(local_docx, gcs_normalized)
+
+            return gcs_normalized
+
+    async def _normalize_from_zip(
+        self,
+        gcs_original: str,
+        meeting_id: str,
+        filename: str,
+    ) -> str:
+        """
+        Extract document from ZIP and normalize it.
+
+        Args:
+            gcs_original: GCS path of original ZIP file.
+            meeting_id: Meeting ID for output path.
+            filename: Original ZIP filename.
+
+        Returns:
+            GCS path of normalized .docx file.
+
+        Raises:
+            ValueError: If no document found in ZIP.
+            RuntimeError: If conversion fails.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Download ZIP file
+            local_zip = tmpdir_path / filename
+            await self.storage.download_file(gcs_original, local_zip)
+
+            # Extract document from ZIP
+            extracted_doc = self._extract_doc_from_zip(local_zip, tmpdir_path)
+            if not extracted_doc:
+                raise ValueError(f"No document found in ZIP: {filename}")
+
+            extracted_filename = extracted_doc.name
+
+            # If it's already docx, upload directly
+            if extracted_filename.lower().endswith(".docx"):
+                gcs_normalized = self.storage.get_normalized_path(meeting_id, filename)
+                await self.storage.upload_file(extracted_doc, gcs_normalized)
+                return gcs_normalized
+
+            # Convert .doc to .docx
+            try:
+                result = subprocess.run(
+                    [
+                        "soffice",
+                        "--headless",
+                        "--convert-to",
+                        "docx",
+                        "--outdir",
+                        str(tmpdir_path),
+                        str(extracted_doc),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout,
+                )
+
+                if result.returncode != 0:
+                    raise RuntimeError(f"LibreOffice conversion failed: {result.stderr}")
+
+            except subprocess.TimeoutExpired:
+                raise RuntimeError(f"Conversion timed out after {self.timeout}s")
+
+            except FileNotFoundError:
+                raise RuntimeError(
+                    "LibreOffice not found. Install with: apt-get install libreoffice"
+                )
+
+            # Find converted file
+            base_name = Path(extracted_filename).stem
             local_docx = tmpdir_path / f"{base_name}.docx"
 
             if not local_docx.exists():

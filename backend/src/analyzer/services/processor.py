@@ -10,6 +10,7 @@ from analyzer.chunking.heading_based import HeadingBasedChunking
 from analyzer.models.api import StatusUpdate
 from analyzer.models.document import Document, DocumentStatus
 from analyzer.services.document_service import DocumentService
+from analyzer.services.ftp_sync import FTPSyncService
 from analyzer.services.normalizer import NormalizerService
 from analyzer.services.vectorizer import VectorizerService
 
@@ -26,6 +27,7 @@ class ProcessorService:
     def __init__(
         self,
         document_service: DocumentService,
+        ftp_sync: FTPSyncService,
         normalizer: NormalizerService,
         vectorizer: VectorizerService,
         chunk_max_tokens: int = 1000,
@@ -35,11 +37,13 @@ class ProcessorService:
 
         Args:
             document_service: Document CRUD service.
+            ftp_sync: FTP synchronization service for downloading.
             normalizer: File normalization service.
             vectorizer: Vectorization service.
             chunk_max_tokens: Maximum tokens per chunk.
         """
         self.document_service = document_service
+        self.ftp_sync = ftp_sync
         self.normalizer = normalizer
         self.vectorizer = vectorizer
         self.chunker = HeadingBasedChunking(max_tokens=chunk_max_tokens)
@@ -89,8 +93,9 @@ class ProcessorService:
             # Step 1: Ensure file is downloaded
             if not doc.source_file.gcs_original_path:
                 emit_status(DocumentStatus.DOWNLOADING, 0.0, "Downloading from FTP")
-                # Note: FTP sync service handles downloading
-                raise ValueError("Document not downloaded. Use FTP sync first.")
+                await self.ftp_sync.download_document(document_id)
+                # Refresh document to get updated gcs_original_path
+                doc = await self.document_service.get(document_id)
 
             # Step 2: Normalize to docx
             emit_status(DocumentStatus.NORMALIZING, 0.1, "Converting to docx")

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     ftp_mock_mode: bool = False  # Use mock data for development
 
     # Vertex AI / Embedding
+    vertex_ai_location: str = "asia-northeast1"
     embedding_model: str = "text-embedding-004"
     embedding_dimensions: int = 768
     embedding_batch_size: int = 100

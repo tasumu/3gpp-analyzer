@@ -18,6 +18,8 @@ class FirestoreEvidenceProvider(EvidenceProvider):
     def __init__(
         self,
         firestore: FirestoreClient,
+        project_id: str,
+        location: str = "asia-northeast1",
         embedding_model: str = "text-embedding-004",
     ):
         """
@@ -25,11 +27,17 @@ class FirestoreEvidenceProvider(EvidenceProvider):
 
         Args:
             firestore: FirestoreClient instance.
+            project_id: GCP project ID for Vertex AI.
+            location: GCP region for Vertex AI.
             embedding_model: Model name for query embedding.
         """
         self.firestore = firestore
         self.embedding_model = embedding_model
-        self._genai_client = genai.Client()
+        self._genai_client = genai.Client(
+            vertexai=True,
+            project=project_id,
+            location=location,
+        )
 
     async def _get_query_embedding(self, query: str) -> list[float]:
         """Generate embedding for a query string."""
