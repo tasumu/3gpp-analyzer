@@ -28,7 +28,8 @@ gcloud services enable \
   firestore.googleapis.com \
   storage.googleapis.com \
   aiplatform.googleapis.com \
-  secretmanager.googleapis.com
+  secretmanager.googleapis.com \
+  iamcredentials.googleapis.com
 ```
 
 ### 2. GCS バケット作成
@@ -51,6 +52,32 @@ gcloud firestore databases create --location=asia-northeast1
 4. プロジェクトのサポートメールを設定して「保存」
 5. 「Settings」タブ → 「承認済みドメイン」に App Hosting の URL を追加
    - 例: `threegpp-bff--your-project.asia-east1.hosted.app`
+
+### 5. IAM署名権限設定（署名URL用）
+
+Cloud Run から GCS の署名URL を生成するために、サービスアカウントに署名権限が必要です。
+
+```bash
+# Cloud Run のサービスアカウントを取得
+SERVICE_ACCOUNT=$(gcloud run services describe 3gpp-analyzer-api \
+  --region asia-northeast1 \
+  --format='value(spec.template.spec.serviceAccountName)')
+
+# デフォルトの場合はCompute Engine default service account
+if [ -z "$SERVICE_ACCOUNT" ]; then
+  PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+  SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+fi
+
+# 署名権限を付与
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
+  --role="roles/iam.serviceAccountTokenCreator"
+
+echo "Service Account: $SERVICE_ACCOUNT"
+```
+
+> **Note**: この権限は GCS 署名URL 生成に必要です。Cloud Run 環境では秘密鍵がないため、IAM API を使用して署名を行います。
 
 ## バックエンドデプロイ
 
@@ -90,10 +117,13 @@ gcloud run services update 3gpp-analyzer-api \
   --set-env-vars "GCS_BUCKET_NAME=${PROJECT_ID}-3gpp-documents" \
   --set-env-vars "USE_FIREBASE_EMULATOR=false" \
   --set-env-vars "FTP_MOCK_MODE=false" \
+  --set-env-vars "VERTEX_AI_LOCATION=asia-northeast1" \
   --update-env-vars='^|^CORS_ORIGINS_STR=http://localhost:3000,https://your-frontend-url.hosted.app'
 ```
 
-> **Note**: `CORS_ORIGINS_STR` はカンマ区切りで複数のオリジンを指定可能。ローカル開発用と本番用を両方含めることを推奨。gcloudでカンマを含む値を設定する場合は `--update-env-vars='^|^KEY=value'` 形式を使用。
+> **Note**:
+> - `CORS_ORIGINS_STR` はカンマ区切りで複数のオリジンを指定可能。ローカル開発用と本番用を両方含めることを推奨。gcloudでカンマを含む値を設定する場合は `--update-env-vars='^|^KEY=value'` 形式を使用。
+> - `VERTEX_AI_LOCATION` は Vertex AI Embedding API のリージョン。デフォルトは `asia-northeast1`。
 
 ## フロントエンドデプロイ
 
@@ -189,3 +219,52 @@ gcloud run services logs read 3gpp-analyzer-api --region asia-northeast1 --limit
 Cloud Run からの FTP 接続は通常動作しますが、問題がある場合:
 - VPC コネクタ経由での接続を検討
 - `FTP_MOCK_MODE=true` で一時的にモックモードで動作確認
+
+### Vertex AI Embedding エラー
+
+```
+ValueError: Missing key inputs argument! To use the Google AI API, provide (api_key) arguments.
+To use the Google Cloud API, provide (vertexai, project & location) arguments.
+```
+
+このエラーは `genai.Client()` の初期化パラメータが不足している場合に発生します。
+
+**解決方法:**
+```python
+# 正しい初期化（Cloud Run / Vertex AI 環境）
+from google import genai
+
+client = genai.Client(
+    vertexai=True,
+    project=project_id,
+    location="asia-northeast1",  # VERTEX_AI_LOCATION
+)
+```
+
+### 署名URL生成エラー
+
+```
+AttributeError: you need a private key to sign credentials
+```
+
+このエラーは Cloud Run 環境で秘密鍵なしで署名URLを生成しようとした場合に発生します。
+
+**解決方法:**
+1. IAM署名権限を付与（上記「5. IAM署名権限設定」参照）
+2. コードで IAM 署名を使用:
+```python
+from google.auth.transport import requests
+import google.auth
+
+credentials, project = google.auth.default()
+auth_request = requests.Request()
+credentials.refresh(auth_request)
+
+url = blob.generate_signed_url(
+    version="v4",
+    expiration=timedelta(minutes=60),
+    method="GET",
+    service_account_email=credentials.service_account_email,
+    access_token=credentials.token,
+)
+```
