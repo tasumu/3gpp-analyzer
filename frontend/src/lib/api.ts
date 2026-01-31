@@ -19,12 +19,27 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 /**
  * Get the current user's Firebase ID token.
  * Returns null if not authenticated.
+ * Waits for auth state to be restored if needed.
  */
 async function getAuthToken(): Promise<string | null> {
   const auth = getFirebaseAuth();
-  const user = auth.currentUser;
-  if (!user) return null;
-  return user.getIdToken();
+
+  // If currentUser is already available, use it
+  if (auth.currentUser) {
+    return auth.currentUser.getIdToken();
+  }
+
+  // Wait for auth state to be restored (happens on page load)
+  return new Promise((resolve) => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      unsubscribe();
+      if (user) {
+        user.getIdToken().then(resolve).catch(() => resolve(null));
+      } else {
+        resolve(null);
+      }
+    });
+  });
 }
 
 class ApiError extends Error {
