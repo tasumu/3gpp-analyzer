@@ -211,6 +211,11 @@ results = db.collection("chunks").find_nearest(
 )
 ```
 
+**現行実装（Phase 1）:**
+- Embeddingモデル: Vertex AI `text-embedding-004`（768次元）
+- ベクトルインデックス: Firestore Vector Search
+- 検索: コサイン類似度、メタデータフィルタ併用可能
+
 **将来の拡張:**
 - 性能問題が出た場合、EvidenceProvider実装を差し替え
 - Pinecone / Vertex AI Vector Search 等に移行可能
@@ -237,12 +242,25 @@ results = db.collection("chunks").find_nearest(
 
 1. ディレクトリ構造とメタ情報のみ先行同期
 2. ファイル本体は必要なときだけダウンロード
-3. ZIPはキャッシュ（更新検知時のみ再展開）
+3. 処理開始時に自動ダウンロード（`gcs_original_path`未設定時）
+
+**現行実装（Phase 1）:**
+- FTP同期: 会合単位でメタデータ取得、遅延ダウンロード
+- ZIP展開: `.docx`/`.doc`ファイルを自動抽出
+  - `__MACOSX`フォルダ、隠しファイルを除外
+  - `.docx`を優先、なければ`.doc`を選択
+- 自動ダウンロード: ProcessorServiceが処理開始時に自動取得
 
 ### 6.3 ファイル変換
 
-- `.doc` → `.docx`（LibreOffice headless推奨）
+- `.doc` → `.docx`（LibreOffice headless）
+- `.zip` → 内包する`.doc`/`.docx`を展開後、必要に応じて変換
 - PDFは必要に応じてテキスト化（初期フェイズでは実装不要）
+
+**現行実装（Phase 1）:**
+- NormalizerService: LibreOffice headless によるdoc→docx変換
+- ZIP対応: 自動展開、docx優先、doc→docx変換
+- タイムアウト: 60秒
 
 ---
 
@@ -273,7 +291,7 @@ class ChunkingStrategy(ABC):
         pass
 ```
 
-### 7.3 現行戦略（v1）: 見出しスタイルベース
+### 7.3 現行戦略（v1）: 見出しスタイルベース ✅ 実装済
 
 ```python
 class HeadingBasedChunking(ChunkingStrategy):
@@ -299,6 +317,13 @@ class HeadingBasedChunking(ChunkingStrategy):
 **メタデータ付与:**
 - 直近の見出しから条項番号を継承
 - ページ番号は段落位置から推定
+
+**Phase 1 実装:**
+- `HeadingBasedChunking`: 見出しベースのチャンク化
+- `DocxExtractor`: python-docx によるdocx構造解析
+- チャンクメタデータ: `contribution_number`, `meeting_id`, `clause_number`
+- Firestoreの`chunks`コレクションに保存
+- `chunk_count`をDocumentに記録
 
 ### 7.4 将来の改善候補
 

@@ -59,9 +59,31 @@ select = ["E", "F", "I", "N", "W"]
 | カテゴリ | 技術 | バージョン | 備考 |
 |---------|------|-----------|------|
 | Agent Framework | Google ADK | 1.x | Agent Development Kit |
-| LLM SDK | google-genai | 1.x | Gemini API クライアント |
+| LLM SDK | google-genai | 1.x | Gemini / Embedding API クライアント |
 | LLMモデル | Gemini | - | `gemini-3-flash-preview` 等 |
+| Embeddingモデル | text-embedding-004 | - | 768次元、Vertex AI 経由 |
 | LLM接続 | Vertex AI | - | 本番環境で使用（サービスアカウント認証） |
+
+### Vertex AI 初期化
+
+Cloud Run 環境では Vertex AI モードで `genai.Client` を初期化:
+
+```python
+from google import genai
+
+client = genai.Client(
+    vertexai=True,
+    project="your-project-id",
+    location="asia-northeast1",
+)
+
+# Embedding生成
+response = client.models.embed_content(
+    model="text-embedding-004",
+    contents=["テキスト"],
+    config={"output_dimensionality": 768},
+)
+```
 
 ## Firebase / GCP
 
@@ -74,6 +96,28 @@ select = ["E", "F", "I", "N", "W"]
 | Admin SDK | firebase-admin 6.5+ | サーバーサイドFirebase操作 |
 | Firestore SDK | google-cloud-firestore 2.16+ | Firestoreクライアント |
 | Storage SDK | google-cloud-storage 2.x | GCSクライアント |
+
+### 署名URL生成（Cloud Run環境）
+
+Cloud Run では秘密鍵がないため、IAM API を使用して署名URL を生成:
+
+```python
+import google.auth
+from google.auth.transport import requests
+
+credentials, project = google.auth.default()
+credentials.refresh(requests.Request())
+
+url = blob.generate_signed_url(
+    version="v4",
+    expiration=timedelta(minutes=60),
+    method="GET",
+    service_account_email=credentials.service_account_email,
+    access_token=credentials.token,
+)
+```
+
+> **必要な権限**: `roles/iam.serviceAccountTokenCreator`
 
 ### ストレージ構成
 
