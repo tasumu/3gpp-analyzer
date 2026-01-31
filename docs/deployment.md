@@ -49,6 +49,8 @@ gcloud firestore databases create --location=asia-northeast1
 2. プロジェクトを選択 → Authentication → 「始める」
 3. 「Sign-in method」タブで「Google」を有効化
 4. プロジェクトのサポートメールを設定して「保存」
+5. 「Settings」タブ → 「承認済みドメイン」に App Hosting の URL を追加
+   - 例: `threegpp-bff--your-project.asia-east1.hosted.app`
 
 ## バックエンドデプロイ
 
@@ -88,10 +90,10 @@ gcloud run services update 3gpp-analyzer-api \
   --set-env-vars "GCS_BUCKET_NAME=${PROJECT_ID}-3gpp-documents" \
   --set-env-vars "USE_FIREBASE_EMULATOR=false" \
   --set-env-vars "FTP_MOCK_MODE=false" \
-  --set-env-vars "CORS_ORIGINS=http://localhost:3000,https://your-frontend-url.hosted.app"
+  --update-env-vars='^|^CORS_ORIGINS_STR=http://localhost:3000,https://your-frontend-url.hosted.app'
 ```
 
-> **Note**: `CORS_ORIGINS` はカンマ区切りで複数のオリジンを指定可能。ローカル開発用と本番用を両方含めることを推奨。
+> **Note**: `CORS_ORIGINS_STR` はカンマ区切りで複数のオリジンを指定可能。ローカル開発用と本番用を両方含めることを推奨。gcloudでカンマを含む値を設定する場合は `--update-env-vars='^|^KEY=value'` 形式を使用。
 
 ## フロントエンドデプロイ
 
@@ -121,9 +123,12 @@ echo "Backend URL: $BACKEND_URL"
 Cloud Secret Manager に API URL を設定:
 
 ```bash
-# Firebase CLI でシークレット作成（権限も自動設定）
-firebase apphosting:secrets:set api-url
-# プロンプトで https://3gpp-analyzer-api-xxxxx-an.a.run.app/api を入力
+# Firebase CLI でシークレット作成
+# 改行文字が入らないよう printf を使用
+printf 'https://3gpp-analyzer-api-xxxxx-an.a.run.app/api' | firebase apphosting:secrets:set api-url --force
+
+# バックエンドにシークレットへのアクセス権限を付与
+firebase apphosting:secrets:grantaccess api-url --backend <バックエンド名>
 ```
 
 ## デプロイフロー
