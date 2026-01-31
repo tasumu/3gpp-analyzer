@@ -76,6 +76,9 @@ Cloud Run の継続的デプロイ機能を使用します。`cloudbuild.yaml` �
 ### 環境変数設定（デプロイ後）
 
 ```bash
+# フロントエンドURLを取得（App Hosting デプロイ後）
+# Firebase Console → App Hosting → URL を確認
+
 gcloud run services update 3gpp-analyzer-api \
   --region asia-northeast1 \
   --memory 1Gi \
@@ -85,8 +88,10 @@ gcloud run services update 3gpp-analyzer-api \
   --set-env-vars "GCS_BUCKET_NAME=${PROJECT_ID}-3gpp-documents" \
   --set-env-vars "USE_FIREBASE_EMULATOR=false" \
   --set-env-vars "FTP_MOCK_MODE=false" \
-  --set-env-vars "CORS_ORIGINS=[\"https://your-frontend-url.web.app\"]"
+  --set-env-vars "CORS_ORIGINS=http://localhost:3000,https://your-frontend-url.hosted.app"
 ```
+
+> **Note**: `CORS_ORIGINS` はカンマ区切りで複数のオリジンを指定可能。ローカル開発用と本番用を両方含めることを推奨。
 
 ## フロントエンドデプロイ
 
