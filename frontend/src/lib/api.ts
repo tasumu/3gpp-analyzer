@@ -3,6 +3,7 @@
  */
 
 import type {
+  ChunkListResponse,
   Document,
   DocumentListResponse,
   DocumentStatus,
@@ -194,6 +195,15 @@ export async function createFTPSyncStream(syncId: string): Promise<EventSource> 
   }
   const url = `${API_BASE}/ftp/sync/${syncId}/stream?token=${encodeURIComponent(token)}`;
   return new EventSource(url);
+}
+
+// Chunk APIs
+
+export async function getDocumentChunks(
+  documentId: string,
+  limit = 500,
+): Promise<ChunkListResponse> {
+  return fetchApi<ChunkListResponse>(`/documents/${documentId}/chunks?limit=${limit}`);
 }
 
 export { ApiError };

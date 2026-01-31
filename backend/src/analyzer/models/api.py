@@ -139,3 +139,36 @@ class FTPSyncProgress(BaseModel):
     documents_new: int = 0
     documents_updated: int = 0
     errors: list[str] = Field(default_factory=list)
+
+
+# Chunk schemas
+
+
+class ChunkMetadataResponse(BaseModel):
+    """Response model for chunk metadata."""
+
+    document_id: str
+    contribution_number: str
+    meeting_id: str | None = None
+    clause_number: str | None = None
+    clause_title: str | None = None
+    page_number: int | None = None
+    structure_type: str
+    heading_hierarchy: list[str] = Field(default_factory=list)
+
+
+class ChunkResponse(BaseModel):
+    """Response model for a single chunk."""
+
+    id: str
+    content: str
+    metadata: ChunkMetadataResponse
+    token_count: int
+    created_at: datetime
+
+
+class ChunkListResponse(BaseModel):
+    """Response model for chunk list."""
+
+    chunks: list[ChunkResponse]
+    total: int
