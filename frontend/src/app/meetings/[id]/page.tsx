@@ -433,20 +433,6 @@ export default function MeetingDetailPage() {
           <h2 className="text-lg font-medium text-gray-900 mb-4">Analysis Settings</h2>
 
           <div className="space-y-4">
-            {/* Custom Analysis Prompt */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Custom Analysis Prompt (for document analysis)
-              </label>
-              <SavedPromptSelector
-                value={analysisPrompt}
-                onChange={setAnalysisPrompt}
-                placeholder="例: セキュリティ関連の議論に焦点を当てて..."
-                rows={2}
-                disabled={isSummarizing || isGeneratingReport}
-              />
-            </div>
-
             {/* Custom Report Prompt */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -456,6 +442,20 @@ export default function MeetingDetailPage() {
                 value={reportPrompt}
                 onChange={setReportPrompt}
                 placeholder="例: 技術的なインパクトに焦点を当てたレポートを生成..."
+                rows={2}
+                disabled={isSummarizing || isGeneratingReport}
+              />
+            </div>
+
+            {/* Custom Analysis Prompt */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Custom Analysis Prompt (for document analysis)
+              </label>
+              <SavedPromptSelector
+                value={analysisPrompt}
+                onChange={setAnalysisPrompt}
+                placeholder="例: セキュリティ関連の議論に焦点を当てて..."
                 rows={2}
                 disabled={isSummarizing || isGeneratingReport}
               />
