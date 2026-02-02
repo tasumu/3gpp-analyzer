@@ -4,6 +4,7 @@ import os
 from typing import Any
 
 from google.cloud import firestore
+from google.cloud.firestore_v1.base_vector_query import DistanceMeasure
 from google.cloud.firestore_v1.vector import Vector
 
 
@@ -194,7 +195,7 @@ class FirestoreClient:
         vector_query = collection.find_nearest(
             vector_field="embedding",
             query_vector=Vector(query_embedding),
-            distance_measure=firestore.DistanceMeasure.COSINE,
+            distance_measure=DistanceMeasure.COSINE,
             limit=top_k,
         )
 
