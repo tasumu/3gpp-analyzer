@@ -361,3 +361,103 @@ export function isSingleAnalysis(
 ): result is SingleAnalysis {
   return result !== null && "summary" in result && "changes" in result;
 }
+
+// ============================================================================
+// Phase 3: Q&A and Meeting Analysis Types
+// ============================================================================
+
+// Q&A Types (P3-05)
+export type QAScope = "document" | "meeting" | "global";
+
+export interface QARequest {
+  question: string;
+  scope: QAScope;
+  scope_id?: string | null;
+  filters?: Record<string, unknown> | null;
+  language: AnalysisLanguage;
+}
+
+export interface QAEvidence {
+  chunk_id: string;
+  contribution_number: string;
+  content: string;
+  clause_number: string | null;
+  clause_title: string | null;
+  page_number: number | null;
+  relevance_score: number;
+}
+
+export interface QAResult {
+  id: string;
+  question: string;
+  answer: string;
+  scope: QAScope;
+  scope_id: string | null;
+  evidences: QAEvidence[];
+  created_at: string;
+}
+
+// Meeting Summary Types (P3-02)
+export interface DocumentSummary {
+  document_id: string;
+  contribution_number: string;
+  title: string;
+  source: string | null;
+  summary: string;
+  key_points: string[];
+  from_cache: boolean;
+}
+
+export interface MeetingSummarizeRequest {
+  custom_prompt?: string | null;
+  language: AnalysisLanguage;
+  force?: boolean;
+}
+
+export interface MeetingSummary {
+  id: string;
+  meeting_id: string;
+  custom_prompt: string | null;
+  overall_report: string;
+  key_topics: string[];
+  document_count: number;
+  language: string;
+  created_at: string;
+  summaries: DocumentSummary[];
+}
+
+// Meeting Report Types (P3-06)
+export interface MeetingReportRequest {
+  custom_prompt?: string | null;
+  language: AnalysisLanguage;
+}
+
+export interface MeetingReportResponse {
+  report_id: string;
+  meeting_id: string;
+  download_url: string;
+  summary_id: string;
+}
+
+// Meeting Info
+export interface MeetingInfo {
+  meeting_id: string;
+  working_group: string;
+  meeting_number: string;
+  total_documents: number;
+  indexed_documents: number;
+  ready_for_analysis: boolean;
+}
+
+// Q&A Scope labels
+export const qaScopeLabels: Record<QAScope, string> = {
+  document: "Single Document",
+  meeting: "Meeting",
+  global: "All Documents",
+};
+
+export const qaScopeLabelsJa: Record<QAScope, string> = {
+  document: "単一寄書",
+  meeting: "会合内",
+  global: "全体",
+};

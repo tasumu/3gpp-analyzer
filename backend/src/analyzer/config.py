@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     analysis_strategy_version: str = "v1"
     review_sheet_expiration_minutes: int = 60
 
+    # Phase 3: Meeting Analysis & Q&A
+    meeting_flash_model: str = "gemini-2.0-flash"  # Lightweight model for individual summaries
+    meeting_pro_model: str = "gemini-2.5-pro"  # High-performance model for overall reports
+    qa_model: str = "gemini-2.5-pro"  # Model for Q&A agents
+    meeting_summary_strategy_version: str = "v1"
+
     # API
     api_prefix: str = "/api"
     # CORS_ORIGINS env var should be comma-separated list of allowed origins
