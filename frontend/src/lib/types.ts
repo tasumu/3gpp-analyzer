@@ -341,6 +341,20 @@ export interface CustomPromptsResponse {
   prompts: CustomPrompt[];
 }
 
+// Report prompt types
+export interface ReportPrompt {
+  id: string;
+  user_id: string;
+  name: string;
+  prompt_text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportPromptsResponse {
+  prompts: ReportPrompt[];
+}
+
 export interface CustomAnalysisResult {
   prompt_text: string;
   prompt_id: string | null;
@@ -409,7 +423,8 @@ export interface DocumentSummary {
 }
 
 export interface MeetingSummarizeRequest {
-  custom_prompt?: string | null;
+  analysis_prompt?: string | null;
+  report_prompt?: string | null;
   language: AnalysisLanguage;
   force?: boolean;
 }
@@ -428,7 +443,8 @@ export interface MeetingSummary {
 
 // Meeting Report Types (P3-06)
 export interface MeetingReportRequest {
-  custom_prompt?: string | null;
+  analysis_prompt?: string | null;
+  report_prompt?: string | null;
   language: AnalysisLanguage;
 }
 

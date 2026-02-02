@@ -86,6 +86,14 @@
       ]
     },
     {
+      "collectionGroup": "report_prompts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "meeting_summaries",
       "queryScope": "COLLECTION",
       "fields": [

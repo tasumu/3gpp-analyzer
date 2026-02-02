@@ -13,6 +13,8 @@ import type {
   CustomPrompt,
   CustomPromptsResponse,
   Document,
+  ReportPrompt,
+  ReportPromptsResponse,
   DocumentListResponse,
   DocumentStatus,
   DocumentSummary,
@@ -350,6 +352,40 @@ export async function deleteCustomPrompt(promptId: string): Promise<void> {
   await fetchApi(`/prompts/${promptId}`, { method: "DELETE" });
 }
 
+// Report Prompts CRUD
+
+export async function listReportPrompts(): Promise<ReportPromptsResponse> {
+  return fetchApi<ReportPromptsResponse>("/report-prompts");
+}
+
+export async function createReportPrompt(
+  name: string,
+  promptText: string,
+): Promise<ReportPrompt> {
+  return fetchApi<ReportPrompt>("/report-prompts", {
+    method: "POST",
+    body: JSON.stringify({ name, prompt_text: promptText }),
+  });
+}
+
+export async function getReportPrompt(promptId: string): Promise<ReportPrompt> {
+  return fetchApi<ReportPrompt>(`/report-prompts/${promptId}`);
+}
+
+export async function updateReportPrompt(
+  promptId: string,
+  updates: { name?: string; prompt_text?: string },
+): Promise<ReportPrompt> {
+  return fetchApi<ReportPrompt>(`/report-prompts/${promptId}`, {
+    method: "PUT",
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function deleteReportPrompt(promptId: string): Promise<void> {
+  await fetchApi(`/report-prompts/${promptId}`, { method: "DELETE" });
+}
+
 // ============================================================================
 // Phase 3: Q&A APIs (P3-05)
 // ============================================================================
@@ -443,22 +479,30 @@ export async function summarizeMeeting(
 
 export async function createMeetingSummarizeStream(
   meetingId: string,
-  customPrompt?: string,
-  language: AnalysisLanguage = "ja",
-  force = false,
+  options?: {
+    analysisPrompt?: string;
+    reportPrompt?: string;
+    language?: AnalysisLanguage;
+    force?: boolean;
+  },
 ): Promise<EventSource> {
   const token = await getAuthToken();
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
 
+  const { analysisPrompt, reportPrompt, language = "ja", force = false } = options || {};
+
   const params = new URLSearchParams({
     language,
     force: force.toString(),
     token,
   });
-  if (customPrompt) {
-    params.set("custom_prompt", customPrompt);
+  if (analysisPrompt) {
+    params.set("analysis_prompt", analysisPrompt);
+  }
+  if (reportPrompt) {
+    params.set("report_prompt", reportPrompt);
   }
 
   const url = `${API_BASE}/meetings/${encodeURIComponent(meetingId)}/summarize/stream?${params.toString()}`;

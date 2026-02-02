@@ -24,6 +24,7 @@ from analyzer.services.meeting_service import MeetingService
 from analyzer.services.normalizer import NormalizerService
 from analyzer.services.processor import ProcessorService
 from analyzer.services.qa_service import QAService
+from analyzer.services.report_prompt_service import ReportPromptService
 from analyzer.services.review_sheet_generator import ReviewSheetGenerator
 from analyzer.services.vectorizer import VectorizerService
 
@@ -163,6 +164,13 @@ def get_custom_prompt_service(
     return CustomPromptService(firestore=firestore)
 
 
+def get_report_prompt_service(
+    firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
+) -> ReportPromptService:
+    """Get ReportPromptService instance."""
+    return ReportPromptService(firestore=firestore)
+
+
 def get_qa_service(
     evidence_provider: Annotated[EvidenceProvider, Depends(get_evidence_provider)],
     firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
@@ -231,6 +239,7 @@ ProcessorServiceDep = Annotated[ProcessorService, Depends(get_processor_service)
 AnalysisServiceDep = Annotated[AnalysisService, Depends(get_analysis_service)]
 ReviewSheetGeneratorDep = Annotated[ReviewSheetGenerator, Depends(get_review_sheet_generator)]
 CustomPromptServiceDep = Annotated[CustomPromptService, Depends(get_custom_prompt_service)]
+ReportPromptServiceDep = Annotated[ReportPromptService, Depends(get_report_prompt_service)]
 QAServiceDep = Annotated[QAService, Depends(get_qa_service)]
 MeetingServiceDep = Annotated[MeetingService, Depends(get_meeting_service)]
 MeetingReportGeneratorDep = Annotated[MeetingReportGenerator, Depends(get_meeting_report_generator)]
