@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import os
 from contextlib import asynccontextmanager
 
 import firebase_admin
@@ -10,6 +11,19 @@ from analyzer.api.router import api_router, internal_router
 from analyzer.config import get_settings
 
 
+def _configure_adk_environment(settings) -> None:
+    """Configure environment variables for Google ADK (Agent Development Kit).
+
+    ADK expects specific environment variable names for Vertex AI configuration.
+    This maps our settings to ADK's expected format.
+    """
+    if settings.gcp_project_id:
+        os.environ.setdefault("GOOGLE_CLOUD_PROJECT", settings.gcp_project_id)
+    if settings.vertex_ai_location:
+        os.environ.setdefault("GOOGLE_CLOUD_LOCATION", settings.vertex_ai_location)
+    os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "true")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
@@ -17,6 +31,9 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     if settings.debug:
         print(f"Starting {settings.app_name} in debug mode")
+
+    # Configure ADK environment variables
+    _configure_adk_environment(settings)
 
     # Initialize Firebase Admin SDK (for auth token verification)
     # Uses Application Default Credentials on Cloud Run
