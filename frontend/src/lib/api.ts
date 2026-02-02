@@ -17,8 +17,16 @@ import type {
   DocumentStatus,
   DownloadResponse,
   FTPBrowseResponse,
+  MeetingInfo,
+  MeetingReportRequest,
+  MeetingReportResponse,
   MeetingsResponse,
+  MeetingSummarizeRequest,
+  MeetingSummary,
   ProcessRequest,
+  QARequest,
+  QAResult,
+  QAScope,
 } from "./types";
 import { getFirebaseAuth } from "./firebase";
 
@@ -318,6 +326,151 @@ export async function updateCustomPrompt(
 
 export async function deleteCustomPrompt(promptId: string): Promise<void> {
   await fetchApi(`/prompts/${promptId}`, { method: "DELETE" });
+}
+
+// ============================================================================
+// Phase 3: Q&A APIs (P3-05)
+// ============================================================================
+
+export async function askQuestion(request: QARequest): Promise<QAResult> {
+  return fetchApi<QAResult>("/qa", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export async function createQAStream(
+  question: string,
+  scope: QAScope = "global",
+  scopeId?: string,
+  language: AnalysisLanguage = "ja",
+): Promise<EventSource> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error("Authentication required for SSE connection");
+  }
+
+  const params = new URLSearchParams({
+    question,
+    scope,
+    language,
+    token,
+  });
+  if (scopeId) {
+    params.set("scope_id", scopeId);
+  }
+
+  const url = `${API_BASE}/qa/stream?${params.toString()}`;
+  return new EventSource(url);
+}
+
+export async function getQAResult(resultId: string): Promise<QAResult> {
+  return fetchApi<QAResult>(`/qa/${resultId}`);
+}
+
+export async function listQAResults(
+  scope?: QAScope,
+  limit = 50,
+): Promise<QAResult[]> {
+  const params = new URLSearchParams();
+  if (scope) params.set("scope", scope);
+  params.set("limit", limit.toString());
+
+  return fetchApi<QAResult[]>(`/qa?${params.toString()}`);
+}
+
+// ============================================================================
+// Phase 3: Meeting Analysis APIs (P3-02, P3-06)
+// ============================================================================
+
+export async function getMeetingInfo(meetingId: string): Promise<MeetingInfo> {
+  return fetchApi<MeetingInfo>(`/meetings/${encodeURIComponent(meetingId)}/info`);
+}
+
+export async function summarizeMeeting(
+  meetingId: string,
+  request?: MeetingSummarizeRequest,
+): Promise<MeetingSummary> {
+  return fetchApi<MeetingSummary>(
+    `/meetings/${encodeURIComponent(meetingId)}/summarize`,
+    {
+      method: "POST",
+      body: JSON.stringify(request || { language: "ja" }),
+    },
+  );
+}
+
+export async function createMeetingSummarizeStream(
+  meetingId: string,
+  customPrompt?: string,
+  language: AnalysisLanguage = "ja",
+  force = false,
+): Promise<EventSource> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error("Authentication required for SSE connection");
+  }
+
+  const params = new URLSearchParams({
+    language,
+    force: force.toString(),
+    token,
+  });
+  if (customPrompt) {
+    params.set("custom_prompt", customPrompt);
+  }
+
+  const url = `${API_BASE}/meetings/${encodeURIComponent(meetingId)}/summarize/stream?${params.toString()}`;
+  return new EventSource(url);
+}
+
+export async function getMeetingSummary(
+  meetingId: string,
+  summaryId: string,
+): Promise<MeetingSummary> {
+  return fetchApi<MeetingSummary>(
+    `/meetings/${encodeURIComponent(meetingId)}/summary/${summaryId}`,
+  );
+}
+
+export async function listMeetingSummaries(
+  meetingId: string,
+  limit = 10,
+): Promise<MeetingSummary[]> {
+  return fetchApi<MeetingSummary[]>(
+    `/meetings/${encodeURIComponent(meetingId)}/summaries?limit=${limit}`,
+  );
+}
+
+export async function generateMeetingReport(
+  meetingId: string,
+  request?: MeetingReportRequest,
+): Promise<MeetingReportResponse> {
+  return fetchApi<MeetingReportResponse>(
+    `/meetings/${encodeURIComponent(meetingId)}/report`,
+    {
+      method: "POST",
+      body: JSON.stringify(request || { language: "ja" }),
+    },
+  );
+}
+
+export async function getMeetingReport(
+  meetingId: string,
+  reportId: string,
+): Promise<MeetingReportResponse> {
+  return fetchApi<MeetingReportResponse>(
+    `/meetings/${encodeURIComponent(meetingId)}/report/${reportId}`,
+  );
+}
+
+export async function listMeetingReports(
+  meetingId: string,
+  limit = 10,
+): Promise<MeetingReportResponse[]> {
+  return fetchApi<MeetingReportResponse[]>(
+    `/meetings/${encodeURIComponent(meetingId)}/reports?limit=${limit}`,
+  );
 }
 
 export { ApiError };

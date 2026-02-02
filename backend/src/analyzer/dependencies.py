@@ -19,8 +19,11 @@ from analyzer.services.analysis_service import AnalysisService
 from analyzer.services.custom_prompt_service import CustomPromptService
 from analyzer.services.document_service import DocumentService
 from analyzer.services.ftp_sync import FTPSyncService
+from analyzer.services.meeting_report_generator import MeetingReportGenerator
+from analyzer.services.meeting_service import MeetingService
 from analyzer.services.normalizer import NormalizerService
 from analyzer.services.processor import ProcessorService
+from analyzer.services.qa_service import QAService
 from analyzer.services.review_sheet_generator import ReviewSheetGenerator
 from analyzer.services.vectorizer import VectorizerService
 
@@ -160,6 +163,64 @@ def get_custom_prompt_service(
     return CustomPromptService(firestore=firestore)
 
 
+def get_qa_service(
+    evidence_provider: Annotated[EvidenceProvider, Depends(get_evidence_provider)],
+    firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> QAService:
+    """Get QAService instance."""
+    return QAService(
+        evidence_provider=evidence_provider,
+        firestore=firestore,
+        project_id=settings.gcp_project_id,
+        location=settings.vertex_ai_location,
+        model=settings.qa_model,
+    )
+
+
+def get_meeting_service(
+    evidence_provider: Annotated[EvidenceProvider, Depends(get_evidence_provider)],
+    document_service: Annotated[DocumentService, Depends(get_document_service)],
+    analysis_service: Annotated[AnalysisService, Depends(get_analysis_service)],
+    firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> MeetingService:
+    """Get MeetingService instance."""
+    return MeetingService(
+        evidence_provider=evidence_provider,
+        document_service=document_service,
+        analysis_service=analysis_service,
+        firestore=firestore,
+        project_id=settings.gcp_project_id,
+        location=settings.vertex_ai_location,
+        flash_model=settings.meeting_flash_model,
+        pro_model=settings.meeting_pro_model,
+        strategy_version=settings.meeting_summary_strategy_version,
+    )
+
+
+def get_meeting_report_generator(
+    meeting_service: Annotated[MeetingService, Depends(get_meeting_service)],
+    evidence_provider: Annotated[EvidenceProvider, Depends(get_evidence_provider)],
+    document_service: Annotated[DocumentService, Depends(get_document_service)],
+    firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
+    storage: Annotated[StorageClient, Depends(get_storage_client)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> MeetingReportGenerator:
+    """Get MeetingReportGenerator instance."""
+    return MeetingReportGenerator(
+        meeting_service=meeting_service,
+        evidence_provider=evidence_provider,
+        document_service=document_service,
+        firestore=firestore,
+        storage=storage,
+        project_id=settings.gcp_project_id,
+        location=settings.vertex_ai_location,
+        model=settings.meeting_pro_model,
+        expiration_minutes=settings.review_sheet_expiration_minutes,
+    )
+
+
 # Type aliases for dependency injection
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 FirestoreClientDep = Annotated[FirestoreClient, Depends(get_firestore_client)]
@@ -173,6 +234,11 @@ ProcessorServiceDep = Annotated[ProcessorService, Depends(get_processor_service)
 AnalysisServiceDep = Annotated[AnalysisService, Depends(get_analysis_service)]
 ReviewSheetGeneratorDep = Annotated[ReviewSheetGenerator, Depends(get_review_sheet_generator)]
 CustomPromptServiceDep = Annotated[CustomPromptService, Depends(get_custom_prompt_service)]
+QAServiceDep = Annotated[QAService, Depends(get_qa_service)]
+MeetingServiceDep = Annotated[MeetingService, Depends(get_meeting_service)]
+MeetingReportGeneratorDep = Annotated[
+    MeetingReportGenerator, Depends(get_meeting_report_generator)
+]
 
 # Authentication dependencies
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]

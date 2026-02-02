@@ -29,6 +29,18 @@ export function Header() {
               Documents
             </a>
             <a
+              href="/meetings"
+              className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+            >
+              Meetings
+            </a>
+            <a
+              href="/qa"
+              className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+            >
+              Q&A
+            </a>
+            <a
               href="/analysis"
               className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
             >
