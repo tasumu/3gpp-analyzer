@@ -101,6 +101,7 @@ export default function MeetingDetailPage() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryProgress, setSummaryProgress] = useState<SummaryProgress | null>(null);
   const [currentSummary, setCurrentSummary] = useState<MeetingSummary | null>(null);
+  const [latestSummary, setLatestSummary] = useState<MeetingSummary | null>(null);
   const [previousSummaries, setPreviousSummaries] = useState<MeetingSummary[]>([]);
 
   // Report state
@@ -134,6 +135,7 @@ export default function MeetingDetailPage() {
       setMeetingInfo(info);
       if (summaries.length > 0) {
         setCurrentSummary(summaries[0]);
+        setLatestSummary(summaries[0]);
         setPreviousSummaries(summaries.slice(1));
       }
     } catch (err) {
@@ -172,6 +174,7 @@ export default function MeetingDetailPage() {
             // Individual document summary received
           } else if (data.event === "complete") {
             setCurrentSummary(data.summary);
+            setLatestSummary(data.summary);
             setSummaryProgress(null);
             setIsSummarizing(false);
             toast.success("Meeting summary completed");
@@ -212,6 +215,7 @@ export default function MeetingDetailPage() {
         force,
       });
       setCurrentSummary(summary);
+      setLatestSummary(summary);
       toast.success("Meeting summary completed");
     } catch (err) {
       console.error("Summarize failed:", err);
@@ -622,10 +626,27 @@ export default function MeetingDetailPage() {
           <div className="bg-white shadow-sm rounded-lg border border-gray-200">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-gray-900">Meeting Summary</h2>
-                <span className="text-xs text-gray-500">
-                  {new Date(currentSummary.created_at).toLocaleString("ja-JP")}
-                </span>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-medium text-gray-900">Meeting Summary</h2>
+                  {latestSummary && currentSummary.id !== latestSummary.id && (
+                    <span className="px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded">
+                      Viewing past summary
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {latestSummary && currentSummary.id !== latestSummary.id && (
+                    <button
+                      onClick={() => setCurrentSummary(latestSummary)}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      View latest
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    {new Date(currentSummary.created_at).toLocaleString("ja-JP")}
+                  </span>
+                </div>
               </div>
 
               {currentSummary.custom_prompt && (
@@ -705,9 +726,14 @@ export default function MeetingDetailPage() {
             <h2 className="text-lg font-medium text-gray-900 mb-4">Previous Summaries</h2>
             <div className="space-y-2">
               {previousSummaries.map((summary) => (
-                <div
+                <button
                   key={summary.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  onClick={() => setCurrentSummary(summary)}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors ${
+                    currentSummary?.id === summary.id
+                      ? "bg-blue-50 border border-blue-200"
+                      : "bg-gray-50 hover:bg-gray-100"
+                  }`}
                 >
                   <div>
                     <span className="text-sm text-gray-700">
@@ -715,14 +741,15 @@ export default function MeetingDetailPage() {
                     </span>
                     {summary.custom_prompt && (
                       <span className="ml-2 text-xs text-gray-500">
-                        ({summary.custom_prompt.substring(0, 30)}...)
+                        ({summary.custom_prompt.substring(0, 30)}
+                        {summary.custom_prompt.length > 30 ? "..." : ""})
                       </span>
                     )}
                   </div>
                   <span className="text-xs text-gray-400">
                     {summary.document_count} documents
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           </div>
