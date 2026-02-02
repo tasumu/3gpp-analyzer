@@ -532,6 +532,19 @@ export default function MeetingDetailPage() {
 
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-3 pt-2">
+              {meetingInfo.unindexed_count > 0 && (
+                <button
+                  onClick={handleBatchProcess}
+                  disabled={isSummarizing || isGeneratingReport || isProcessing}
+                  className="px-4 py-2 bg-purple-600 text-white font-medium rounded-md
+                           hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isProcessing
+                    ? "Processing..."
+                    : `Process All Documents (${meetingInfo.unindexed_count})`}
+                </button>
+              )}
+
               <button
                 onClick={handleSummarize}
                 disabled={isSummarizing || isGeneratingReport || isProcessing || !meetingInfo.ready_for_analysis}
@@ -549,19 +562,6 @@ export default function MeetingDetailPage() {
               >
                 {isGeneratingReport ? "Generating..." : "Generate Full Report"}
               </button>
-
-              {meetingInfo.unindexed_count > 0 && (
-                <button
-                  onClick={handleBatchProcess}
-                  disabled={isSummarizing || isGeneratingReport || isProcessing}
-                  className="px-4 py-2 bg-purple-600 text-white font-medium rounded-md
-                           hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {isProcessing
-                    ? "処理中..."
-                    : `全文書を一括処理 (${meetingInfo.unindexed_count}件)`}
-                </button>
-              )}
             </div>
 
             {!meetingInfo.ready_for_analysis && (
@@ -687,9 +687,13 @@ export default function MeetingDetailPage() {
               </div>
 
               {!showAllSummaries && currentSummary.summaries.length > 6 && (
-                <div className="text-center mt-4 text-sm text-gray-500">
+                <button
+                  onClick={() => setShowAllSummaries(true)}
+                  className="w-full mt-4 py-2 text-sm text-blue-600 hover:text-blue-800
+                           hover:bg-blue-50 rounded-lg transition-colors"
+                >
                   +{currentSummary.summaries.length - 6} more documents
-                </div>
+                </button>
               )}
             </div>
           </div>
