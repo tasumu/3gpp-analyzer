@@ -7,19 +7,35 @@ import type { AnalysisLanguage, AnalysisResult, Document } from "@/lib/types";
 import { languageLabels } from "@/lib/types";
 import { AnalysisResultDisplay } from "./AnalysisResult";
 import { AnalysisProgress } from "./AnalysisProgress";
-import { CustomAnalysisSection } from "./CustomAnalysisSection";
 
 interface AnalysisPanelProps {
   document: Document;
   onAnalysisComplete?: () => void;
+  language?: AnalysisLanguage;
+  onLanguageChange?: (language: AnalysisLanguage) => void;
 }
 
-export function AnalysisPanel({ document, onAnalysisComplete }: AnalysisPanelProps) {
+export function AnalysisPanel({
+  document,
+  onAnalysisComplete,
+  language: externalLanguage,
+  onLanguageChange,
+}: AnalysisPanelProps) {
   const [analyses, setAnalyses] = useState<AnalysisResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null);
-  const [language, setLanguage] = useState<AnalysisLanguage>("ja");
+  const [internalLanguage, setInternalLanguage] = useState<AnalysisLanguage>("ja");
+
+  // Use external language if provided, otherwise use internal state
+  const language = externalLanguage ?? internalLanguage;
+  const setLanguage = (lang: AnalysisLanguage) => {
+    if (onLanguageChange) {
+      onLanguageChange(lang);
+    } else {
+      setInternalLanguage(lang);
+    }
+  };
 
   useEffect(() => {
     loadAnalyses();
@@ -79,14 +95,11 @@ export function AnalysisPanel({ document, onAnalysisComplete }: AnalysisPanelPro
 
   return (
     <div className="space-y-6">
-      {/* Header with Language Selector */}
+      {/* Description and Controls */}
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-medium text-gray-900">Document Analysis</h3>
-          <p className="text-sm text-gray-500">
-            Analyze this document to extract key points, changes, and issues.
-          </p>
-        </div>
+        <p className="text-sm text-gray-500">
+          Analyze this document to extract key points, changes, and issues.
+        </p>
         <div className="flex items-center gap-4">
           {/* Language Selector */}
           <div className="flex items-center gap-2">
@@ -183,9 +196,6 @@ export function AnalysisPanel({ document, onAnalysisComplete }: AnalysisPanelPro
           </div>
         </div>
       )}
-
-      {/* Custom Analysis Section */}
-      <CustomAnalysisSection documentId={document.id} language={language} />
     </div>
   );
 }

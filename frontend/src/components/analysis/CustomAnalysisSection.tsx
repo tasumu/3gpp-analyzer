@@ -111,13 +111,10 @@ export function CustomAnalysisSection({
     result?.result && isCustomAnalysis(result.result) ? result.result : null;
 
   return (
-    <div className="border-t pt-6 mt-6 space-y-4">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900">Custom Analysis</h3>
-        <p className="text-sm text-gray-500">
-          Ask a specific question or analyze from a particular perspective.
-        </p>
-      </div>
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">
+        Ask a specific question or analyze from a particular perspective.
+      </p>
 
       {/* Saved Prompts */}
       {!isLoadingPrompts && prompts.length > 0 && (
