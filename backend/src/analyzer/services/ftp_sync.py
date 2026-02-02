@@ -1,6 +1,7 @@
 """FTP synchronization service for 3GPP documents (P1-01)."""
 
 import asyncio
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +11,8 @@ from typing import Callable
 from analyzer.models.document import Document, DocumentStatus, Meeting, SourceFile
 from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.providers.storage_client import StorageClient
+
+logger = logging.getLogger(__name__)
 
 # Contribution number pattern: e.g., S2-2401234, R1-2312345
 CONTRIBUTION_PATTERN = re.compile(r"^([A-Z]\d-\d{6,7})")
@@ -503,7 +506,7 @@ class FTPSyncService:
                 # Extract contribution number
                 contrib_num = self._parse_contribution_number(file_info["filename"])
                 if not contrib_num:
-                    # Skip files without valid contribution number
+                    logger.info(f"Skipped (invalid contribution number): {file_info['filename']}")
                     continue
 
                 # Create document ID

@@ -3,13 +3,47 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { AnalysisPanel } from "@/components/analysis";
+import { AnalysisPanel, CustomAnalysisSection } from "@/components/analysis";
 import { AuthGuard } from "@/components/AuthGuard";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
 import { deleteDocument, getDocument, getDownloadUrl } from "@/lib/api";
-import type { Document } from "@/lib/types";
+import type { AnalysisLanguage, Document } from "@/lib/types";
 import { formatDate, formatFileSize } from "@/lib/types";
+
+interface CollapsibleSectionProps {
+  title: string;
+  defaultExpanded?: boolean;
+  children: React.ReactNode;
+}
+
+function CollapsibleSection({ title, defaultExpanded = false, children }: CollapsibleSectionProps) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+
+  return (
+    <div className="bg-white shadow-sm rounded-lg overflow-hidden">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
+      >
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+        <svg
+          className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isExpanded && (
+        <div className="px-6 pb-6 border-t border-gray-100">
+          <div className="pt-4">{children}</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function DocumentDetailPage() {
   const params = useParams();
@@ -20,6 +54,7 @@ export default function DocumentDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [analysisLanguage, setAnalysisLanguage] = useState<AnalysisLanguage>("ja");
 
   const fetchDocument = useCallback(async () => {
     setIsLoading(true);
@@ -158,13 +193,6 @@ export default function DocumentDetailPage() {
         />
       </div>
 
-      {/* Analysis (only for indexed documents) */}
-      {document.status === "indexed" && (
-        <div className="bg-white shadow-sm rounded-lg p-6">
-          <AnalysisPanel document={document} onAnalysisComplete={fetchDocument} />
-        </div>
-      )}
-
       {/* Actions */}
       <div className="bg-white shadow-sm rounded-lg p-6">
         <h2 className="text-lg font-semibold mb-4">Actions</h2>
@@ -203,6 +231,25 @@ export default function DocumentDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Document Analysis (only for indexed documents) */}
+      {document.status === "indexed" && (
+        <CollapsibleSection title="Document Analysis" defaultExpanded={true}>
+          <AnalysisPanel
+            document={document}
+            onAnalysisComplete={fetchDocument}
+            language={analysisLanguage}
+            onLanguageChange={setAnalysisLanguage}
+          />
+        </CollapsibleSection>
+      )}
+
+      {/* Custom Document Analysis (only for indexed documents) */}
+      {document.status === "indexed" && (
+        <CollapsibleSection title="Custom Document Analysis" defaultExpanded={false}>
+          <CustomAnalysisSection documentId={document.id} language={analysisLanguage} />
+        </CollapsibleSection>
+      )}
     </div>
     </AuthGuard>
   );

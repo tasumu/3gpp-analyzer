@@ -18,6 +18,7 @@ interface UseDocumentStatusResult {
   message: string | null;
   error: string | null;
   isConnected: boolean;
+  isStarting: boolean;
   startProcessing: () => void;
   stopWatching: () => void;
 }
@@ -34,6 +35,7 @@ export function useDocumentStatus({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
 
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -53,6 +55,7 @@ export function useDocumentStatus({
     setProgress(0);
     setMessage(null);
     setError(null);
+    setIsStarting(true);
 
     try {
       // Create new SSE connection (now async due to token retrieval)
@@ -61,6 +64,7 @@ export function useDocumentStatus({
 
       eventSource.onopen = () => {
         setIsConnected(true);
+        setIsStarting(false);
       };
 
       eventSource.addEventListener("status", (event) => {
@@ -92,6 +96,7 @@ export function useDocumentStatus({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to connect");
       onError?.(err instanceof Error ? err.message : "Failed to connect");
+      setIsStarting(false);
     }
   }, [documentId, force, onComplete, onError, stopWatching]);
 
@@ -112,6 +117,7 @@ export function useDocumentStatus({
     message,
     error,
     isConnected,
+    isStarting,
     startProcessing,
     stopWatching,
   };
