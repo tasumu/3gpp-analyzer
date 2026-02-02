@@ -166,9 +166,7 @@ async def get_document_chunks(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    chunks_data = await document_service.firestore.get_chunks_by_document(
-        document_id, limit=limit
-    )
+    chunks_data = await document_service.firestore.get_chunks_by_document(document_id, limit=limit)
 
     chunks = []
     for chunk in chunks_data:

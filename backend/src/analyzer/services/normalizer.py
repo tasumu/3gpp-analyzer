@@ -59,7 +59,8 @@ class NormalizerService:
         with zipfile.ZipFile(zip_path, "r") as zf:
             # Get list of doc/docx files
             doc_files = [
-                f for f in zf.namelist()
+                f
+                for f in zf.namelist()
                 if f.lower().endswith((".doc", ".docx"))
                 and not f.startswith("__MACOSX")
                 and not f.startswith(".")
@@ -133,9 +134,7 @@ class NormalizerService:
                 gcs_normalized = await self._convert_doc_to_docx(gcs_original, meeting_id, filename)
 
             elif self._is_zip(filename):
-                gcs_normalized = await self._normalize_from_zip(
-                    gcs_original, meeting_id, filename
-                )
+                gcs_normalized = await self._normalize_from_zip(gcs_original, meeting_id, filename)
 
             else:
                 raise ValueError(f"Unsupported file format: {filename}")

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { AnalysisPanel } from "@/components/analysis";
 import { AuthGuard } from "@/components/AuthGuard";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
@@ -156,6 +157,13 @@ export default function DocumentDetailPage() {
           onComplete={fetchDocument}
         />
       </div>
+
+      {/* Analysis (only for indexed documents) */}
+      {document.status === "indexed" && (
+        <div className="bg-white shadow-sm rounded-lg p-6">
+          <AnalysisPanel document={document} onAnalysisComplete={fetchDocument} />
+        </div>
+      )}
 
       {/* Actions */}
       <div className="bg-white shadow-sm rounded-lg p-6">
