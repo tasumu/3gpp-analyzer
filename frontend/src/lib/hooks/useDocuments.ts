@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import useSWR from "swr";
 import { listDocuments, listMeetings } from "../api";
 import type { Document, DocumentStatus, Meeting } from "../types";
 
@@ -22,45 +22,34 @@ interface UseDocumentsResult {
 }
 
 export function useDocuments(options: UseDocumentsOptions = {}): UseDocumentsResult {
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
   const { meeting_id, status, page = 1, page_size = 50 } = options;
 
-  const fetchDocuments = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+  // Create a stable cache key based on parameters
+  const cacheKey = ["documents", meeting_id, status, page, page_size].filter(Boolean).join("-");
 
-    try {
-      const response = await listDocuments({
+  const { data, error, isLoading, mutate } = useSWR(
+    cacheKey,
+    () =>
+      listDocuments({
         meeting_id,
         status,
         page,
         page_size,
-      });
-      setDocuments(response.documents);
-      setTotal(response.total);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error(String(err)));
-    } finally {
-      setIsLoading(false);
+      }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 5000, // Dedupe requests within 5 seconds
     }
-  }, [meeting_id, status, page, page_size]);
-
-  useEffect(() => {
-    fetchDocuments();
-  }, [fetchDocuments]);
+  );
 
   return {
-    documents,
-    total,
+    documents: data?.documents ?? [],
+    total: data?.total ?? 0,
     page,
     pageSize: page_size,
     isLoading,
-    error,
-    refresh: fetchDocuments,
+    error: error ?? null,
+    refresh: () => mutate(),
   };
 }
 
@@ -72,32 +61,19 @@ interface UseMeetingsResult {
 }
 
 export function useMeetings(): UseMeetingsResult {
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  const fetchMeetings = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await listMeetings();
-      setMeetings(response.meetings);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error(String(err)));
-    } finally {
-      setIsLoading(false);
+  const { data, error, isLoading, mutate } = useSWR(
+    "meetings",
+    () => listMeetings().then((r) => r.meetings),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 5000, // Dedupe requests within 5 seconds
     }
-  }, []);
-
-  useEffect(() => {
-    fetchMeetings();
-  }, [fetchMeetings]);
+  );
 
   return {
-    meetings,
+    meetings: data ?? [],
     isLoading,
-    error,
-    refresh: fetchMeetings,
+    error: error ?? null,
+    refresh: () => mutate(),
   };
 }
