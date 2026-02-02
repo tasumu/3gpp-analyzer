@@ -32,7 +32,15 @@ export function AnalysisResultDisplay({ analysis }: AnalysisResultDisplayProps) 
 
   // Type guard for single analysis
   const isSingleAnalysis = analysis.type === "single";
-  const result = analysis.result as SingleAnalysis;
+  const rawResult = analysis.result as SingleAnalysis;
+
+  // Ensure arrays are defined (defensive coding for Firestore data)
+  const result = {
+    ...rawResult,
+    changes: rawResult.changes || [],
+    issues: rawResult.issues || [],
+    evidences: rawResult.evidences || [],
+  };
 
   const downloadUrl = getReviewSheetUrl(analysis.id);
 
