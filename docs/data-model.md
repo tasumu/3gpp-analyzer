@@ -285,10 +285,10 @@ interface AnalysisResult {
   type: AnalysisType;              // 分析タイプ
   strategy_version: string;        // 分析戦略バージョン
   created_at: timestamp;           // 作成日時
-  result: SingleAnalysis | CompareAnalysis;
+  result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult;
 }
 
-type AnalysisType = "single" | "compare";
+type AnalysisType = "single" | "compare" | "custom";
 
 interface SingleAnalysis {
   summary: string;                 // 要点サマリ
@@ -320,6 +320,13 @@ interface Difference {
   doc1_position: string;           // 文書1の立場
   doc2_position: string;           // 文書2の立場
 }
+
+interface CustomAnalysisResult {
+  prompt_text: string;             // 使用したカスタムプロンプト
+  prompt_id: string | null;        // 保存済みプロンプトID（使用した場合）
+  answer: string;                  // 自由形式の回答
+  evidences: Evidence[];           // 根拠
+}
 ```
 
 ### 5.2 Python定義
@@ -329,7 +336,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Literal
 
-AnalysisType = Literal["single", "compare"]
+AnalysisType = Literal["single", "compare", "custom"]
 ChangeType = Literal["addition", "modification", "deletion"]
 Severity = Literal["high", "medium", "low"]
 
@@ -359,13 +366,19 @@ class CompareAnalysis(BaseModel):
     recommendation: str
     evidences: list[Evidence]
 
+class CustomAnalysisResult(BaseModel):
+    prompt_text: str
+    prompt_id: str | None = None
+    answer: str
+    evidences: list[Evidence]
+
 class AnalysisResult(BaseModel):
     id: str
     document_id: str
     type: AnalysisType
     strategy_version: str
     created_at: datetime
-    result: SingleAnalysis | CompareAnalysis
+    result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult
 ```
 
 ### 5.3 永続化の方針
@@ -377,7 +390,36 @@ class AnalysisResult(BaseModel):
 | 再分析条件 | 戦略バージョン変更、明示的な再分析リクエスト |
 | 保持期間 | 無期限（必要に応じてアーカイブ） |
 
-### 5.4 使用例
+### 5.4 カスタム分析結果の使用例
+
+**カスタム分析リクエスト**
+
+```json
+{
+  "prompt_text": "セキュリティの観点でサマライズしてください",
+  "prompt_id": "prompt-12345"
+}
+```
+
+**カスタム分析レスポンス**
+
+```json
+{
+  "id": "ana-custom-12345",
+  "document_id": "doc-67890",
+  "type": "custom",
+  "strategy_version": "v1",
+  "created_at": "2025-01-29T12:00:00Z",
+  "result": {
+    "prompt_text": "セキュリティの観点でサマライズしてください",
+    "prompt_id": "prompt-12345",
+    "answer": "本寄書はセキュリティ観点から以下の点が重要です...",
+    "evidences": [...]
+  }
+}
+```
+
+### 5.5 使用例
 
 ```json
 {
@@ -464,3 +506,89 @@ class AnalysisResult(BaseModel):
 
 - 相対パス: `S1-234567.docx`
 - FTPパス: `ftp://..../S1-234567.doc`
+
+---
+
+## 7. CustomPrompt（カスタムプロンプト）
+
+ユーザーが保存したカスタム分析用プロンプト。
+
+### 7.1 スキーマ
+
+```typescript
+interface CustomPrompt {
+  id: string;                      // プロンプトID
+  user_id: string;                 // 所有者ユーザーID
+  name: string;                    // 表示名
+  prompt_text: string;             // プロンプトテキスト
+  created_at: timestamp;           // 作成日時
+  updated_at: timestamp;           // 更新日時
+}
+```
+
+### 7.2 Python定義
+
+```python
+from pydantic import BaseModel, Field
+from datetime import datetime
+
+class CustomPrompt(BaseModel):
+    id: str = Field(..., description="プロンプトID")
+    user_id: str = Field(..., description="所有者ユーザーID")
+    name: str = Field(..., min_length=1, max_length=100, description="表示名")
+    prompt_text: str = Field(..., min_length=1, max_length=2000, description="プロンプトテキスト")
+    created_at: datetime
+    updated_at: datetime
+```
+
+### 7.3 Firestoreコレクション
+
+```
+custom_prompts/{prompt_id}
+  - user_id: string
+  - name: string
+  - prompt_text: string
+  - created_at: timestamp
+  - updated_at: timestamp
+```
+
+**インデックス**: `user_id` + `created_at` DESC
+
+### 7.4 使用例
+
+```json
+{
+  "id": "prompt-12345",
+  "user_id": "user-abc",
+  "name": "セキュリティ分析",
+  "prompt_text": "セキュリティの観点でサマライズしてください",
+  "created_at": "2025-01-28T10:00:00Z",
+  "updated_at": "2025-01-28T10:00:00Z"
+}
+```
+
+---
+
+## 8. 言語設定
+
+### 8.1 出力言語
+
+分析結果の出力言語を選択可能。
+
+```typescript
+type AnalysisLanguage = "ja" | "en";
+```
+
+### 8.2 言語適用範囲
+
+| 項目 | 言語設定の影響 |
+|------|---------------|
+| summary（要点サマリ） | 選択言語で出力 |
+| changes.description | 選択言語で出力 |
+| issues.description | 選択言語で出力 |
+| evidences.text | 原文維持（翻訳なし） |
+| 技術用語 | 英語維持（3GPP用語、条項番号等） |
+
+### 8.3 デフォルト値
+
+- デフォルト言語: `ja`（日本語）

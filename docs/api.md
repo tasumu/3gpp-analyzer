@@ -155,7 +155,8 @@ data: {"status": "indexed", "document_id": "doc-12345"}
   "options": {
     "include_summary": true,
     "include_changes": true,
-    "include_issues": true
+    "include_issues": true,
+    "language": "ja"
   }
 }
 ```
@@ -165,6 +166,7 @@ data: {"status": "indexed", "document_id": "doc-12345"}
 | type | string | Yes | "single" または "compare" |
 | contribution_numbers | string[] | Yes | single: 1件, compare: 2件 |
 | options | object | No | 分析オプション |
+| options.language | string | No | 出力言語（"ja" または "en"、デフォルト: "ja"） |
 
 **レスポンス**
 
@@ -274,6 +276,177 @@ data: {"analysis_id": "ana-12345", "status": "completed"}
 ```
 Content-Type: text/markdown
 Content-Disposition: attachment; filename="review-sheet-S1-234567.md"
+```
+
+---
+
+### POST /api/documents/{id}/analyze/custom
+
+カスタム分析を実行する。ユーザー定義のプロンプトで文書を分析。
+
+**リクエスト**
+
+```json
+{
+  "prompt_text": "セキュリティの観点でサマライズしてください",
+  "prompt_id": "prompt-12345",
+  "language": "ja"
+}
+```
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|---|------|------|
+| prompt_text | string | Yes | カスタムプロンプト（1-2000文字） |
+| prompt_id | string | No | 保存済みプロンプトのID（使用した場合） |
+| language | string | No | 出力言語（"ja" または "en"、デフォルト: "ja"） |
+
+**レスポンス**
+
+```json
+{
+  "id": "ana-custom-12345",
+  "document_id": "doc-67890",
+  "type": "custom",
+  "status": "completed",
+  "strategy_version": "v1",
+  "created_at": "2025-01-29T12:00:00Z",
+  "result": {
+    "prompt_text": "セキュリティの観点でサマライズしてください",
+    "prompt_id": "prompt-12345",
+    "answer": "本寄書はセキュリティ観点から以下の点が重要です...",
+    "evidences": [
+      {
+        "text": "Security requirements shall include...",
+        "contribution_number": "S1-234567",
+        "clause_number": "6.1",
+        "page_number": 15,
+        "score": 0.89
+      }
+    ]
+  }
+}
+```
+
+---
+
+### GET /api/prompts
+
+ユーザーの保存済みプロンプト一覧を取得する。
+
+**レスポンス**
+
+```json
+{
+  "prompts": [
+    {
+      "id": "prompt-12345",
+      "user_id": "user-abc",
+      "name": "セキュリティ分析",
+      "prompt_text": "セキュリティの観点でサマライズしてください",
+      "created_at": "2025-01-28T10:00:00Z",
+      "updated_at": "2025-01-28T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### POST /api/prompts
+
+新しいプロンプトを保存する。
+
+**リクエスト**
+
+```json
+{
+  "name": "セキュリティ分析",
+  "prompt_text": "セキュリティの観点でサマライズしてください"
+}
+```
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|---|------|------|
+| name | string | Yes | 表示名（1-100文字） |
+| prompt_text | string | Yes | プロンプトテキスト（1-2000文字） |
+
+**レスポンス**
+
+```json
+{
+  "id": "prompt-12345",
+  "user_id": "user-abc",
+  "name": "セキュリティ分析",
+  "prompt_text": "セキュリティの観点でサマライズしてください",
+  "created_at": "2025-01-28T10:00:00Z",
+  "updated_at": "2025-01-28T10:00:00Z"
+}
+```
+
+---
+
+### GET /api/prompts/{id}
+
+保存済みプロンプトを取得する。
+
+**レスポンス**
+
+```json
+{
+  "id": "prompt-12345",
+  "user_id": "user-abc",
+  "name": "セキュリティ分析",
+  "prompt_text": "セキュリティの観点でサマライズしてください",
+  "created_at": "2025-01-28T10:00:00Z",
+  "updated_at": "2025-01-28T10:00:00Z"
+}
+```
+
+---
+
+### PUT /api/prompts/{id}
+
+保存済みプロンプトを更新する。
+
+**リクエスト**
+
+```json
+{
+  "name": "セキュリティ詳細分析",
+  "prompt_text": "セキュリティの観点で詳細にサマライズしてください"
+}
+```
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|---|------|------|
+| name | string | No | 新しい表示名 |
+| prompt_text | string | No | 新しいプロンプトテキスト |
+
+**レスポンス**
+
+```json
+{
+  "id": "prompt-12345",
+  "user_id": "user-abc",
+  "name": "セキュリティ詳細分析",
+  "prompt_text": "セキュリティの観点で詳細にサマライズしてください",
+  "created_at": "2025-01-28T10:00:00Z",
+  "updated_at": "2025-01-29T12:00:00Z"
+}
+```
+
+---
+
+### DELETE /api/prompts/{id}
+
+保存済みプロンプトを削除する。
+
+**レスポンス**
+
+```json
+{
+  "status": "deleted"
+}
 ```
 
 ---
