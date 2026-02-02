@@ -45,6 +45,7 @@ class MeetingService:
         project_id: str,
         location: str = "asia-northeast1",
         pro_model: str = "gemini-3-pro-preview",
+        pro_model_location: str = "global",
         strategy_version: str = "v1",
     ):
         """
@@ -57,6 +58,7 @@ class MeetingService:
             project_id: GCP project ID.
             location: GCP region for Vertex AI.
             pro_model: High-performance model for overall reports.
+            pro_model_location: Location for pro model (e.g., "global" for gemini-3).
             strategy_version: Version identifier for caching.
         """
         self.document_service = document_service
@@ -65,13 +67,14 @@ class MeetingService:
         self.project_id = project_id
         self.location = location
         self.pro_model = pro_model
+        self.pro_model_location = pro_model_location
         self.strategy_version = strategy_version
 
-        # Initialize GenAI client for overall report generation
+        # Initialize GenAI client for overall report generation (uses pro_model_location)
         self._pro_client = genai.Client(
             vertexai=True,
             project=project_id,
-            location=location,
+            location=pro_model_location,
         )
 
     async def summarize_meeting(
