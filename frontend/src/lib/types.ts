@@ -446,7 +446,43 @@ export interface MeetingInfo {
   meeting_number: string;
   total_documents: number;
   indexed_documents: number;
+  unindexed_count: number;
   ready_for_analysis: boolean;
+}
+
+// Batch Processing Types
+export type BatchProcessEventType =
+  | "batch_start"
+  | "document_start"
+  | "document_progress"
+  | "document_complete"
+  | "batch_complete"
+  | "error";
+
+export interface BatchProcessEvent {
+  type: BatchProcessEventType;
+  document_id?: string;
+  contribution_number?: string;
+  index?: number;
+  total?: number;
+  status?: string;
+  progress?: number;
+  message?: string;
+  success?: boolean;
+  error?: string;
+  success_count?: number;
+  failed_count?: number;
+  errors?: Record<string, string>;
+}
+
+export interface BatchProcessProgress {
+  total: number;
+  processed: number;
+  current_document: string | null;
+  current_status: string | null;
+  current_progress: number;
+  success: number;
+  failed: number;
 }
 
 // Q&A Scope labels

@@ -3,7 +3,9 @@
 import asyncio
 import tempfile
 from pathlib import Path
-from typing import AsyncGenerator, Callable
+from typing import AsyncGenerator, Callable, Literal
+
+from pydantic import BaseModel
 
 from analyzer.chunking.extractor import DocxExtractor
 from analyzer.chunking.heading_based import HeadingBasedChunking
@@ -13,6 +15,32 @@ from analyzer.services.document_service import DocumentService
 from analyzer.services.ftp_sync import FTPSyncService
 from analyzer.services.normalizer import NormalizerService
 from analyzer.services.vectorizer import VectorizerService
+
+
+class BatchProcessEvent(BaseModel):
+    """Event model for batch processing progress."""
+
+    type: Literal[
+        "batch_start",
+        "document_start",
+        "document_progress",
+        "document_complete",
+        "batch_complete",
+        "error",
+    ]
+    document_id: str | None = None
+    contribution_number: str | None = None
+    index: int | None = None
+    total: int | None = None
+    status: str | None = None
+    progress: float | None = None
+    message: str | None = None
+    success: bool | None = None
+    error: str | None = None
+    # For batch_complete
+    success_count: int | None = None
+    failed_count: int | None = None
+    errors: dict[str, str] | None = None
 
 
 class ProcessorService:
@@ -253,3 +281,155 @@ class ProcessorService:
             "failed": failed,
             "errors": errors,
         }
+
+    async def process_batch_stream(
+        self,
+        document_ids: list[str],
+        force: bool = False,
+        concurrency: int = 3,
+    ) -> AsyncGenerator[BatchProcessEvent, None]:
+        """
+        Process multiple documents with streaming progress updates.
+
+        Args:
+            document_ids: List of document IDs to process.
+            force: Force reprocessing.
+            concurrency: Maximum concurrent processing tasks.
+
+        Yields:
+            BatchProcessEvent objects as processing progresses.
+        """
+        total = len(document_ids)
+        if total == 0:
+            yield BatchProcessEvent(
+                type="batch_complete",
+                total=0,
+                success_count=0,
+                failed_count=0,
+                errors={},
+            )
+            return
+
+        # Emit batch start
+        yield BatchProcessEvent(
+            type="batch_start",
+            total=total,
+        )
+
+        # Track results
+        success_count = 0
+        failed_count = 0
+        errors: dict[str, str] = {}
+
+        # Process documents with limited concurrency
+        semaphore = asyncio.Semaphore(concurrency)
+        pending_docs = list(enumerate(document_ids))
+        completed = 0
+
+        # Queue for events from concurrent tasks
+        event_queue: asyncio.Queue[BatchProcessEvent] = asyncio.Queue()
+
+        async def process_one(idx: int, doc_id: str):
+            """Process a single document and put events in queue."""
+            async with semaphore:
+                # Get document info for contribution_number
+                doc = await self.document_service.get(doc_id)
+                contrib_num = doc.contribution_number if doc else doc_id
+
+                await event_queue.put(
+                    BatchProcessEvent(
+                        type="document_start",
+                        document_id=doc_id,
+                        contribution_number=contrib_num,
+                        index=idx + 1,
+                        total=total,
+                    )
+                )
+
+                try:
+                    # Process with progress callback
+                    def progress_callback(update: StatusUpdate):
+                        # Put progress event in queue (non-blocking)
+                        try:
+                            event_queue.put_nowait(
+                                BatchProcessEvent(
+                                    type="document_progress",
+                                    document_id=doc_id,
+                                    contribution_number=contrib_num,
+                                    status=update.status.value,
+                                    progress=update.progress,
+                                    message=update.message,
+                                )
+                            )
+                        except asyncio.QueueFull:
+                            pass  # Skip if queue is full
+
+                    await self.process_document(doc_id, force, progress_callback)
+
+                    await event_queue.put(
+                        BatchProcessEvent(
+                            type="document_complete",
+                            document_id=doc_id,
+                            contribution_number=contrib_num,
+                            success=True,
+                        )
+                    )
+                    return (doc_id, True, None)
+
+                except Exception as e:
+                    error_msg = str(e)
+                    await event_queue.put(
+                        BatchProcessEvent(
+                            type="document_complete",
+                            document_id=doc_id,
+                            contribution_number=contrib_num,
+                            success=False,
+                            error=error_msg,
+                        )
+                    )
+                    return (doc_id, False, error_msg)
+
+        # Start all tasks
+        tasks = [asyncio.create_task(process_one(idx, doc_id)) for idx, doc_id in pending_docs]
+
+        # Process events as they come
+        while completed < total:
+            try:
+                # Wait for next event with timeout
+                event = await asyncio.wait_for(event_queue.get(), timeout=1.0)
+                yield event
+
+                if event.type == "document_complete":
+                    completed += 1
+                    if event.success:
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                        if event.document_id and event.error:
+                            errors[event.document_id] = event.error
+
+            except asyncio.TimeoutError:
+                # Check if all tasks are done
+                if all(t.done() for t in tasks):
+                    # Drain remaining events
+                    while not event_queue.empty():
+                        event = event_queue.get_nowait()
+                        yield event
+                        if event.type == "document_complete":
+                            completed += 1
+                            if event.success:
+                                success_count += 1
+                            else:
+                                failed_count += 1
+                                if event.document_id and event.error:
+                                    errors[event.document_id] = event.error
+                    break
+
+        # Emit batch complete
+        yield BatchProcessEvent(
+            type="batch_complete",
+            total=total,
+            success_count=success_count,
+            failed_count=failed_count,
+            errors=errors if errors else None,
+        )
