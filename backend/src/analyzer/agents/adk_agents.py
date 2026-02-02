@@ -111,6 +111,12 @@ def create_qa_agent(
 5. For complex questions, break them down into multiple searches
 {scope_search_instruction}
 
+## Important: Answer Based on Available Evidence
+
+When presenting search results:
+- **Summarize what IS available** rather than focusing on what is NOT found
+- Do NOT assume the user needs a specific level of technical detail
+
 ## Response Format
 
 {lang_text}
