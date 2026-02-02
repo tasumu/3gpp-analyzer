@@ -4,7 +4,8 @@ import logging
 import uuid
 from datetime import datetime
 
-from analyzer.agents.meeting_agent import MeetingReportAgent
+from analyzer.agents.adk_agents import ADKAgentRunner, create_meeting_report_agent
+from analyzer.agents.context import AgentToolContext
 from analyzer.models.meeting_analysis import MeetingReport, MeetingSummary
 from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
@@ -19,7 +20,7 @@ class MeetingReportGenerator:
     """
     Generator for comprehensive meeting reports (P3-06).
 
-    Uses MeetingService for summarization and MeetingReportAgent
+    Uses MeetingService for summarization and ADK agents
     for detailed analysis with RAG search capabilities.
     """
 
@@ -97,38 +98,32 @@ class MeetingReportGenerator:
             user_id=user_id,
         )
 
-        # Step 2: Use agent for detailed analysis
-        agent = MeetingReportAgent(
+        # Step 2: Use ADK agent for detailed analysis
+        agent = create_meeting_report_agent(
+            meeting_id=meeting_id,
+            model=self.model,
+            language=language,
+            custom_prompt=custom_prompt,
+        )
+
+        # Create context with services
+        agent_context = AgentToolContext(
             evidence_provider=self.evidence_provider,
+            scope="meeting",
+            scope_id=meeting_id,
+            meeting_id=meeting_id,
             document_service=self.document_service,
             firestore=self.firestore,
-            project_id=self.project_id,
-            meeting_id=meeting_id,
             language=language,
-            location=self.location,
-            model=self.model,
         )
 
-        # Prepare context with summary data
-        context = {
-            "meeting_id": meeting_id,
-            "custom_prompt": custom_prompt,
-            "language": language,
-            "summary": {
-                "document_count": summary.document_count,
-                "key_topics": summary.key_topics,
-                "overall_report": summary.overall_report[:2000],  # Truncate for context
-            },
-        }
+        # Create runner and execute
+        runner = ADKAgentRunner(agent=agent, agent_context=agent_context)
 
-        # Generate detailed analysis
-        detailed_analysis = await agent.run(
+        detailed_analysis, evidences = await runner.run(
             user_input=self._build_agent_prompt(meeting_id, summary, custom_prompt, language),
-            context=context,
+            user_id=user_id or "anonymous",
         )
-
-        # Get used evidences
-        evidences = agent.get_used_evidences()
 
         # Step 3: Generate Markdown report
         markdown_content = self._format_report(
@@ -188,14 +183,13 @@ class MeetingReportGenerator:
 
         # Include key info from summary
         top_docs = summary.individual_summaries[:10]
-        docs_preview = "\n".join([
-            f"- {s.contribution_number}: {s.title} ({s.source})"
-            for s in top_docs
-        ])
+        docs_preview = "\n".join(
+            [f"- {s.contribution_number}: {s.title} ({s.source})" for s in top_docs]
+        )
 
         return f"""Based on the meeting summary for {meeting_id}, perform detailed analysis.
 
-Key Topics Identified: {', '.join(summary.key_topics) if summary.key_topics else 'N/A'}
+Key Topics Identified: {", ".join(summary.key_topics) if summary.key_topics else "N/A"}
 
 Sample Contributions:
 {docs_preview}
@@ -253,41 +247,49 @@ Provide a detailed analysis with citations."""
         if custom_prompt:
             sections.append(f"- **{custom_focus_label}**: {custom_prompt}")
 
-        sections.extend([
-            "",
-            "---",
-            "",
-            overview_title,
-            "",
-            summary.overall_report,
-            "",
-        ])
+        sections.extend(
+            [
+                "",
+                "---",
+                "",
+                overview_title,
+                "",
+                summary.overall_report,
+                "",
+            ]
+        )
 
         # Key topics
         if summary.key_topics:
-            sections.extend([
-                topics_title,
-                "",
-            ])
+            sections.extend(
+                [
+                    topics_title,
+                    "",
+                ]
+            )
             for topic in summary.key_topics:
                 sections.append(f"- {topic}")
             sections.append("")
 
         # Detailed analysis from agent
-        sections.extend([
-            analysis_title,
-            "",
-            detailed_analysis,
-            "",
-        ])
+        sections.extend(
+            [
+                analysis_title,
+                "",
+                detailed_analysis,
+                "",
+            ]
+        )
 
         # Contribution summaries table
-        sections.extend([
-            contributions_title,
-            "",
-            "| Contribution | Title | Source | Summary |",
-            "|-------------|-------|--------|---------|",
-        ])
+        sections.extend(
+            [
+                contributions_title,
+                "",
+                "| Contribution | Title | Source | Summary |",
+                "|-------------|-------|--------|---------|",
+            ]
+        )
 
         for s in summary.individual_summaries[:50]:  # Limit to 50
             # Truncate summary for table
@@ -302,10 +304,12 @@ Provide a detailed analysis with citations."""
 
         # References from RAG search
         if evidences:
-            sections.extend([
-                references_title,
-                "",
-            ])
+            sections.extend(
+                [
+                    references_title,
+                    "",
+                ]
+            )
             # Group by contribution
             by_contrib: dict[str, list] = {}
             for ev in evidences[:30]:  # Limit references
@@ -323,20 +327,22 @@ Provide a detailed analysis with citations."""
                 sections.append("")
 
         # Footer
-        sections.extend([
-            "---",
-            "",
-            "*This report was generated automatically by 3GPP Analyzer.*",
-        ])
+        sections.extend(
+            [
+                "---",
+                "",
+                "*This report was generated automatically by 3GPP Analyzer.*",
+            ]
+        )
 
         return "\n".join(sections)
 
     async def _save_report(self, report: MeetingReport) -> None:
         """Save report metadata to Firestore."""
         try:
-            doc_ref = self.firestore.client.collection(
-                self.MEETING_REPORTS_COLLECTION
-            ).document(report.id)
+            doc_ref = self.firestore.client.collection(self.MEETING_REPORTS_COLLECTION).document(
+                report.id
+            )
             doc_ref.set(report.to_firestore())
             logger.info(f"Saved meeting report metadata: {report.id}")
         except Exception as e:
@@ -345,9 +351,9 @@ Provide a detailed analysis with citations."""
     async def get_report(self, report_id: str) -> MeetingReport | None:
         """Get a report by ID."""
         try:
-            doc_ref = self.firestore.client.collection(
-                self.MEETING_REPORTS_COLLECTION
-            ).document(report_id)
+            doc_ref = self.firestore.client.collection(self.MEETING_REPORTS_COLLECTION).document(
+                report_id
+            )
             doc = doc_ref.get()
             if doc.exists:
                 data = doc.to_dict()
@@ -391,16 +397,18 @@ Provide a detailed analysis with citations."""
                     gcs_path=data["gcs_path"],
                     expiration_minutes=self.expiration_minutes,
                 )
-                results.append(MeetingReport(
-                    id=doc.id,
-                    meeting_id=data["meeting_id"],
-                    summary_id=data["summary_id"],
-                    content="",
-                    gcs_path=data["gcs_path"],
-                    download_url=download_url,
-                    created_at=data.get("created_at", datetime.utcnow()),
-                    created_by=data.get("created_by"),
-                ))
+                results.append(
+                    MeetingReport(
+                        id=doc.id,
+                        meeting_id=data["meeting_id"],
+                        summary_id=data["summary_id"],
+                        content="",
+                        gcs_path=data["gcs_path"],
+                        download_url=download_url,
+                        created_at=data.get("created_at", datetime.utcnow()),
+                        created_by=data.get("created_by"),
+                    )
+                )
             return results
         except Exception as e:
             logger.error(f"Error listing meeting reports: {e}")

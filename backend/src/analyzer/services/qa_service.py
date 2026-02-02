@@ -6,9 +6,10 @@ from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 
-from analyzer.agents.qa_agent import QAAgent, QAScope
+from analyzer.agents.adk_agents import ADKAgentRunner, create_qa_agent
+from analyzer.agents.context import AgentToolContext
 from analyzer.models.evidence import Evidence
-from analyzer.models.qa import QAResult, QAStreamEvent
+from analyzer.models.qa import QAResult, QAScope, QAStreamEvent
 from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
 
@@ -23,6 +24,8 @@ class QAService:
     - document: Single document Q&A
     - meeting: Meeting-wide Q&A
     - global: Cross-meeting Q&A
+
+    Uses Google ADK for agent execution.
     """
 
     QA_RESULTS_COLLECTION = "qa_results"
@@ -89,36 +92,30 @@ class QAService:
             f"scope={scope.value}, scope_id={scope_id}"
         )
 
-        # Create agent
-        agent = QAAgent(
-            evidence_provider=self.evidence_provider,
-            project_id=self.project_id,
-            scope=scope,
+        # Create ADK agent
+        agent = create_qa_agent(
+            model=self.model,
+            scope=scope.value,
             scope_id=scope_id,
             language=language,
-            location=self.location,
-            model=self.model,
         )
 
-        # Run agent
+        # Create context with services
+        agent_context = AgentToolContext(
+            evidence_provider=self.evidence_provider,
+            scope=scope.value,
+            scope_id=scope_id,
+            language=language,
+        )
+
+        # Create runner and execute
+        runner = ADKAgentRunner(agent=agent, agent_context=agent_context)
+
         try:
-            answer_text = await agent.run(question)
-            evidences = agent.get_used_evidences()
-
-            # Deduplicate evidences by chunk_id
-            seen_chunks: set[str] = set()
-            unique_evidences: list[Evidence] = []
-            for ev in evidences:
-                if ev.chunk_id not in seen_chunks:
-                    seen_chunks.add(ev.chunk_id)
-                    unique_evidences.append(ev)
-
-            # Sort by relevance score
-            unique_evidences.sort(key=lambda x: x.relevance_score, reverse=True)
-
-            # Limit to top evidences
-            unique_evidences = unique_evidences[:20]
-
+            answer_text, unique_evidences = await runner.run(
+                user_input=question,
+                user_id=user_id or "anonymous",
+            )
         except Exception as e:
             logger.error(f"Error running Q&A agent: {e}")
             raise
@@ -177,40 +174,42 @@ class QAService:
             f"scope={scope.value}, scope_id={scope_id}"
         )
 
-        # Create agent
-        agent = QAAgent(
-            evidence_provider=self.evidence_provider,
-            project_id=self.project_id,
-            scope=scope,
+        # Create ADK agent
+        agent = create_qa_agent(
+            model=self.model,
+            scope=scope.value,
             scope_id=scope_id,
             language=language,
-            location=self.location,
-            model=self.model,
         )
 
+        # Create context with services
+        agent_context = AgentToolContext(
+            evidence_provider=self.evidence_provider,
+            scope=scope.value,
+            scope_id=scope_id,
+            language=language,
+        )
+
+        # Create runner
+        runner = ADKAgentRunner(agent=agent, agent_context=agent_context)
+
         try:
-            # Stream response
             full_answer = ""
-            async for chunk in agent.run_stream(question):
-                full_answer += chunk
-                yield QAStreamEvent(type="chunk", content=chunk)
+            evidences: list[Evidence] = []
 
-            # Get evidences
-            evidences = agent.get_used_evidences()
-
-            # Deduplicate and sort
-            seen_chunks: set[str] = set()
-            unique_evidences: list[Evidence] = []
-            for ev in evidences:
-                if ev.chunk_id not in seen_chunks:
-                    seen_chunks.add(ev.chunk_id)
-                    unique_evidences.append(ev)
-
-            unique_evidences.sort(key=lambda x: x.relevance_score, reverse=True)
-            unique_evidences = unique_evidences[:20]
+            async for event in runner.run_stream(
+                user_input=question,
+                user_id=user_id or "anonymous",
+            ):
+                if event["type"] == "chunk":
+                    full_answer += event.get("content", "")
+                    yield QAStreamEvent(type="chunk", content=event.get("content", ""))
+                elif event["type"] == "done":
+                    full_answer = event.get("content", full_answer)
+                    evidences = event.get("evidences", [])
 
             # Yield evidence events
-            for ev in unique_evidences:
+            for ev in evidences:
                 yield QAStreamEvent(type="evidence", evidence=ev)
 
             # Create result
@@ -220,7 +219,7 @@ class QAService:
                 answer=full_answer,
                 scope=scope,
                 scope_id=scope_id,
-                evidences=unique_evidences,
+                evidences=evidences,
                 created_at=datetime.utcnow(),
                 created_by=user_id,
             )
@@ -239,9 +238,9 @@ class QAService:
     async def _save_result(self, result: QAResult) -> None:
         """Save Q&A result to Firestore."""
         try:
-            doc_ref = self.firestore.client.collection(
-                self.QA_RESULTS_COLLECTION
-            ).document(result.id)
+            doc_ref = self.firestore.client.collection(self.QA_RESULTS_COLLECTION).document(
+                result.id
+            )
             doc_ref.set(result.to_firestore())
             logger.info(f"Saved Q&A result: {result.id}")
         except Exception as e:
@@ -251,9 +250,9 @@ class QAService:
     async def get_result(self, result_id: str) -> QAResult | None:
         """Get a saved Q&A result by ID."""
         try:
-            doc_ref = self.firestore.client.collection(
-                self.QA_RESULTS_COLLECTION
-            ).document(result_id)
+            doc_ref = self.firestore.client.collection(self.QA_RESULTS_COLLECTION).document(
+                result_id
+            )
             doc = doc_ref.get()
             if doc.exists:
                 return QAResult.from_firestore(doc.id, doc.to_dict())
