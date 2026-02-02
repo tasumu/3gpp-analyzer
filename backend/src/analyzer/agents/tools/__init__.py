@@ -1,6 +1,15 @@
-"""Agent tools for Function Calling."""
+"""ADK tool functions for agents."""
 
-from analyzer.agents.tools.document_tool import create_document_tools
-from analyzer.agents.tools.search_tool import create_search_tool
+from analyzer.agents.tools.adk_document_tools import (
+    get_document_content,
+    get_document_summary,
+    list_meeting_documents,
+)
+from analyzer.agents.tools.adk_search_tool import search_evidence
 
-__all__ = ["create_search_tool", "create_document_tools"]
+__all__ = [
+    "get_document_content",
+    "get_document_summary",
+    "list_meeting_documents",
+    "search_evidence",
+]
