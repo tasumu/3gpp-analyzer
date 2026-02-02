@@ -209,6 +209,8 @@ class ProcessorService:
         Yields:
             StatusUpdate objects as processing progresses.
         """
+        from analyzer.models.api import StatusUpdate
+
         updates: list[StatusUpdate] = []
         update_event = asyncio.Event()
 
@@ -216,22 +218,32 @@ class ProcessorService:
             updates.append(update)
             update_event.set()
 
+        # Yield initial status to confirm connection
+        doc = await self.document_service.get(document_id)
+        if doc:
+            yield StatusUpdate(
+                document_id=document_id,
+                status=doc.status,
+                progress=0.0,
+                message="Starting processing...",
+            )
+
         # Start processing in background
         task = asyncio.create_task(self.process_document(document_id, force, callback))
 
         # Yield updates as they come
-        try:
-            while not task.done():
+        while not task.done():
+            try:
                 await asyncio.wait_for(update_event.wait(), timeout=1.0)
                 update_event.clear()
 
                 while updates:
                     yield updates.pop(0)
+            except asyncio.TimeoutError:
+                # Continue waiting, don't break the loop
+                pass
 
-        except asyncio.TimeoutError:
-            pass  # Continue waiting
-
-        # Get any final updates
+        # Get any final updates after task completes
         while updates:
             yield updates.pop(0)
 
