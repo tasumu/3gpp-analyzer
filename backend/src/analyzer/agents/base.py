@@ -170,7 +170,7 @@ class BaseAgent(ABC):
         contents: list[types.Content] = [
             types.Content(
                 role="user",
-                parts=[types.Part.from_text(user_input)],
+                parts=[types.Part.from_text(text=user_input)],
             )
         ]
 

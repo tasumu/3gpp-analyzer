@@ -352,7 +352,7 @@ class MeetingService:
         # Call LLM
         response = self._flash_client.models.generate_content(
             model=self.flash_model,
-            contents=[types.Content(role="user", parts=[types.Part.from_text(prompt)])],
+            contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema={
@@ -495,7 +495,7 @@ At the end, provide a JSON block with key topics: {{"key_topics": ["topic1", "to
 
         response = self._pro_client.models.generate_content(
             model=self.pro_model,
-            contents=[types.Content(role="user", parts=[types.Part.from_text(prompt)])],
+            contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
         )
 
         report_text = response.text or "Report generation failed."
