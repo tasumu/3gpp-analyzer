@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { analyzeDocument, getDocumentAnalyses } from "@/lib/api";
-import type { AnalysisResult, Document } from "@/lib/types";
+import type { AnalysisLanguage, AnalysisResult, Document } from "@/lib/types";
+import { languageLabels } from "@/lib/types";
 import { AnalysisResultDisplay } from "./AnalysisResult";
 import { AnalysisProgress } from "./AnalysisProgress";
+import { CustomAnalysisSection } from "./CustomAnalysisSection";
 
 interface AnalysisPanelProps {
   document: Document;
@@ -17,6 +19,7 @@ export function AnalysisPanel({ document, onAnalysisComplete }: AnalysisPanelPro
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null);
+  const [language, setLanguage] = useState<AnalysisLanguage>("ja");
 
   useEffect(() => {
     loadAnalyses();
@@ -40,7 +43,7 @@ export function AnalysisPanel({ document, onAnalysisComplete }: AnalysisPanelPro
 
     try {
       setIsAnalyzing(true);
-      const result = await analyzeDocument(document.id, force);
+      const result = await analyzeDocument(document.id, force, { language });
       setCurrentAnalysisId(result.id);
 
       if (result.status === "completed") {
@@ -76,7 +79,7 @@ export function AnalysisPanel({ document, onAnalysisComplete }: AnalysisPanelPro
 
   return (
     <div className="space-y-6">
-      {/* Analyze Button */}
+      {/* Header with Language Selector */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-medium text-gray-900">Document Analysis</h3>
@@ -84,25 +87,52 @@ export function AnalysisPanel({ document, onAnalysisComplete }: AnalysisPanelPro
             Analyze this document to extract key points, changes, and issues.
           </p>
         </div>
-        <div className="flex gap-2">
-          {hasCompletedAnalysis && (
-            <button
-              onClick={() => handleAnalyze(true)}
-              disabled={isAnalyzing}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border
-                       border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+        <div className="flex items-center gap-4">
+          {/* Language Selector */}
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="analysis-language"
+              className="text-sm font-medium text-gray-700"
             >
-              Re-analyze
+              Output Language:
+            </label>
+            <select
+              id="analysis-language"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as AnalysisLanguage)}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md
+                       focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isAnalyzing}
+            >
+              {(Object.keys(languageLabels) as AnalysisLanguage[]).map((lang) => (
+                <option key={lang} value={lang}>
+                  {languageLabels[lang]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Analyze Buttons */}
+          <div className="flex gap-2">
+            {hasCompletedAnalysis && (
+              <button
+                onClick={() => handleAnalyze(true)}
+                disabled={isAnalyzing}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border
+                         border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              >
+                Re-analyze
+              </button>
+            )}
+            <button
+              onClick={() => handleAnalyze(false)}
+              disabled={isAnalyzing}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600
+                       rounded-md hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isAnalyzing ? "Analyzing..." : hasCompletedAnalysis ? "Analyze" : "Start Analysis"}
             </button>
-          )}
-          <button
-            onClick={() => handleAnalyze(false)}
-            disabled={isAnalyzing}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600
-                     rounded-md hover:bg-blue-700 disabled:opacity-50"
-          >
-            {isAnalyzing ? "Analyzing..." : hasCompletedAnalysis ? "Analyze" : "Start Analysis"}
-          </button>
+          </div>
         </div>
       </div>
 
@@ -153,6 +183,9 @@ export function AnalysisPanel({ document, onAnalysisComplete }: AnalysisPanelPro
           </div>
         </div>
       )}
+
+      {/* Custom Analysis Section */}
+      <CustomAnalysisSection documentId={document.id} language={language} />
     </div>
   );
 }

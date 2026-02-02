@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from analyzer.models.evidence import Evidence
 
 # Type definitions
-AnalysisType = Literal["single", "compare"]
+AnalysisType = Literal["single", "compare", "custom"]
+AnalysisLanguage = Literal["ja", "en"]
 AnalysisStatus = Literal["pending", "processing", "completed", "failed"]
 ChangeType = Literal["addition", "modification", "deletion"]
 Severity = Literal["high", "medium", "low"]
@@ -55,12 +56,24 @@ class CompareAnalysis(BaseModel):
     evidences: list[Evidence] = Field(default_factory=list, description="Supporting evidence")
 
 
+class CustomAnalysisResult(BaseModel):
+    """Result of custom analysis with user-defined prompt."""
+
+    prompt_text: str = Field(..., description="The custom prompt used for analysis")
+    prompt_id: str | None = Field(None, description="ID of saved prompt if used")
+    answer: str = Field(..., description="Free-form answer to the custom prompt")
+    evidences: list[Evidence] = Field(default_factory=list, description="Supporting evidence")
+
+
 class AnalysisOptions(BaseModel):
     """Options for analysis execution."""
 
     include_summary: bool = Field(default=True, description="Include summary in analysis")
     include_changes: bool = Field(default=True, description="Include changes in analysis")
     include_issues: bool = Field(default=True, description="Include issues in analysis")
+    language: AnalysisLanguage = Field(
+        default="ja", description="Output language for summary and descriptions"
+    )
 
 
 class AnalysisRequest(BaseModel):
@@ -87,7 +100,9 @@ class AnalysisResult(BaseModel):
     status: AnalysisStatus = Field(..., description="Analysis status")
     strategy_version: str = Field(..., description="Analysis strategy version")
     options: AnalysisOptions = Field(default_factory=AnalysisOptions, description="Options used")
-    result: SingleAnalysis | CompareAnalysis | None = Field(None, description="Analysis result")
+    result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult | None = Field(
+        None, description="Analysis result"
+    )
     review_sheet_path: str | None = Field(None, description="GCS path to review sheet")
     error_message: str | None = Field(None, description="Error message if failed")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation time")

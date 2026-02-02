@@ -3,11 +3,15 @@
  */
 
 import type {
+  AnalysisLanguage,
   AnalysisListResponse,
+  AnalysisOptions,
   AnalysisRequest,
   AnalysisResult,
   AnalysisStartResponse,
   ChunkListResponse,
+  CustomPrompt,
+  CustomPromptsResponse,
   Document,
   DocumentListResponse,
   DocumentStatus,
@@ -232,10 +236,14 @@ export async function listAnalyses(limit = 20): Promise<AnalysisListResponse> {
 export async function analyzeDocument(
   documentId: string,
   force = false,
+  options?: AnalysisOptions,
 ): Promise<AnalysisResult> {
   return fetchApi<AnalysisResult>(
-    `/documents/${documentId}/analyze?force=${force}`,
-    { method: "POST" },
+    `/documents/${documentId}/analyze`,
+    {
+      method: "POST",
+      body: JSON.stringify({ options, force }),
+    },
   );
 }
 
@@ -256,6 +264,60 @@ export async function createAnalysisStream(analysisId: string): Promise<EventSou
 
 export function getReviewSheetUrl(analysisId: string): string {
   return `${API_BASE}/downloads/${analysisId}`;
+}
+
+// Custom Analysis APIs
+
+export async function runCustomAnalysis(
+  documentId: string,
+  promptText: string,
+  options?: { promptId?: string; language?: AnalysisLanguage },
+): Promise<AnalysisResult> {
+  return fetchApi<AnalysisResult>(
+    `/documents/${documentId}/analyze/custom`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        prompt_text: promptText,
+        prompt_id: options?.promptId,
+        language: options?.language || "ja",
+      }),
+    },
+  );
+}
+
+// Custom Prompts CRUD
+
+export async function listCustomPrompts(): Promise<CustomPromptsResponse> {
+  return fetchApi<CustomPromptsResponse>("/prompts");
+}
+
+export async function createCustomPrompt(
+  name: string,
+  promptText: string,
+): Promise<CustomPrompt> {
+  return fetchApi<CustomPrompt>("/prompts", {
+    method: "POST",
+    body: JSON.stringify({ name, prompt_text: promptText }),
+  });
+}
+
+export async function getCustomPrompt(promptId: string): Promise<CustomPrompt> {
+  return fetchApi<CustomPrompt>(`/prompts/${promptId}`);
+}
+
+export async function updateCustomPrompt(
+  promptId: string,
+  updates: { name?: string; prompt_text?: string },
+): Promise<CustomPrompt> {
+  return fetchApi<CustomPrompt>(`/prompts/${promptId}`, {
+    method: "PUT",
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function deleteCustomPrompt(promptId: string): Promise<void> {
+  await fetchApi(`/prompts/${promptId}`, { method: "DELETE" });
 }
 
 export { ApiError };

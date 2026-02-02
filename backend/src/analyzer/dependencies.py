@@ -16,6 +16,7 @@ from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.providers.firestore_provider import FirestoreEvidenceProvider
 from analyzer.providers.storage_client import StorageClient
 from analyzer.services.analysis_service import AnalysisService
+from analyzer.services.custom_prompt_service import CustomPromptService
 from analyzer.services.document_service import DocumentService
 from analyzer.services.ftp_sync import FTPSyncService
 from analyzer.services.normalizer import NormalizerService
@@ -152,6 +153,13 @@ def get_review_sheet_generator(
     return ReviewSheetGenerator(storage=storage)
 
 
+def get_custom_prompt_service(
+    firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
+) -> CustomPromptService:
+    """Get CustomPromptService instance."""
+    return CustomPromptService(firestore=firestore)
+
+
 # Type aliases for dependency injection
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 FirestoreClientDep = Annotated[FirestoreClient, Depends(get_firestore_client)]
@@ -164,6 +172,7 @@ VectorizerServiceDep = Annotated[VectorizerService, Depends(get_vectorizer_servi
 ProcessorServiceDep = Annotated[ProcessorService, Depends(get_processor_service)]
 AnalysisServiceDep = Annotated[AnalysisService, Depends(get_analysis_service)]
 ReviewSheetGeneratorDep = Annotated[ReviewSheetGenerator, Depends(get_review_sheet_generator)]
+CustomPromptServiceDep = Annotated[CustomPromptService, Depends(get_custom_prompt_service)]
 
 # Authentication dependencies
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]

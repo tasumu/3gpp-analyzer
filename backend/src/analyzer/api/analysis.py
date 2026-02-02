@@ -5,6 +5,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from analyzer.dependencies import (
@@ -241,19 +242,26 @@ async def stream_analysis(
     return EventSourceResponse(event_generator())
 
 
+class AnalyzeDocumentRequest(BaseModel):
+    """Request body for analyze document endpoint."""
+
+    options: AnalysisOptions | None = None
+    force: bool = False
+
+
 @router.post("/documents/{document_id}/analyze")
 async def analyze_document(
     document_id: str,
     current_user: CurrentUserDep,
     analysis_service: AnalysisServiceDep,
     document_service: DocumentServiceDep,
-    options: AnalysisOptions | None = None,
-    force: bool = Query(False, description="Force re-analysis"),
+    request: AnalyzeDocumentRequest | None = None,
 ):
     """
     Analyze a specific document.
 
     Convenience endpoint that accepts document_id directly.
+    Accepts options including language selection in the request body.
     """
     doc = await document_service.get(document_id)
     if not doc:
@@ -265,10 +273,15 @@ async def analyze_document(
             detail=f"Document is not indexed (status: {doc.status}). Process the document first.",
         )
 
+    # Extract options from request body
+    req = request or AnalyzeDocumentRequest()
+    options = req.options or AnalysisOptions()
+    force = req.force
+
     try:
         result = await analysis_service.analyze_single(
             document_id=document_id,
-            options=options or AnalysisOptions(),
+            options=options,
             force=force,
             user_id=current_user.uid,
         )
