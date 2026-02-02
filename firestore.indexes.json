@@ -123,19 +123,7 @@
     {
       "collectionGroup": "chunks",
       "fieldPath": "embedding",
-      "indexes": [
-        {
-          "order": "ASCENDING",
-          "queryScope": "COLLECTION"
-        },
-        {
-          "vectorConfig": {
-            "dimension": 768,
-            "flat": {}
-          },
-          "queryScope": "COLLECTION"
-        }
-      ]
+      "indexes": []
     }
   ]
 }

@@ -2,6 +2,8 @@ runConfig:
   cpu: 1
   memoryMiB: 512
   concurrency: 80
+  maxInstances: 2
+  minInstances: 0
 
 # Environment variables
 # Note: Firebase SDK config (FIREBASE_WEBAPP_CONFIG) is set automatically by App Hosting

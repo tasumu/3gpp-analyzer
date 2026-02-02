@@ -122,6 +122,9 @@ firebase-adminsdk*.json
 # Firebase
 # =============================================================================
 
+# Firebase project config (contains project-specific settings)
+.firebaserc
+
 # Emulator data
 .firebase/
 firebase-debug.log
