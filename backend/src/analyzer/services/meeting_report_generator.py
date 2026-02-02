@@ -36,7 +36,7 @@ class MeetingReportGenerator:
         storage: StorageClient,
         project_id: str,
         location: str = "asia-northeast1",
-        model: str = "gemini-2.5-pro",
+        model: str = "gemini-3-pro-preview",
         expiration_minutes: int = 60,
     ):
         """
