@@ -129,47 +129,69 @@ export default function QAPage() {
         let fullAnswer = "";
         let evidences: QAEvidence[] = [];
 
-        eventSource.onmessage = (event) => {
+        // Handle chunk events (streaming text)
+        eventSource.addEventListener("chunk", (event) => {
           try {
             const data = JSON.parse(event.data);
-
-            if (data.event === "token") {
-              fullAnswer += data.token;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMessageId
-                    ? { ...m, content: fullAnswer }
-                    : m
-                )
-              );
-            } else if (data.event === "evidences") {
-              evidences = data.evidences;
-            } else if (data.event === "complete") {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMessageId
-                    ? { ...m, content: data.answer, evidences: data.evidences, isStreaming: false }
-                    : m
-                )
-              );
-              eventSource.close();
-              setIsLoading(false);
-            } else if (data.event === "error") {
-              toast.error(data.message || "An error occurred");
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMessageId
-                    ? { ...m, content: "Error: " + (data.message || "Unknown error"), isStreaming: false }
-                    : m
-                )
-              );
-              eventSource.close();
-              setIsLoading(false);
-            }
+            fullAnswer += data.content;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessageId
+                  ? { ...m, content: fullAnswer }
+                  : m
+              )
+            );
           } catch {
-            console.error("Failed to parse SSE data");
+            console.error("Failed to parse chunk data");
           }
-        };
+        });
+
+        // Handle evidence events
+        eventSource.addEventListener("evidence", (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            evidences.push(data.evidence);
+          } catch {
+            console.error("Failed to parse evidence data");
+          }
+        });
+
+        // Handle done event (completion)
+        eventSource.addEventListener("done", (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessageId
+                  ? { ...m, content: fullAnswer || data.answer, evidences, isStreaming: false }
+                  : m
+              )
+            );
+            eventSource.close();
+            setIsLoading(false);
+          } catch {
+            console.error("Failed to parse done data");
+          }
+        });
+
+        // Handle error events
+        eventSource.addEventListener("error", (event) => {
+          try {
+            const data = JSON.parse((event as MessageEvent).data);
+            toast.error(data.error || "An error occurred");
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessageId
+                  ? { ...m, content: "Error: " + (data.error || "Unknown error"), isStreaming: false }
+                  : m
+              )
+            );
+          } catch {
+            // Connection error, not a JSON error event
+          }
+          eventSource.close();
+          setIsLoading(false);
+        });
 
         eventSource.onerror = () => {
           eventSource.close();
