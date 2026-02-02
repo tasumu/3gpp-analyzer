@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { analyzeDocument, getDocumentAnalyses } from "@/lib/api";
-import type { AnalysisLanguage, AnalysisResult, Document } from "@/lib/types";
+import { analyzeDocument, getDocumentSummary } from "@/lib/api";
+import type { AnalysisLanguage, Document, DocumentSummary } from "@/lib/types";
 import { languageLabels } from "@/lib/types";
-import { AnalysisResultDisplay } from "./AnalysisResult";
-import { AnalysisProgress } from "./AnalysisProgress";
+import { DocumentSummaryCard } from "@/components/DocumentSummaryCard";
 
 interface AnalysisPanelProps {
   document: Document;
@@ -21,10 +20,9 @@ export function AnalysisPanel({
   language: externalLanguage,
   onLanguageChange,
 }: AnalysisPanelProps) {
-  const [analyses, setAnalyses] = useState<AnalysisResult[]>([]);
+  const [summary, setSummary] = useState<DocumentSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null);
   const [internalLanguage, setInternalLanguage] = useState<AnalysisLanguage>("ja");
 
   // Use external language if provided, otherwise use internal state
@@ -38,17 +36,17 @@ export function AnalysisPanel({
   };
 
   useEffect(() => {
-    loadAnalyses();
-  }, [document.id]);
+    loadSummary();
+  }, [document.id, language]);
 
-  async function loadAnalyses() {
+  async function loadSummary() {
     try {
       setIsLoading(true);
-      const response = await getDocumentAnalyses(document.id);
-      setAnalyses(response.analyses);
+      const result = await getDocumentSummary(document.id, language);
+      setSummary(result);
     } catch (error) {
-      console.error("Failed to load analyses:", error);
-      toast.error("Failed to load analyses");
+      console.error("Failed to load summary:", error);
+      // Not showing error toast as the document might not have a summary yet
     } finally {
       setIsLoading(false);
     }
@@ -59,46 +57,29 @@ export function AnalysisPanel({
 
     try {
       setIsAnalyzing(true);
-      const result = await analyzeDocument(document.id, force, { language });
-      setCurrentAnalysisId(result.id);
-
-      if (result.status === "completed") {
-        toast.success("Analysis completed");
-        await loadAnalyses();
-        setIsAnalyzing(false);
-        setCurrentAnalysisId(null);
-        onAnalysisComplete?.();
-      }
+      const result = await analyzeDocument(document.id, {
+        language,
+        force,
+      });
+      setSummary(result);
+      toast.success("Analysis completed");
+      onAnalysisComplete?.();
     } catch (error) {
       console.error("Analysis failed:", error);
       toast.error("Analysis failed");
+    } finally {
       setIsAnalyzing(false);
-      setCurrentAnalysisId(null);
     }
   }
 
-  function handleAnalysisComplete() {
-    setIsAnalyzing(false);
-    setCurrentAnalysisId(null);
-    loadAnalyses();
-    onAnalysisComplete?.();
-  }
-
-  function handleAnalysisError(error: string) {
-    toast.error(`Analysis failed: ${error}`);
-    setIsAnalyzing(false);
-    setCurrentAnalysisId(null);
-  }
-
-  const latestCompletedAnalysis = analyses.find((a) => a.status === "completed");
-  const hasCompletedAnalysis = !!latestCompletedAnalysis;
+  const hasSummary = !!summary;
 
   return (
     <div className="space-y-6">
       {/* Description and Controls */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500">
-          Analyze this document to extract key points, changes, and issues.
+          Analyze this document to get a summary and key points.
         </p>
         <div className="flex items-center gap-4">
           {/* Language Selector */}
@@ -127,7 +108,7 @@ export function AnalysisPanel({
 
           {/* Analyze Buttons */}
           <div className="flex gap-2">
-            {hasCompletedAnalysis && (
+            {hasSummary && (
               <button
                 onClick={() => handleAnalyze(true)}
                 disabled={isAnalyzing}
@@ -143,58 +124,35 @@ export function AnalysisPanel({
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600
                        rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
-              {isAnalyzing ? "Analyzing..." : hasCompletedAnalysis ? "Analyze" : "Start Analysis"}
+              {isAnalyzing ? "Analyzing..." : hasSummary ? "Analyze" : "Start Analysis"}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Analysis Progress */}
-      {isAnalyzing && currentAnalysisId && (
-        <AnalysisProgress
-          analysisId={currentAnalysisId}
-          onComplete={handleAnalysisComplete}
-          onError={handleAnalysisError}
-        />
-      )}
-
       {/* Loading State */}
       {isLoading && !isAnalyzing && (
-        <div className="text-center py-8 text-gray-500">Loading analyses...</div>
+        <div className="text-center py-8 text-gray-500">Loading...</div>
       )}
 
-      {/* No Analyses */}
-      {!isLoading && analyses.length === 0 && !isAnalyzing && (
+      {/* No Summary */}
+      {!isLoading && !summary && !isAnalyzing && (
         <div className="text-center py-8 text-gray-500 border border-dashed rounded-lg">
-          No analyses yet. Click &quot;Start Analysis&quot; to begin.
+          No analysis yet. Click &quot;Start Analysis&quot; to begin.
         </div>
       )}
 
-      {/* Analysis Results */}
-      {!isLoading && latestCompletedAnalysis && (
-        <AnalysisResultDisplay analysis={latestCompletedAnalysis} />
+      {/* Analyzing State */}
+      {isAnalyzing && (
+        <div className="text-center py-8 text-gray-500">
+          <div className="animate-spin inline-block w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mb-2" />
+          <p>Analyzing document...</p>
+        </div>
       )}
 
-      {/* Previous Analyses */}
-      {analyses.length > 1 && (
-        <div className="border-t pt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Previous Analyses</h4>
-          <div className="space-y-2">
-            {analyses.slice(1).map((analysis) => (
-              <div
-                key={analysis.id}
-                className="text-sm text-gray-500 flex items-center justify-between
-                         p-2 bg-gray-50 rounded"
-              >
-                <span>
-                  {new Date(analysis.created_at).toLocaleString("ja-JP")} -{" "}
-                  {analysis.status}
-                </span>
-                <span className="text-xs text-gray-400">v{analysis.strategy_version}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Summary Result */}
+      {!isLoading && summary && !isAnalyzing && (
+        <DocumentSummaryCard summary={summary} showCachedBadge={true} />
       )}
     </div>
   );

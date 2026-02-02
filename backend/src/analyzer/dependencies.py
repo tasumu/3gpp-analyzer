@@ -179,7 +179,6 @@ def get_qa_service(
 
 
 def get_meeting_service(
-    evidence_provider: Annotated[EvidenceProvider, Depends(get_evidence_provider)],
     document_service: Annotated[DocumentService, Depends(get_document_service)],
     analysis_service: Annotated[AnalysisService, Depends(get_analysis_service)],
     firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
@@ -187,13 +186,11 @@ def get_meeting_service(
 ) -> MeetingService:
     """Get MeetingService instance."""
     return MeetingService(
-        evidence_provider=evidence_provider,
         document_service=document_service,
         analysis_service=analysis_service,
         firestore=firestore,
         project_id=settings.gcp_project_id,
         location=settings.vertex_ai_location,
-        flash_model=settings.meeting_flash_model,
         pro_model=settings.meeting_pro_model,
         strategy_version=settings.meeting_summary_strategy_version,
     )

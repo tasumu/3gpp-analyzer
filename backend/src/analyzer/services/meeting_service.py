@@ -1,7 +1,9 @@
 """Meeting Service for summarizing meeting contributions (P3-02)."""
 
 import asyncio
+import json
 import logging
+import re
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime
@@ -10,13 +12,11 @@ from google import genai
 from google.genai import types
 
 from analyzer.models.document import Document, DocumentStatus
-from analyzer.models.evidence import Evidence
 from analyzer.models.meeting_analysis import (
     DocumentSummary,
     MeetingSummary,
     MeetingSummaryStreamEvent,
 )
-from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.services.analysis_service import AnalysisService
 from analyzer.services.document_service import DocumentService
@@ -39,13 +39,11 @@ class MeetingService:
 
     def __init__(
         self,
-        evidence_provider: EvidenceProvider,
         document_service: DocumentService,
         analysis_service: AnalysisService,
         firestore: FirestoreClient,
         project_id: str,
         location: str = "asia-northeast1",
-        flash_model: str = "gemini-3-flash-preview",
         pro_model: str = "gemini-3-pro-preview",
         strategy_version: str = "v1",
     ):
@@ -53,32 +51,23 @@ class MeetingService:
         Initialize MeetingService.
 
         Args:
-            evidence_provider: Provider for RAG search operations.
             document_service: Service for document operations.
-            analysis_service: Service for individual document analysis.
+            analysis_service: Service for individual document analysis (and summarization).
             firestore: Firestore client for persistence.
             project_id: GCP project ID.
             location: GCP region for Vertex AI.
-            flash_model: Lightweight model for individual summaries.
             pro_model: High-performance model for overall reports.
             strategy_version: Version identifier for caching.
         """
-        self.evidence_provider = evidence_provider
         self.document_service = document_service
         self.analysis_service = analysis_service
         self.firestore = firestore
         self.project_id = project_id
         self.location = location
-        self.flash_model = flash_model
         self.pro_model = pro_model
         self.strategy_version = strategy_version
 
-        # Initialize GenAI clients
-        self._flash_client = genai.Client(
-            vertexai=True,
-            project=project_id,
-            location=location,
-        )
+        # Initialize GenAI client for overall report generation
         self._pro_client = genai.Client(
             vertexai=True,
             project=project_id,
@@ -300,141 +289,17 @@ class MeetingService:
         language: str,
     ) -> DocumentSummary:
         """
-        Summarize a single document using the lightweight model.
+        Summarize a single document using the unified analysis service.
 
-        First tries to use cached analysis result, then falls back to
-        direct summarization.
+        Uses the shared document summary cache for consistency between
+        meeting summarization and individual document analysis.
         """
-        # Try to get cached analysis
-        cached_result = await self.analysis_service.get_cached_result(document.id, "single")
-        if cached_result and cached_result.result:
-            result = cached_result.result
-            return DocumentSummary(
-                document_id=document.id,
-                contribution_number=document.contribution_number,
-                title=document.title or "Untitled",
-                source=document.source,
-                summary=result.summary,
-                key_points=(
-                    [c.description for c in result.changes[:5]]
-                    if hasattr(result, "changes")
-                    else []
-                ),
-                from_cache=True,
-            )
-
-        # Get document content
-        evidences = await self.evidence_provider.get_by_document(document.id, top_k=30)
-
-        if not evidences:
-            return DocumentSummary(
-                document_id=document.id,
-                contribution_number=document.contribution_number,
-                title=document.title or "Untitled",
-                source=document.source,
-                summary="No content available for this document.",
-                from_cache=False,
-            )
-
-        # Build prompt
-        content_text = self._format_evidence_for_summary(evidences)
-        prompt = self._build_summary_prompt(
-            document=document,
-            content=content_text,
-            custom_prompt=custom_prompt,
+        return await self.analysis_service.generate_summary(
+            document_id=document.id,
             language=language,
+            custom_prompt=custom_prompt,
+            force=False,  # Use cache when available
         )
-
-        # Call LLM
-        response = self._flash_client.models.generate_content(
-            model=self.flash_model,
-            contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema={
-                    "type": "object",
-                    "properties": {
-                        "summary": {"type": "string"},
-                        "key_points": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                        },
-                    },
-                    "required": ["summary", "key_points"],
-                },
-            ),
-        )
-
-        try:
-            import json
-
-            result_data = json.loads(response.text)
-            return DocumentSummary(
-                document_id=document.id,
-                contribution_number=document.contribution_number,
-                title=document.title or "Untitled",
-                source=document.source,
-                summary=result_data.get("summary", ""),
-                key_points=result_data.get("key_points", []),
-                from_cache=False,
-            )
-        except Exception as e:
-            logger.warning(f"Failed to parse summary response: {e}")
-            return DocumentSummary(
-                document_id=document.id,
-                contribution_number=document.contribution_number,
-                title=document.title or "Untitled",
-                source=document.source,
-                summary=response.text[:500] if response.text else "Summary generation failed",
-                from_cache=False,
-            )
-
-    def _format_evidence_for_summary(self, evidences: list[Evidence]) -> str:
-        """Format evidence chunks for summarization prompt."""
-        sections = []
-        for ev in evidences:
-            section = f"[{ev.clause_number or 'Content'}]"
-            if ev.clause_title:
-                section += f" {ev.clause_title}"
-            section += f"\n{ev.content}"
-            sections.append(section)
-        return "\n\n".join(sections)
-
-    def _build_summary_prompt(
-        self,
-        document: Document,
-        content: str,
-        custom_prompt: str | None,
-        language: str,
-    ) -> str:
-        """Build prompt for document summarization."""
-        lang_instruction = (
-            "Respond in Japanese. Keep technical terms in English."
-            if language == "ja"
-            else "Respond in English."
-        )
-
-        custom_instruction = ""
-        if custom_prompt:
-            custom_instruction = f"\n\nSpecial focus: {custom_prompt}"
-
-        return f"""Summarize this 3GPP contribution document.
-
-Document Information:
-- Contribution Number: {document.contribution_number}
-- Title: {document.title or "Unknown"}
-- Source: {document.source or "Unknown"}
-
-Document Content:
-{content}
-
-Instructions:
-1. Provide a concise summary (2-4 sentences)
-2. Extract 3-5 key points
-3. {lang_instruction}
-{custom_instruction}
-
-Return JSON with "summary" and "key_points" fields."""
 
     async def _generate_overall_report(
         self,
@@ -502,9 +367,6 @@ At the end, provide a JSON block with key topics: {{"key_topics": ["topic1", "to
         # Try to extract key topics from the response
         key_topics: list[str] = []
         try:
-            import json
-            import re
-
             # Look for JSON block at the end
             json_match = re.search(r'\{[^{}]*"key_topics"\s*:\s*\[[^\]]*\][^{}]*\}', report_text)
             if json_match:
