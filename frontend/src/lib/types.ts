@@ -190,7 +190,8 @@ export interface GroupedChunks {
 
 // Analysis types (Phase 2)
 
-export type AnalysisType = "single" | "compare";
+export type AnalysisType = "single" | "compare" | "custom";
+export type AnalysisLanguage = "ja" | "en";
 export type AnalysisStatus = "pending" | "processing" | "completed" | "failed";
 export type ChangeType = "addition" | "modification" | "deletion";
 export type Severity = "high" | "medium" | "low";
@@ -242,6 +243,7 @@ export interface AnalysisOptions {
   include_summary?: boolean;
   include_changes?: boolean;
   include_issues?: boolean;
+  language?: AnalysisLanguage;
 }
 
 export interface AnalysisRequest {
@@ -260,7 +262,7 @@ export interface AnalysisResult {
   status: AnalysisStatus;
   strategy_version: string;
   options: AnalysisOptions;
-  result: SingleAnalysis | CompareAnalysis | null;
+  result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult | null;
   review_sheet_path: string | null;
   error_message: string | null;
   created_at: string;
@@ -318,3 +320,44 @@ export const analysisStatusColors: Record<AnalysisStatus, string> = {
   completed: "bg-green-100 text-green-800",
   failed: "bg-red-100 text-red-800",
 };
+
+// Language display helpers
+export const languageLabels: Record<AnalysisLanguage, string> = {
+  ja: "日本語",
+  en: "English",
+};
+
+// Custom analysis types
+export interface CustomPrompt {
+  id: string;
+  user_id: string;
+  name: string;
+  prompt_text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomPromptsResponse {
+  prompts: CustomPrompt[];
+}
+
+export interface CustomAnalysisResult {
+  prompt_text: string;
+  prompt_id: string | null;
+  answer: string;
+  evidences: Evidence[];
+}
+
+// Type guard for custom analysis
+export function isCustomAnalysis(
+  result: AnalysisResult["result"]
+): result is CustomAnalysisResult {
+  return result !== null && "answer" in result && "prompt_text" in result;
+}
+
+// Type guard for single analysis
+export function isSingleAnalysis(
+  result: AnalysisResult["result"]
+): result is SingleAnalysis {
+  return result !== null && "summary" in result && "changes" in result;
+}
