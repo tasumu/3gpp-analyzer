@@ -16,11 +16,14 @@ def _configure_adk_environment(settings) -> None:
 
     ADK expects specific environment variable names for Vertex AI configuration.
     This maps our settings to ADK's expected format.
+
+    Note: ADK uses us-central1 to access preview models (e.g., gemini-3-pro-preview)
+    that may not be available in asia-northeast1.
     """
     if settings.gcp_project_id:
         os.environ.setdefault("GOOGLE_CLOUD_PROJECT", settings.gcp_project_id)
-    if settings.vertex_ai_location:
-        os.environ.setdefault("GOOGLE_CLOUD_LOCATION", settings.vertex_ai_location)
+    # Use us-central1 for ADK to access preview models
+    os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "us-central1")
     os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "true")
 
 
