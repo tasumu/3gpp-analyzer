@@ -5,7 +5,7 @@ from typing import Any
 
 from google.adk.tools import ToolContext
 
-from analyzer.agents.context import AgentToolContext
+from analyzer.agents.context import AgentToolContext, get_current_agent_context
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +31,9 @@ async def list_meeting_documents(
         List of documents with metadata including document_id, contribution_number,
         title, and source.
     """
-    ctx: AgentToolContext | None = None
-    if tool_context and tool_context.state:
+    # Get context from contextvar (preferred) or ADK's state (fallback)
+    ctx: AgentToolContext | None = get_current_agent_context()
+    if not ctx and tool_context and tool_context.state:
         ctx = tool_context.state.get("agent_context")
 
     if not ctx or not ctx.document_service:
@@ -89,8 +90,9 @@ async def get_document_summary(
         Document summary and metadata including contribution_number, title,
         source, status, and summary text.
     """
-    ctx: AgentToolContext | None = None
-    if tool_context and tool_context.state:
+    # Get context from contextvar (preferred) or ADK's state (fallback)
+    ctx: AgentToolContext | None = get_current_agent_context()
+    if not ctx and tool_context and tool_context.state:
         ctx = tool_context.state.get("agent_context")
 
     if not ctx or not ctx.firestore:
@@ -162,8 +164,9 @@ async def get_document_content(
         Document content organized by sections with clause numbers,
         titles, content text, and page numbers.
     """
-    ctx: AgentToolContext | None = None
-    if tool_context and tool_context.state:
+    # Get context from contextvar (preferred) or ADK's state (fallback)
+    ctx: AgentToolContext | None = get_current_agent_context()
+    if not ctx and tool_context and tool_context.state:
         ctx = tool_context.state.get("agent_context")
 
     if not ctx:
