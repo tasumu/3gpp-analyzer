@@ -86,6 +86,20 @@ async def search_evidence(
         # Track used evidences
         ctx.used_evidences.extend(evidences)
 
+        # Handle no results case
+        if len(evidences) == 0:
+            return {
+                "results": [],
+                "count": 0,
+                "query": query,
+                "message": (
+                    "No relevant documents found for this query. Consider: "
+                    "1) Using different technical terms or synonyms, "
+                    "2) Trying a broader search scope, "
+                    "3) Searching for specific specification numbers if known."
+                ),
+            }
+
         # Convert to serializable format
         results = []
         for ev in evidences:

@@ -400,21 +400,29 @@ export default function QAPage() {
                 )}
 
                 {/* Evidences */}
-                {message.evidences && message.evidences.length > 0 && (
+                {message.type === "assistant" && !message.isStreaming && (
                   <div className="mt-4 pt-3 border-t border-gray-300">
-                    <div className="text-xs font-medium text-gray-600 mb-2">
-                      References ({message.evidences.length})
-                    </div>
-                    <div className="space-y-2">
-                      {message.evidences.slice(0, 5).map((ev, idx) => (
-                        <QAEvidenceItem key={idx} evidence={ev} />
-                      ))}
-                      {message.evidences.length > 5 && (
-                        <div className="text-xs text-gray-500">
-                          +{message.evidences.length - 5} more references
+                    {message.evidences && message.evidences.length > 0 ? (
+                      <>
+                        <div className="text-xs font-medium text-gray-600 mb-2">
+                          References ({message.evidences.length})
                         </div>
-                      )}
-                    </div>
+                        <div className="space-y-2">
+                          {message.evidences.slice(0, 5).map((ev, idx) => (
+                            <QAEvidenceItem key={idx} evidence={ev} />
+                          ))}
+                          {message.evidences.length > 5 && (
+                            <div className="text-xs text-gray-500">
+                              +{message.evidences.length - 5} more references
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-xs text-gray-500 italic">
+                        No supporting documents were found for this query.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

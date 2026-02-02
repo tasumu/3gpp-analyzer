@@ -64,6 +64,13 @@ def create_qa_agent(
         "ja": (
             "回答は日本語で行ってください。"
             "技術用語（3GPP用語、仕様書番号、条項番号など）は英語のまま使用してください。"
+            "\n\n"
+            "**CRITICAL: Search queries MUST be in English.**\n"
+            "3GPP documents are written in English. When calling search_evidence, "
+            "always translate the user's Japanese question into English technical terms.\n"
+            "Example:\n"
+            "- User question: '5Gのハンドオーバー手順について教えて'\n"
+            "- Search query: 'handover procedure 5G NR mobility management'"
         ),
         "en": "Respond in English. Use standard 3GPP terminology.",
     }
@@ -84,7 +91,8 @@ def create_qa_agent(
 
 ## Instructions
 
-1. Use the search_evidence tool to find relevant information from the documents
+1. **ALWAYS call search_evidence** at least once for every question.
+   This ensures your answer is grounded in the actual document content.
 2. Always cite your sources with contribution numbers and clause numbers
 3. If you cannot find sufficient information, clearly state that
 4. Be precise and technical in your answers
@@ -92,9 +100,15 @@ def create_qa_agent(
 
 ## Search Guidelines
 
-- Use specific technical terms in your search queries
-- If initial search doesn't yield results, try alternative phrasings
-- For complex questions, break them down into multiple searches
+**IMPORTANT: Search Query Optimization**
+
+1. **Always use English technical terms** for the search query
+2. **Extract key 3GPP terminology**: spec numbers, acronyms (RRC, NAS, PDU), release info
+3. **Formulate queries as technical descriptions**:
+   - Bad: "What is power saving?"
+   - Good: "UE power saving DRX configuration connected mode"
+4. **If initial search returns few results**: try synonyms, broader terms, or spec numbers
+5. For complex questions, break them down into multiple searches
 {scope_search_instruction}
 
 ## Response Format
