@@ -4,12 +4,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
+import { SavedPromptSelector } from "@/components/meeting/SavedPromptSelector";
 import {
   getMeetingInfo,
   summarizeMeeting,
   createMeetingSummarizeStream,
   generateMeetingReport,
   listMeetingSummaries,
+  createBatchProcessStream,
 } from "@/lib/api";
 import type {
   AnalysisLanguage,
@@ -17,6 +19,8 @@ import type {
   MeetingInfo,
   MeetingReportResponse,
   MeetingSummary,
+  BatchProcessEvent,
+  BatchProcessProgress,
 } from "@/lib/types";
 import { languageLabels } from "@/lib/types";
 
@@ -102,6 +106,10 @@ export default function MeetingDetailPage() {
   // Report state
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [currentReport, setCurrentReport] = useState<MeetingReportResponse | null>(null);
+
+  // Batch processing state
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processProgress, setProcessProgress] = useState<BatchProcessProgress | null>(null);
 
   // Settings
   const [customPrompt, setCustomPrompt] = useState("");
@@ -232,6 +240,106 @@ export default function MeetingDetailPage() {
     }
   }
 
+  async function handleBatchProcess() {
+    if (isProcessing) return;
+
+    setIsProcessing(true);
+    setProcessProgress({
+      total: meetingInfo?.unindexed_count || 0,
+      processed: 0,
+      current_document: null,
+      current_status: null,
+      current_progress: 0,
+      success: 0,
+      failed: 0,
+    });
+
+    try {
+      const eventSource = await createBatchProcessStream(meetingId, {
+        force: false,
+        concurrency: 3,
+      });
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data: BatchProcessEvent = JSON.parse(event.data);
+
+          if (data.type === "batch_start") {
+            setProcessProgress((prev) =>
+              prev ? { ...prev, total: data.total || 0 } : prev
+            );
+          } else if (data.type === "document_start") {
+            setProcessProgress((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    current_document: data.contribution_number || data.document_id || null,
+                    current_status: "開始中",
+                    current_progress: 0,
+                  }
+                : prev
+            );
+          } else if (data.type === "document_progress") {
+            setProcessProgress((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    current_status: data.message || data.status || null,
+                    current_progress: data.progress || 0,
+                  }
+                : prev
+            );
+          } else if (data.type === "document_complete") {
+            setProcessProgress((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    processed: prev.processed + 1,
+                    success: data.success ? prev.success + 1 : prev.success,
+                    failed: data.success ? prev.failed : prev.failed + 1,
+                    current_document: null,
+                    current_status: null,
+                    current_progress: 0,
+                  }
+                : prev
+            );
+          } else if (data.type === "batch_complete") {
+            setIsProcessing(false);
+            setProcessProgress(null);
+            loadMeetingData(); // Refresh meeting info
+            if (data.failed_count && data.failed_count > 0) {
+              toast.warning(
+                `処理完了: ${data.success_count}件成功, ${data.failed_count}件失敗`
+              );
+            } else {
+              toast.success(`${data.success_count}件の文書を処理しました`);
+            }
+            eventSource.close();
+          } else if (data.type === "error") {
+            toast.error(data.error || "処理中にエラーが発生しました");
+            setIsProcessing(false);
+            setProcessProgress(null);
+            eventSource.close();
+          }
+        } catch {
+          console.error("Failed to parse SSE data");
+        }
+      };
+
+      eventSource.onerror = () => {
+        eventSource.close();
+        setIsProcessing(false);
+        setProcessProgress(null);
+        toast.error("接続が切断されました");
+      };
+    } catch (err) {
+      console.error("Batch process failed:", err);
+      toast.error("一括処理の開始に失敗しました");
+      setIsProcessing(false);
+      setProcessProgress(null);
+    }
+  }
+
   if (isLoading) {
     return (
       <AuthGuard>
@@ -292,6 +400,74 @@ export default function MeetingDetailPage() {
           </div>
         </div>
 
+        {/* Indexed-Only Info Banner */}
+        {meetingInfo && meetingInfo.total_documents > meetingInfo.indexed_documents && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+            <svg
+              className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <div>
+              <p className="text-sm text-blue-800">
+                サマライズおよび分析は<strong>インデックス化済み文書</strong>のみが対象です。
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                {meetingInfo.indexed_documents} / {meetingInfo.total_documents} 件の文書が分析対象になります。
+                {meetingInfo.unindexed_count > 0 && (
+                  <span className="ml-1">
+                    （{meetingInfo.unindexed_count}件が未処理）
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Batch Processing Progress */}
+        {processProgress && (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-purple-800">
+                一括処理中: {processProgress.current_document || "準備中..."}
+              </span>
+              <span className="text-sm text-purple-600">
+                {processProgress.processed} / {processProgress.total}
+              </span>
+            </div>
+            {processProgress.current_status && (
+              <p className="text-xs text-purple-600 mb-2">
+                {processProgress.current_status}
+              </p>
+            )}
+            <div className="w-full h-2 bg-purple-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-purple-600 rounded-full transition-all"
+                style={{
+                  width: `${
+                    processProgress.total > 0
+                      ? (processProgress.processed / processProgress.total) * 100
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+            {(processProgress.success > 0 || processProgress.failed > 0) && (
+              <p className="text-xs text-purple-600 mt-2">
+                成功: {processProgress.success} / 失敗: {processProgress.failed}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Settings Panel */}
         <div className="bg-white shadow-sm rounded-lg p-6 border border-gray-200">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Analysis Settings</h2>
@@ -302,13 +478,12 @@ export default function MeetingDetailPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Custom Analysis Prompt (optional)
               </label>
-              <textarea
+              <SavedPromptSelector
                 value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="e.g., Focus on security-related discussions..."
+                onChange={setCustomPrompt}
+                placeholder="例: セキュリティ関連の議論に焦点を当てて..."
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isSummarizing || isGeneratingReport}
               />
             </div>
 
@@ -346,10 +521,10 @@ export default function MeetingDetailPage() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-2">
+            <div className="flex flex-wrap gap-3 pt-2">
               <button
                 onClick={handleSummarize}
-                disabled={isSummarizing || isGeneratingReport || !meetingInfo.ready_for_analysis}
+                disabled={isSummarizing || isGeneratingReport || isProcessing || !meetingInfo.ready_for_analysis}
                 className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md
                          hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
@@ -358,17 +533,30 @@ export default function MeetingDetailPage() {
 
               <button
                 onClick={handleGenerateReport}
-                disabled={isSummarizing || isGeneratingReport || !meetingInfo.ready_for_analysis}
+                disabled={isSummarizing || isGeneratingReport || isProcessing || !meetingInfo.ready_for_analysis}
                 className="px-4 py-2 bg-green-600 text-white font-medium rounded-md
                          hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {isGeneratingReport ? "Generating..." : "Generate Full Report"}
               </button>
+
+              {meetingInfo.unindexed_count > 0 && (
+                <button
+                  onClick={handleBatchProcess}
+                  disabled={isSummarizing || isGeneratingReport || isProcessing}
+                  className="px-4 py-2 bg-purple-600 text-white font-medium rounded-md
+                           hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isProcessing
+                    ? "処理中..."
+                    : `全文書を一括処理 (${meetingInfo.unindexed_count}件)`}
+                </button>
+              )}
             </div>
 
             {!meetingInfo.ready_for_analysis && (
               <p className="text-sm text-yellow-600">
-                Please wait for all documents to be indexed before analysis.
+                分析を開始するには、少なくとも1件の文書をインデックス化してください。
               </p>
             )}
           </div>
@@ -467,6 +655,9 @@ export default function MeetingDetailPage() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-medium text-gray-700">
                   Document Summaries ({currentSummary.document_count})
+                  <span className="ml-2 text-xs text-gray-500 font-normal">
+                    (インデックス化済み文書のみ)
+                  </span>
                 </h3>
                 <button
                   onClick={() => setShowAllSummaries(!showAllSummaries)}

@@ -4,7 +4,7 @@ import json
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from analyzer.dependencies import (
@@ -13,7 +13,9 @@ from analyzer.dependencies import (
     DocumentServiceDep,
     MeetingReportGeneratorDep,
     MeetingServiceDep,
+    ProcessorServiceDep,
 )
+from analyzer.models.document import DocumentStatus
 from analyzer.models.meeting_analysis import (
     MeetingReportRequest,
     MeetingSummarizeRequest,
@@ -46,6 +48,13 @@ class MeetingReportResponse(BaseModel):
     meeting_id: str
     download_url: str
     summary_id: str
+
+
+class BatchProcessRequest(BaseModel):
+    """Request model for batch processing."""
+
+    force: bool = Field(default=False, description="Force reprocess already indexed docs")
+    concurrency: int = Field(default=3, ge=1, le=10, description="Max concurrent processes")
 
 
 def meeting_summary_to_response(summary: MeetingSummary) -> MeetingSummaryResponse:
@@ -258,8 +267,6 @@ async def get_meeting_info(
 
     Returns document statistics for the meeting.
     """
-    from analyzer.models.document import DocumentStatus
-
     # Get total documents
     _, total = await document_service.list_documents(
         meeting_id=meeting_id,
@@ -284,8 +291,88 @@ async def get_meeting_info(
         "meeting_number": meeting_number,
         "total_documents": total,
         "indexed_documents": indexed,
+        "unindexed_count": total - indexed,
         "ready_for_analysis": indexed > 0,
     }
+
+
+# ============================================================================
+# Batch Processing Endpoints
+# ============================================================================
+
+
+@router.get("/{meeting_id}/process/stream")
+async def batch_process_meeting_stream(
+    meeting_id: str,
+    current_user: CurrentUserQueryDep,
+    document_service: DocumentServiceDep,
+    processor: ProcessorServiceDep,
+    force: bool = Query(False, description="Force reprocess already indexed docs"),
+    concurrency: int = Query(3, ge=1, le=10, description="Max concurrent processes"),
+):
+    """
+    Batch process all unindexed documents in a meeting with streaming progress (SSE).
+
+    Events:
+    - batch_start: Processing started with total document count
+    - document_start: Started processing a specific document
+    - document_progress: Progress update for current document
+    - document_complete: Document processing completed (success or failure)
+    - batch_complete: All documents processed
+    - error: Error occurred
+    """
+
+    async def event_generator():
+        try:
+            # Get documents to process
+            if force:
+                # Get all documents
+                documents, _ = await document_service.list_documents(
+                    meeting_id=meeting_id,
+                    page_size=1000,
+                )
+            else:
+                # Get only unindexed documents (not INDEXED status)
+                all_docs, _ = await document_service.list_documents(
+                    meeting_id=meeting_id,
+                    page_size=1000,
+                )
+                documents = [doc for doc in all_docs if doc.status != DocumentStatus.INDEXED]
+
+            if not documents:
+                yield {
+                    "event": "batch_complete",
+                    "data": json.dumps(
+                        {
+                            "total": 0,
+                            "success_count": 0,
+                            "failed_count": 0,
+                            "message": "No documents to process",
+                        }
+                    ),
+                }
+                return
+
+            document_ids = [doc.id for doc in documents]
+
+            async for event in processor.process_batch_stream(
+                document_ids=document_ids,
+                force=force,
+                concurrency=concurrency,
+            ):
+                yield {
+                    "event": event.type,
+                    "data": event.model_dump_json(exclude_none=True),
+                }
+
+        except Exception as e:
+            logger.error(f"Error in batch processing stream: {e}")
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(e)}),
+            }
+
+    return EventSourceResponse(event_generator())
 
 
 # ============================================================================

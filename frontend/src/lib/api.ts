@@ -387,6 +387,25 @@ export async function getMeetingInfo(meetingId: string): Promise<MeetingInfo> {
   return fetchApi<MeetingInfo>(`/meetings/${encodeURIComponent(meetingId)}/info`);
 }
 
+export async function createBatchProcessStream(
+  meetingId: string,
+  options?: { force?: boolean; concurrency?: number }
+): Promise<EventSource> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error("Authentication required for SSE connection");
+  }
+
+  const params = new URLSearchParams({
+    token,
+    force: (options?.force ?? false).toString(),
+    concurrency: (options?.concurrency ?? 3).toString(),
+  });
+
+  const url = `${API_BASE}/meetings/${encodeURIComponent(meetingId)}/process/stream?${params.toString()}`;
+  return new EventSource(url);
+}
+
 export async function summarizeMeeting(
   meetingId: string,
   request?: MeetingSummarizeRequest,
