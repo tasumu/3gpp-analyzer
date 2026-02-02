@@ -106,7 +106,8 @@ async def summarize_meeting(
     try:
         result = await meeting_service.summarize_meeting(
             meeting_id=meeting_id,
-            custom_prompt=request.custom_prompt,
+            analysis_prompt=request.analysis_prompt,
+            report_prompt=request.report_prompt,
             language=request.language,
             user_id=current_user.uid,
             force=request.force,
@@ -124,7 +125,8 @@ async def summarize_meeting_stream(
     meeting_id: str,
     current_user: CurrentUserQueryDep,
     meeting_service: MeetingServiceDep,
-    custom_prompt: str | None = Query(None, max_length=2000),
+    analysis_prompt: str | None = Query(None, max_length=2000),
+    report_prompt: str | None = Query(None, max_length=2000),
     language: str = Query("ja", pattern="^(ja|en)$"),
     force: bool = Query(False),
 ):
@@ -143,7 +145,8 @@ async def summarize_meeting_stream(
         try:
             async for event in meeting_service.summarize_meeting_stream(
                 meeting_id=meeting_id,
-                custom_prompt=custom_prompt,
+                analysis_prompt=analysis_prompt,
+                report_prompt=report_prompt,
                 language=language,
                 user_id=current_user.uid,
                 force=force,
@@ -405,7 +408,8 @@ async def generate_meeting_report(
     try:
         report = await report_generator.generate(
             meeting_id=meeting_id,
-            custom_prompt=request.custom_prompt,
+            analysis_prompt=request.analysis_prompt,
+            report_prompt=request.report_prompt,
             language=request.language,
             user_id=current_user.uid,
         )

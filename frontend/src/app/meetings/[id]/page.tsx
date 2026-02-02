@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
 import { DocumentSummaryCard } from "@/components/DocumentSummaryCard";
 import { SavedPromptSelector } from "@/components/meeting/SavedPromptSelector";
+import { SavedReportPromptSelector } from "@/components/meeting/SavedReportPromptSelector";
 import {
   getMeetingInfo,
   summarizeMeeting,
@@ -55,7 +56,8 @@ export default function MeetingDetailPage() {
   const [processProgress, setProcessProgress] = useState<BatchProcessProgress | null>(null);
 
   // Settings
-  const [customPrompt, setCustomPrompt] = useState("");
+  const [analysisPrompt, setAnalysisPrompt] = useState("");
+  const [reportPrompt, setReportPrompt] = useState("");
   const [language, setLanguage] = useState<AnalysisLanguage>("ja");
   const [force, setForce] = useState(false);
   const [showAllSummaries, setShowAllSummaries] = useState(false);
@@ -95,12 +97,12 @@ export default function MeetingDetailPage() {
     setSummaryProgress(null);
 
     try {
-      const eventSource = await createMeetingSummarizeStream(
-        meetingId,
-        customPrompt || undefined,
+      const eventSource = await createMeetingSummarizeStream(meetingId, {
+        analysisPrompt: analysisPrompt || undefined,
+        reportPrompt: reportPrompt || undefined,
         language,
-        force
-      );
+        force,
+      });
 
       eventSource.onmessage = (event) => {
         try {
@@ -152,7 +154,8 @@ export default function MeetingDetailPage() {
     setIsSummarizing(true);
     try {
       const summary = await summarizeMeeting(meetingId, {
-        custom_prompt: customPrompt || null,
+        analysis_prompt: analysisPrompt || null,
+        report_prompt: reportPrompt || null,
         language,
         force,
       });
@@ -173,7 +176,8 @@ export default function MeetingDetailPage() {
     setIsGeneratingReport(true);
     try {
       const report = await generateMeetingReport(meetingId, {
-        custom_prompt: customPrompt || null,
+        analysis_prompt: analysisPrompt || null,
+        report_prompt: reportPrompt || null,
         language,
       });
       setCurrentReport(report);
@@ -429,15 +433,29 @@ export default function MeetingDetailPage() {
           <h2 className="text-lg font-medium text-gray-900 mb-4">Analysis Settings</h2>
 
           <div className="space-y-4">
-            {/* Custom Prompt */}
+            {/* Custom Analysis Prompt */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Custom Analysis Prompt (optional)
+                Custom Analysis Prompt (for document analysis)
               </label>
               <SavedPromptSelector
-                value={customPrompt}
-                onChange={setCustomPrompt}
+                value={analysisPrompt}
+                onChange={setAnalysisPrompt}
                 placeholder="例: セキュリティ関連の議論に焦点を当てて..."
+                rows={2}
+                disabled={isSummarizing || isGeneratingReport}
+              />
+            </div>
+
+            {/* Custom Report Prompt */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Custom Report Prompt (for meeting summary & report)
+              </label>
+              <SavedReportPromptSelector
+                value={reportPrompt}
+                onChange={setReportPrompt}
+                placeholder="例: 技術的なインパクトに焦点を当てたレポートを生成..."
                 rows={2}
                 disabled={isSummarizing || isGeneratingReport}
               />

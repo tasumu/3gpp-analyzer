@@ -96,10 +96,15 @@ class MeetingReport(BaseModel):
 class MeetingSummarizeRequest(BaseModel):
     """Request model for meeting summarization."""
 
-    custom_prompt: str | None = Field(
+    analysis_prompt: str | None = Field(
         default=None,
         max_length=2000,
-        description="Custom prompt for analysis (e.g., 'Focus on security aspects')",
+        description="Custom prompt for individual document analysis",
+    )
+    report_prompt: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Custom prompt for overall report generation",
     )
     language: str = Field(
         default="ja",
@@ -115,7 +120,12 @@ class MeetingSummarizeRequest(BaseModel):
 class MeetingReportRequest(BaseModel):
     """Request model for meeting report generation."""
 
-    custom_prompt: str | None = Field(
+    analysis_prompt: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Custom prompt for individual document analysis",
+    )
+    report_prompt: str | None = Field(
         default=None,
         max_length=2000,
         description="Custom prompt for report generation",

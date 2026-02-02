@@ -66,7 +66,8 @@ class MeetingReportGenerator:
     async def generate(
         self,
         meeting_id: str,
-        custom_prompt: str | None = None,
+        analysis_prompt: str | None = None,
+        report_prompt: str | None = None,
         language: str = "ja",
         user_id: str | None = None,
     ) -> MeetingReport:
@@ -81,7 +82,8 @@ class MeetingReportGenerator:
 
         Args:
             meeting_id: Meeting ID to generate report for.
-            custom_prompt: Optional custom analysis focus.
+            analysis_prompt: Custom prompt for individual document analysis.
+            report_prompt: Custom prompt for report generation.
             language: Output language.
             user_id: User ID who requested.
 
@@ -93,7 +95,8 @@ class MeetingReportGenerator:
         # Step 1: Get meeting summary
         summary = await self.meeting_service.summarize_meeting(
             meeting_id=meeting_id,
-            custom_prompt=custom_prompt,
+            analysis_prompt=analysis_prompt,
+            report_prompt=report_prompt,
             language=language,
             user_id=user_id,
         )
@@ -103,7 +106,7 @@ class MeetingReportGenerator:
             meeting_id=meeting_id,
             model=self.model,
             language=language,
-            custom_prompt=custom_prompt,
+            custom_prompt=report_prompt,
         )
 
         # Create context with services
@@ -121,7 +124,7 @@ class MeetingReportGenerator:
         runner = ADKAgentRunner(agent=agent, agent_context=agent_context)
 
         detailed_analysis, evidences = await runner.run(
-            user_input=self._build_agent_prompt(meeting_id, summary, custom_prompt, language),
+            user_input=self._build_agent_prompt(meeting_id, summary, report_prompt, language),
             user_id=user_id or "anonymous",
         )
 
@@ -131,7 +134,7 @@ class MeetingReportGenerator:
             summary=summary,
             detailed_analysis=detailed_analysis,
             evidences=evidences,
-            custom_prompt=custom_prompt,
+            report_prompt=report_prompt,
             language=language,
         )
 
@@ -173,13 +176,13 @@ class MeetingReportGenerator:
         self,
         meeting_id: str,
         summary: MeetingSummary,
-        custom_prompt: str | None,
+        report_prompt: str | None,
         language: str,
     ) -> str:
         """Build prompt for the meeting report agent."""
         custom_instruction = ""
-        if custom_prompt:
-            custom_instruction = f"\n\nSpecial focus: {custom_prompt}"
+        if report_prompt:
+            custom_instruction = f"\n\nSpecial focus: {report_prompt}"
 
         # Include key info from summary
         top_docs = summary.individual_summaries[:10]
@@ -210,7 +213,7 @@ Provide a detailed analysis with citations."""
         summary: MeetingSummary,
         detailed_analysis: str,
         evidences: list,
-        custom_prompt: str | None,
+        report_prompt: str | None,
         language: str,
     ) -> str:
         """Format the final Markdown report."""
@@ -244,8 +247,8 @@ Provide a detailed analysis with citations."""
             f"- **{generated_label}**: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
         ]
 
-        if custom_prompt:
-            sections.append(f"- **{custom_focus_label}**: {custom_prompt}")
+        if report_prompt:
+            sections.append(f"- **{custom_focus_label}**: {report_prompt}")
 
         sections.extend(
             [

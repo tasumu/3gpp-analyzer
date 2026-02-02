@@ -77,7 +77,8 @@ class MeetingService:
     async def summarize_meeting(
         self,
         meeting_id: str,
-        custom_prompt: str | None = None,
+        analysis_prompt: str | None = None,
+        report_prompt: str | None = None,
         language: str = "ja",
         user_id: str | None = None,
         force: bool = False,
@@ -87,7 +88,8 @@ class MeetingService:
 
         Args:
             meeting_id: Meeting ID (e.g., 'SA2#162').
-            custom_prompt: Custom analysis prompt.
+            analysis_prompt: Custom prompt for individual document analysis.
+            report_prompt: Custom prompt for overall report generation.
             language: Output language (ja or en).
             user_id: User ID who initiated.
             force: Force re-analysis even if cached.
@@ -102,7 +104,7 @@ class MeetingService:
 
         # Check cache unless forced
         if not force:
-            cached = await self._get_cached_summary(meeting_id, custom_prompt, language)
+            cached = await self._get_cached_summary(meeting_id, report_prompt, language)
             if cached:
                 logger.info(f"Returning cached summary for meeting {meeting_id}")
                 return cached
@@ -124,7 +126,7 @@ class MeetingService:
 
         async def summarize_with_limit(doc: Document) -> DocumentSummary:
             async with semaphore:
-                return await self._summarize_document(doc, custom_prompt, language)
+                return await self._summarize_document(doc, analysis_prompt, language)
 
         individual_summaries = await asyncio.gather(
             *[summarize_with_limit(doc) for doc in documents],
@@ -145,7 +147,7 @@ class MeetingService:
         overall_report, key_topics = await self._generate_overall_report(
             meeting_id=meeting_id,
             summaries=valid_summaries,
-            custom_prompt=custom_prompt,
+            report_prompt=report_prompt,
             language=language,
         )
 
@@ -153,7 +155,7 @@ class MeetingService:
         result = MeetingSummary(
             id=str(uuid.uuid4()),
             meeting_id=meeting_id,
-            custom_prompt=custom_prompt,
+            custom_prompt=report_prompt,
             individual_summaries=valid_summaries,
             overall_report=overall_report,
             key_topics=key_topics,
@@ -171,13 +173,22 @@ class MeetingService:
     async def summarize_meeting_stream(
         self,
         meeting_id: str,
-        custom_prompt: str | None = None,
+        analysis_prompt: str | None = None,
+        report_prompt: str | None = None,
         language: str = "ja",
         user_id: str | None = None,
         force: bool = False,
     ) -> AsyncGenerator[MeetingSummaryStreamEvent, None]:
         """
         Summarize meeting with streaming progress updates.
+
+        Args:
+            meeting_id: Meeting ID (e.g., 'SA2#162').
+            analysis_prompt: Custom prompt for individual document analysis.
+            report_prompt: Custom prompt for overall report generation.
+            language: Output language (ja or en).
+            user_id: User ID who initiated.
+            force: Force re-analysis even if cached.
 
         Yields events as documents are processed.
         """
@@ -212,7 +223,7 @@ class MeetingService:
 
         for doc in documents:
             try:
-                summary = await self._summarize_document(doc, custom_prompt, language)
+                summary = await self._summarize_document(doc, analysis_prompt, language)
                 valid_summaries.append(summary)
                 processed += 1
 
@@ -252,7 +263,7 @@ class MeetingService:
         overall_report, key_topics = await self._generate_overall_report(
             meeting_id=meeting_id,
             summaries=valid_summaries,
-            custom_prompt=custom_prompt,
+            report_prompt=report_prompt,
             language=language,
         )
 
@@ -265,7 +276,7 @@ class MeetingService:
         result = MeetingSummary(
             id=str(uuid.uuid4()),
             meeting_id=meeting_id,
-            custom_prompt=custom_prompt,
+            custom_prompt=report_prompt,
             individual_summaries=valid_summaries,
             overall_report=overall_report,
             key_topics=key_topics,
@@ -305,7 +316,7 @@ class MeetingService:
         self,
         meeting_id: str,
         summaries: list[DocumentSummary],
-        custom_prompt: str | None,
+        report_prompt: str | None,
         language: str,
     ) -> tuple[str, list[str]]:
         """
@@ -334,8 +345,8 @@ class MeetingService:
         )
 
         custom_instruction = ""
-        if custom_prompt:
-            custom_instruction = f"\n\nSpecial focus requested: {custom_prompt}"
+        if report_prompt:
+            custom_instruction = f"\n\nSpecial focus requested: {report_prompt}"
 
         prompt = f"""You are an expert 3GPP standardization analyst. \
 Create a comprehensive meeting report.

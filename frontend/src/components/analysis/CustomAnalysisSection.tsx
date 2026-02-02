@@ -12,26 +12,8 @@ import type {
   AnalysisLanguage,
   AnalysisResult,
   CustomPrompt,
-  Evidence,
 } from "@/lib/types";
 import { isCustomAnalysis } from "@/lib/types";
-
-function EvidenceCitation({ evidence }: { evidence: Evidence }) {
-  return (
-    <div className="text-sm p-3 bg-gray-50 rounded border border-gray-200">
-      <div className="flex items-start justify-between">
-        <span className="font-medium text-gray-700">
-          {evidence.clause_number || "Content"}
-          {evidence.clause_title && ` - ${evidence.clause_title}`}
-        </span>
-        {evidence.page_number && (
-          <span className="text-xs text-gray-500">Page {evidence.page_number}</span>
-        )}
-      </div>
-      <p className="text-gray-600 mt-1 line-clamp-3">{evidence.content}</p>
-    </div>
-  );
-}
 
 interface CustomAnalysisSectionProps {
   documentId: string;
@@ -259,31 +241,11 @@ export function CustomAnalysisSection({
 
       {/* Result Display */}
       {customResult && (
-        <div className="space-y-4 p-4 bg-white border border-gray-200 rounded-lg">
-          <div>
-            <h4 className="font-medium text-gray-900 mb-2">Result</h4>
-            <div className="text-sm text-gray-700 whitespace-pre-wrap">
-              {customResult.answer}
-            </div>
+        <div className="p-4 bg-white border border-gray-200 rounded-lg">
+          <h4 className="font-medium text-gray-900 mb-2">Result</h4>
+          <div className="text-sm text-gray-700 whitespace-pre-wrap">
+            {customResult.answer}
           </div>
-
-          {customResult.evidences.length > 0 && (
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">
-                Evidence ({customResult.evidences.length})
-              </h4>
-              <div className="space-y-2">
-                {customResult.evidences.slice(0, 5).map((evidence, i) => (
-                  <EvidenceCitation key={i} evidence={evidence} />
-                ))}
-                {customResult.evidences.length > 5 && (
-                  <p className="text-sm text-gray-500">
-                    ...and {customResult.evidences.length - 5} more
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
