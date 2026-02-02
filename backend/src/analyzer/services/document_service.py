@@ -49,6 +49,7 @@ class DocumentService:
         self,
         meeting_id: str | None = None,
         status: DocumentStatus | None = None,
+        contribution_number: str | None = None,
         page: int = 1,
         page_size: int = 50,
     ) -> tuple[list[Document], int]:
@@ -58,6 +59,7 @@ class DocumentService:
         Args:
             meeting_id: Filter by meeting ID.
             status: Filter by processing status.
+            contribution_number: Filter by contribution number.
             page: Page number (1-indexed).
             page_size: Items per page.
 
@@ -69,6 +71,8 @@ class DocumentService:
             filters["meeting.id"] = meeting_id
         if status:
             filters["status"] = status.value
+        if contribution_number:
+            filters["contribution_number"] = contribution_number
 
         # Get total count
         total = await self.firestore.count_documents(filters)

@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     libreoffice_timeout: int = 60
     chunk_max_tokens: int = 1000
 
+    # Analysis (Phase 2)
+    analysis_model: str = "gemini-3-flash-preview"
+    analysis_strategy_version: str = "v1"
+    review_sheet_expiration_minutes: int = 60
+
     # API
     api_prefix: str = "/api"
     # CORS_ORIGINS env var should be comma-separated list of allowed origins
