@@ -140,7 +140,15 @@
     {
       "collectionGroup": "chunks",
       "fieldPath": "embedding",
-      "indexes": []
+      "indexes": [
+        {
+          "queryScope": "COLLECTION",
+          "vectorConfig": {
+            "dimension": 768,
+            "flat": {}
+          }
+        }
+      ]
     }
   ]
 }
