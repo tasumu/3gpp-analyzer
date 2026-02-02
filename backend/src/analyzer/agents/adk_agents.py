@@ -10,7 +10,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 
-from analyzer.agents.context import AgentToolContext
+from analyzer.agents.context import AgentToolContext, set_current_agent_context
 from analyzer.agents.tools.adk_document_tools import (
     get_document_content,
     get_document_summary,
@@ -262,32 +262,39 @@ class ADKAgentRunner:
         # Reset evidence tracking
         self.agent_context.reset_evidences()
 
-        # Create session with injected context
-        session_id = session_id or str(uuid.uuid4())
-        await self.session_service.create_session(
-            app_name=APP_NAME,
-            user_id=user_id,
-            session_id=session_id,
-            state={"agent_context": self.agent_context},
-        )
+        # Set context in contextvar (avoids pickle issues with session state)
+        set_current_agent_context(self.agent_context)
 
-        # Build message
-        user_message = Content(parts=[Part(text=user_input)])
+        try:
+            # Create session without unpicklable objects in state
+            session_id = session_id or str(uuid.uuid4())
+            await self.session_service.create_session(
+                app_name=APP_NAME,
+                user_id=user_id,
+                session_id=session_id,
+                state={},  # Empty state - context is in contextvar
+            )
 
-        # Run agent
-        full_text = ""
-        async for event in self.runner.run_async(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=user_message,
-        ):
-            if event.is_final_response():
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if hasattr(part, "text") and part.text:
-                            full_text = part.text
+            # Build message
+            user_message = Content(parts=[Part(text=user_input)])
 
-        return full_text, self.agent_context.get_unique_evidences()
+            # Run agent
+            full_text = ""
+            async for event in self.runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=user_message,
+            ):
+                if event.is_final_response():
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if hasattr(part, "text") and part.text:
+                                full_text = part.text
+
+            return full_text, self.agent_context.get_unique_evidences()
+        finally:
+            # Reset contextvar
+            set_current_agent_context(None)
 
     async def run_stream(
         self,
@@ -312,42 +319,49 @@ class ADKAgentRunner:
         # Reset evidence tracking
         self.agent_context.reset_evidences()
 
-        # Create session with injected context
-        session_id = session_id or str(uuid.uuid4())
-        await self.session_service.create_session(
-            app_name=APP_NAME,
-            user_id=user_id,
-            session_id=session_id,
-            state={"agent_context": self.agent_context},
-        )
+        # Set context in contextvar (avoids pickle issues with session state)
+        set_current_agent_context(self.agent_context)
 
-        # Build message
-        user_message = Content(parts=[Part(text=user_input)])
+        try:
+            # Create session without unpicklable objects in state
+            session_id = session_id or str(uuid.uuid4())
+            await self.session_service.create_session(
+                app_name=APP_NAME,
+                user_id=user_id,
+                session_id=session_id,
+                state={},  # Empty state - context is in contextvar
+            )
 
-        # Run agent with streaming
-        full_text = ""
-        async for event in self.runner.run_async(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=user_message,
-        ):
-            # Yield partial text updates
-            if hasattr(event, "partial") and event.partial:
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if hasattr(part, "text") and part.text:
-                            yield {"type": "chunk", "content": part.text}
+            # Build message
+            user_message = Content(parts=[Part(text=user_input)])
 
-            # Handle final response
-            if event.is_final_response():
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if hasattr(part, "text") and part.text:
-                            full_text = part.text
+            # Run agent with streaming
+            full_text = ""
+            async for event in self.runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=user_message,
+            ):
+                # Yield partial text updates
+                if hasattr(event, "partial") and event.partial:
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if hasattr(part, "text") and part.text:
+                                yield {"type": "chunk", "content": part.text}
 
-        # Yield final result with evidences
-        yield {
-            "type": "done",
-            "content": full_text,
-            "evidences": self.agent_context.get_unique_evidences(),
-        }
+                # Handle final response
+                if event.is_final_response():
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if hasattr(part, "text") and part.text:
+                                full_text = part.text
+
+            # Yield final result with evidences
+            yield {
+                "type": "done",
+                "content": full_text,
+                "evidences": self.agent_context.get_unique_evidences(),
+            }
+        finally:
+            # Reset contextvar
+            set_current_agent_context(None)

@@ -1,5 +1,6 @@
 """Agent context for ADK tool functions."""
 
+import contextvars
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -9,6 +10,23 @@ if TYPE_CHECKING:
     from analyzer.providers.base import EvidenceProvider
     from analyzer.providers.firestore_client import FirestoreClient
     from analyzer.services.document_service import DocumentService
+
+# Context variable for storing AgentToolContext during agent execution.
+# This avoids pickle issues with InMemorySessionService by keeping unpicklable
+# objects (like Firestore clients) out of session state.
+_agent_context_var: contextvars.ContextVar["AgentToolContext | None"] = contextvars.ContextVar(
+    "agent_context", default=None
+)
+
+
+def get_current_agent_context() -> "AgentToolContext | None":
+    """Get the current AgentToolContext from contextvar."""
+    return _agent_context_var.get()
+
+
+def set_current_agent_context(ctx: "AgentToolContext | None") -> contextvars.Token:
+    """Set the current AgentToolContext in contextvar. Returns a token for reset."""
+    return _agent_context_var.set(ctx)
 
 
 @dataclass

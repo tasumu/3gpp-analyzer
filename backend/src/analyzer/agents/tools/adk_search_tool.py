@@ -5,7 +5,7 @@ from typing import Any
 
 from google.adk.tools import ToolContext
 
-from analyzer.agents.context import AgentToolContext
+from analyzer.agents.context import AgentToolContext, get_current_agent_context
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +42,9 @@ async def search_evidence(
     Returns:
         Search results with evidence list and count.
     """
-    # Get our custom context from ADK's state
-    ctx: AgentToolContext | None = None
-    if tool_context and tool_context.state:
+    # Get our custom context from contextvar (preferred) or ADK's state (fallback)
+    ctx: AgentToolContext | None = get_current_agent_context()
+    if not ctx and tool_context and tool_context.state:
         ctx = tool_context.state.get("agent_context")
 
     if not ctx:
