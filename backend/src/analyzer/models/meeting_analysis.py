@@ -14,12 +14,8 @@ class DocumentSummary(BaseModel):
     title: str = Field(..., description="Document title")
     source: str | None = Field(default=None, description="Contributing company/entity")
     summary: str = Field(..., description="Summary text")
-    key_points: list[str] = Field(
-        default_factory=list, description="Key points from the document"
-    )
-    from_cache: bool = Field(
-        default=False, description="Whether summary was retrieved from cache"
-    )
+    key_points: list[str] = Field(default_factory=list, description="Key points from the document")
+    from_cache: bool = Field(default=False, description="Whether summary was retrieved from cache")
 
 
 class MeetingSummary(BaseModel):
@@ -27,9 +23,7 @@ class MeetingSummary(BaseModel):
 
     id: str = Field(..., description="Unique identifier for this summary")
     meeting_id: str = Field(..., description="Meeting ID (e.g., 'SA2#162')")
-    custom_prompt: str | None = Field(
-        default=None, description="Custom prompt used for analysis"
-    )
+    custom_prompt: str | None = Field(default=None, description="Custom prompt used for analysis")
     individual_summaries: list[DocumentSummary] = Field(
         default_factory=list, description="Summaries of individual documents"
     )
@@ -39,9 +33,7 @@ class MeetingSummary(BaseModel):
     )
     document_count: int = Field(..., description="Total number of documents analyzed")
     language: str = Field(default="ja", description="Output language")
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Creation timestamp"
-    )
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     created_by: str | None = Field(default=None, description="User ID who created")
 
     def to_firestore(self) -> dict[str, Any]:
@@ -62,8 +54,7 @@ class MeetingSummary(BaseModel):
     def from_firestore(cls, doc_id: str, data: dict[str, Any]) -> "MeetingSummary":
         """Create from Firestore document."""
         individual_summaries = [
-            DocumentSummary.model_validate(s)
-            for s in data.get("individual_summaries", [])
+            DocumentSummary.model_validate(s) for s in data.get("individual_summaries", [])
         ]
         return cls(
             id=doc_id,
@@ -88,9 +79,7 @@ class MeetingReport(BaseModel):
     content: str = Field(..., description="Full report content (Markdown)")
     gcs_path: str = Field(..., description="GCS path where report is stored")
     download_url: str = Field(..., description="Signed download URL")
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Creation timestamp"
-    )
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     created_by: str | None = Field(default=None, description="User ID who created")
 
     def to_firestore(self) -> dict[str, Any]:
@@ -145,16 +134,12 @@ class MeetingSummaryStreamEvent(BaseModel):
         ...,
         description="Event type: progress, document_summary, overall_report, done, error",
     )
-    progress: dict | None = Field(
-        default=None, description="Progress info for progress events"
-    )
+    progress: dict | None = Field(default=None, description="Progress info for progress events")
     document_summary: DocumentSummary | None = Field(
         default=None, description="Document summary for document_summary events"
     )
     overall_report: str | None = Field(
         default=None, description="Overall report for overall_report events"
     )
-    result: MeetingSummary | None = Field(
-        default=None, description="Final result for done events"
-    )
+    result: MeetingSummary | None = Field(default=None, description="Final result for done events")
     error: str | None = Field(default=None, description="Error message")

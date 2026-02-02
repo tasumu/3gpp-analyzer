@@ -81,9 +81,7 @@ class QAResult(BaseModel):
     @classmethod
     def from_firestore(cls, doc_id: str, data: dict[str, Any]) -> "QAResult":
         """Create from Firestore document."""
-        evidences = [
-            Evidence.model_validate(ev) for ev in data.get("evidences", [])
-        ]
+        evidences = [Evidence.model_validate(ev) for ev in data.get("evidences", [])]
         return cls(
             id=doc_id,
             question=data.get("question", ""),
@@ -101,10 +99,6 @@ class QAStreamEvent(BaseModel):
 
     type: str = Field(..., description="Event type: chunk, evidence, done, error")
     content: str | None = Field(default=None, description="Text content for chunk events")
-    evidence: Evidence | None = Field(
-        default=None, description="Evidence for evidence events"
-    )
+    evidence: Evidence | None = Field(default=None, description="Evidence for evidence events")
     error: str | None = Field(default=None, description="Error message for error events")
-    result: QAResult | None = Field(
-        default=None, description="Final result for done events"
-    )
+    result: QAResult | None = Field(default=None, description="Final result for done events")

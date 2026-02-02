@@ -236,9 +236,7 @@ ReviewSheetGeneratorDep = Annotated[ReviewSheetGenerator, Depends(get_review_she
 CustomPromptServiceDep = Annotated[CustomPromptService, Depends(get_custom_prompt_service)]
 QAServiceDep = Annotated[QAService, Depends(get_qa_service)]
 MeetingServiceDep = Annotated[MeetingService, Depends(get_meeting_service)]
-MeetingReportGeneratorDep = Annotated[
-    MeetingReportGenerator, Depends(get_meeting_report_generator)
-]
+MeetingReportGeneratorDep = Annotated[MeetingReportGenerator, Depends(get_meeting_report_generator)]
 
 # Authentication dependencies
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
