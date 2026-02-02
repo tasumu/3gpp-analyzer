@@ -62,7 +62,13 @@ export function useDocumentStatus({
       const eventSource = await createStatusStream(documentId, force);
       eventSourceRef.current = eventSource;
 
+      // Set connected immediately after creating the EventSource
+      // onopen may not fire reliably in all browsers
+      setIsConnected(true);
+      setIsStarting(false);
+
       eventSource.onopen = () => {
+        // Ensure connected state is set (backup for browsers where it works)
         setIsConnected(true);
         setIsStarting(false);
       };
@@ -85,12 +91,14 @@ export function useDocumentStatus({
         setError(data.error);
         onError?.(data.error);
         stopWatching();
+        setIsStarting(false);
       });
 
       eventSource.onerror = () => {
         // Connection error
         if (eventSource.readyState === EventSource.CLOSED) {
           stopWatching();
+          setIsStarting(false);
         }
       };
     } catch (err) {

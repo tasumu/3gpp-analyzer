@@ -260,7 +260,8 @@ export default function MeetingDetailPage() {
         concurrency: 3,
       });
 
-      eventSource.onmessage = (event) => {
+      // Helper to handle batch events
+      const handleBatchEvent = (event: MessageEvent) => {
         try {
           const data: BatchProcessEvent = JSON.parse(event.data);
 
@@ -273,7 +274,8 @@ export default function MeetingDetailPage() {
               prev
                 ? {
                     ...prev,
-                    current_document: data.contribution_number || data.document_id || null,
+                    current_document:
+                      data.contribution_number || data.document_id || null,
                     current_status: "開始中",
                     current_progress: 0,
                   }
@@ -325,6 +327,14 @@ export default function MeetingDetailPage() {
           console.error("Failed to parse SSE data");
         }
       };
+
+      // Listen to named events (backend sends event: batch_start, document_start, etc.)
+      eventSource.addEventListener("batch_start", handleBatchEvent);
+      eventSource.addEventListener("document_start", handleBatchEvent);
+      eventSource.addEventListener("document_progress", handleBatchEvent);
+      eventSource.addEventListener("document_complete", handleBatchEvent);
+      eventSource.addEventListener("batch_complete", handleBatchEvent);
+      eventSource.addEventListener("error", handleBatchEvent);
 
       eventSource.onerror = () => {
         eventSource.close();
