@@ -117,14 +117,14 @@ gcloud run services update 3gpp-analyzer-api \
   --set-env-vars "GCS_BUCKET_NAME=${PROJECT_ID}-3gpp-documents" \
   --set-env-vars "USE_FIREBASE_EMULATOR=false" \
   --set-env-vars "FTP_MOCK_MODE=false" \
-  --set-env-vars "VERTEX_AI_LOCATION=asia-northeast1" \
+  --set-env-vars "VERTEX_AI_LOCATION=us-central1" \
   --set-env-vars "ANALYSIS_MODEL=gemini-3-flash-preview" \
   --update-env-vars='^|^CORS_ORIGINS_STR=http://localhost:3000,https://your-frontend-url.hosted.app'
 ```
 
 > **Note**:
 > - `CORS_ORIGINS_STR` はカンマ区切りで複数のオリジンを指定可能。ローカル開発用と本番用を両方含めることを推奨。gcloudでカンマを含む値を設定する場合は `--update-env-vars='^|^KEY=value'` 形式を使用。
-> - `VERTEX_AI_LOCATION` は Vertex AI Embedding API のリージョン。デフォルトは `asia-northeast1`。
+> - `VERTEX_AI_LOCATION` は Vertex AI API のリージョン。preview モデル（gemini-3-*-preview）を使用するため `us-central1` を指定。
 > - `ANALYSIS_MODEL` は分析に使用する Gemini モデル。デフォルトは `gemini-3-flash-preview`。
 
 ## フロントエンドデプロイ
