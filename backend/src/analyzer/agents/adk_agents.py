@@ -25,7 +25,7 @@ APP_NAME = "3gpp-analyzer"
 
 
 def create_qa_agent(
-    model: str = "gemini-2.5-pro",
+    model: str = "gemini-3-pro-preview",
     scope: str = "global",
     scope_id: str | None = None,
     language: str = "ja",
@@ -120,7 +120,7 @@ Example citation format: [S2-2401234, Clause 5.2.1]
 
 def create_meeting_report_agent(
     meeting_id: str,
-    model: str = "gemini-2.5-pro",
+    model: str = "gemini-3-pro-preview",
     language: str = "ja",
     custom_prompt: str | None = None,
 ) -> LlmAgent:

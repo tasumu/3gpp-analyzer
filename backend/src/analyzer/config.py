@@ -53,9 +53,9 @@ class Settings(BaseSettings):
     review_sheet_expiration_minutes: int = 60
 
     # Phase 3: Meeting Analysis & Q&A
-    meeting_flash_model: str = "gemini-2.0-flash"  # Lightweight model for individual summaries
-    meeting_pro_model: str = "gemini-2.5-pro"  # High-performance model for overall reports
-    qa_model: str = "gemini-2.5-pro"  # Model for Q&A agents
+    meeting_flash_model: str = "gemini-3-flash-preview"  # Lightweight model for individual summaries
+    meeting_pro_model: str = "gemini-3-pro-preview"  # High-performance model for overall reports
+    qa_model: str = "gemini-3-pro-preview"  # Model for Q&A agents
     meeting_summary_strategy_version: str = "v1"
 
     # API

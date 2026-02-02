@@ -36,7 +36,7 @@ class QAService:
         firestore: FirestoreClient,
         project_id: str,
         location: str = "asia-northeast1",
-        model: str = "gemini-2.5-pro",
+        model: str = "gemini-3-pro-preview",
         save_results: bool = True,
     ):
         """
