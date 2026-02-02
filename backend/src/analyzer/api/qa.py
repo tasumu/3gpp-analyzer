@@ -7,13 +7,12 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from analyzer.agents.qa_agent import QAScope
 from analyzer.dependencies import (
     CurrentUserDep,
     CurrentUserQueryDep,
     QAServiceDep,
 )
-from analyzer.models.qa import QARequest, QAResult
+from analyzer.models.qa import QARequest, QAResult, QAScope
 
 logger = logging.getLogger(__name__)
 
@@ -110,11 +109,13 @@ async def ask_question_stream(
     try:
         qa_scope = QAScope(scope)
     except ValueError:
+
         async def error_generator():
             yield {
                 "event": "error",
                 "data": json.dumps({"error": f"Invalid scope: {scope}"}),
             }
+
         return EventSourceResponse(error_generator())
 
     async def event_generator():
@@ -134,24 +135,28 @@ async def ask_question_stream(
                 elif event.type == "evidence":
                     yield {
                         "event": "evidence",
-                        "data": json.dumps({
-                            "evidence": {
-                                "chunk_id": event.evidence.chunk_id,
-                                "contribution_number": event.evidence.contribution_number,
-                                "content": event.evidence.content[:300],
-                                "clause_number": event.evidence.clause_number,
-                                "relevance_score": event.evidence.relevance_score,
+                        "data": json.dumps(
+                            {
+                                "evidence": {
+                                    "chunk_id": event.evidence.chunk_id,
+                                    "contribution_number": event.evidence.contribution_number,
+                                    "content": event.evidence.content[:300],
+                                    "clause_number": event.evidence.clause_number,
+                                    "relevance_score": event.evidence.relevance_score,
+                                }
                             }
-                        }),
+                        ),
                     }
                 elif event.type == "done":
                     yield {
                         "event": "done",
-                        "data": json.dumps({
-                            "result_id": event.result.id,
-                            "answer": event.result.answer,
-                            "evidence_count": len(event.result.evidences),
-                        }),
+                        "data": json.dumps(
+                            {
+                                "result_id": event.result.id,
+                                "answer": event.result.answer,
+                                "evidence_count": len(event.result.evidences),
+                            }
+                        ),
                     }
                 elif event.type == "error":
                     yield {

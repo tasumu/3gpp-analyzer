@@ -129,6 +129,7 @@ async def summarize_meeting_stream(
     - done: Final result with complete summary
     - error: Error message
     """
+
     async def event_generator():
         try:
             async for event in meeting_service.summarize_meeting_stream(
@@ -139,41 +140,66 @@ async def summarize_meeting_stream(
                 force=force,
             ):
                 if event.type == "progress":
+                    # Map backend progress format to frontend expected format
+                    progress_data = {
+                        "event": "progress",
+                        "current": event.progress.get("processed", 0),
+                        "total": event.progress.get("total_documents", 0),
+                        "contribution_number": event.progress.get("current_document", ""),
+                    }
                     yield {
                         "event": "progress",
-                        "data": json.dumps(event.progress),
+                        "data": json.dumps(progress_data),
                     }
                 elif event.type == "document_summary":
+                    # Send progress event for document_summary
+                    if event.progress:
+                        progress_data = {
+                            "event": "progress",
+                            "current": event.progress.get("processed", 0),
+                            "total": event.progress.get("total_documents", 0),
+                            "contribution_number": event.progress.get("current_document", ""),
+                        }
+                        yield {
+                            "event": "progress",
+                            "data": json.dumps(progress_data),
+                        }
                     yield {
                         "event": "document_summary",
-                        "data": json.dumps({
-                            "document_id": event.document_summary.document_id,
-                            "contribution_number": event.document_summary.contribution_number,
-                            "title": event.document_summary.title,
-                            "summary": event.document_summary.summary[:200] + "..."
-                            if len(event.document_summary.summary) > 200
-                            else event.document_summary.summary,
-                            "from_cache": event.document_summary.from_cache,
-                        }),
+                        "data": json.dumps(
+                            {
+                                "document_id": event.document_summary.document_id,
+                                "contribution_number": event.document_summary.contribution_number,
+                                "title": event.document_summary.title,
+                                "summary": event.document_summary.summary[:200] + "..."
+                                if len(event.document_summary.summary) > 200
+                                else event.document_summary.summary,
+                                "from_cache": event.document_summary.from_cache,
+                            }
+                        ),
                     }
                 elif event.type == "overall_report":
                     yield {
                         "event": "overall_report",
-                        "data": json.dumps({
-                            "report": event.overall_report[:500] + "..."
-                            if len(event.overall_report) > 500
-                            else event.overall_report,
-                        }),
+                        "data": json.dumps(
+                            {
+                                "report": event.overall_report[:500] + "..."
+                                if len(event.overall_report) > 500
+                                else event.overall_report,
+                            }
+                        ),
                     }
                 elif event.type == "done":
+                    # Send complete event with full summary for frontend compatibility
+                    summary_response = meeting_summary_to_response(event.result)
                     yield {
-                        "event": "done",
-                        "data": json.dumps({
-                            "summary_id": event.result.id,
-                            "meeting_id": event.result.meeting_id,
-                            "document_count": event.result.document_count,
-                            "key_topics": event.result.key_topics,
-                        }),
+                        "event": "complete",
+                        "data": json.dumps(
+                            {
+                                "event": "complete",
+                                "summary": summary_response.model_dump(),
+                            }
+                        ),
                     }
                 elif event.type == "error":
                     yield {

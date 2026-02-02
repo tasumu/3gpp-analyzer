@@ -306,9 +306,7 @@ class MeetingService:
         direct summarization.
         """
         # Try to get cached analysis
-        cached_result = await self.analysis_service.get_cached_result(
-            document.id, "single"
-        )
+        cached_result = await self.analysis_service.get_cached_result(document.id, "single")
         if cached_result and cached_result.result:
             result = cached_result.result
             return DocumentSummary(
@@ -326,9 +324,7 @@ class MeetingService:
             )
 
         # Get document content
-        evidences = await self.evidence_provider.get_by_document(
-            document.id, top_k=30
-        )
+        evidences = await self.evidence_provider.get_by_document(document.id, top_k=30)
 
         if not evidences:
             return DocumentSummary(
@@ -371,6 +367,7 @@ class MeetingService:
 
         try:
             import json
+
             result_data = json.loads(response.text)
             return DocumentSummary(
                 document_id=document.id,
@@ -425,8 +422,8 @@ class MeetingService:
 
 Document Information:
 - Contribution Number: {document.contribution_number}
-- Title: {document.title or 'Unknown'}
-- Source: {document.source or 'Unknown'}
+- Title: {document.title or "Unknown"}
+- Source: {document.source or "Unknown"}
 
 Document Content:
 {content}
@@ -455,13 +452,15 @@ Return JSON with "summary" and "key_points" fields."""
             return "No documents available for analysis.", []
 
         # Prepare summary input
-        summaries_text = "\n\n".join([
-            f"### {s.contribution_number}: {s.title}\n"
-            f"Source: {s.source or 'Unknown'}\n"
-            f"Summary: {s.summary}\n"
-            f"Key Points: {', '.join(s.key_points) if s.key_points else 'N/A'}"
-            for s in summaries
-        ])
+        summaries_text = "\n\n".join(
+            [
+                f"### {s.contribution_number}: {s.title}\n"
+                f"Source: {s.source or 'Unknown'}\n"
+                f"Summary: {s.summary}\n"
+                f"Key Points: {', '.join(s.key_points) if s.key_points else 'N/A'}"
+                for s in summaries
+            ]
+        )
 
         lang_instruction = (
             "Write the report in Japanese. Keep technical terms in English."
@@ -505,13 +504,14 @@ At the end, provide a JSON block with key topics: {{"key_topics": ["topic1", "to
         try:
             import json
             import re
+
             # Look for JSON block at the end
             json_match = re.search(r'\{[^{}]*"key_topics"\s*:\s*\[[^\]]*\][^{}]*\}', report_text)
             if json_match:
                 topics_data = json.loads(json_match.group())
                 key_topics = topics_data.get("key_topics", [])
                 # Remove JSON from report
-                report_text = report_text[:json_match.start()].strip()
+                report_text = report_text[: json_match.start()].strip()
         except Exception as e:
             logger.warning(f"Failed to extract key topics: {e}")
 
@@ -549,9 +549,9 @@ At the end, provide a JSON block with key topics: {{"key_topics": ["topic1", "to
     async def _save_summary(self, summary: MeetingSummary) -> None:
         """Save meeting summary to Firestore."""
         try:
-            doc_ref = self.firestore.client.collection(
-                self.MEETING_SUMMARIES_COLLECTION
-            ).document(summary.id)
+            doc_ref = self.firestore.client.collection(self.MEETING_SUMMARIES_COLLECTION).document(
+                summary.id
+            )
             doc_ref.set(summary.to_firestore())
             logger.info(f"Saved meeting summary: {summary.id}")
         except Exception as e:
@@ -560,9 +560,9 @@ At the end, provide a JSON block with key topics: {{"key_topics": ["topic1", "to
     async def get_summary(self, summary_id: str) -> MeetingSummary | None:
         """Get a meeting summary by ID."""
         try:
-            doc_ref = self.firestore.client.collection(
-                self.MEETING_SUMMARIES_COLLECTION
-            ).document(summary_id)
+            doc_ref = self.firestore.client.collection(self.MEETING_SUMMARIES_COLLECTION).document(
+                summary_id
+            )
             doc = doc_ref.get()
             if doc.exists:
                 return MeetingSummary.from_firestore(doc.id, doc.to_dict())
