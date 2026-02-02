@@ -1,11 +1,11 @@
-"""Analysis API endpoints for P2-05."""
+"""Analysis API endpoints for document analysis and summarization."""
 
 import json
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from analyzer.dependencies import (
@@ -16,10 +16,10 @@ from analyzer.dependencies import (
     ReviewSheetGeneratorDep,
 )
 from analyzer.models.analysis import (
-    AnalysisOptions,
     AnalysisRequest,
     AnalysisResult,
 )
+from analyzer.models.meeting_analysis import DocumentSummary
 
 logger = logging.getLogger(__name__)
 
@@ -245,23 +245,24 @@ async def stream_analysis(
 class AnalyzeDocumentRequest(BaseModel):
     """Request body for analyze document endpoint."""
 
-    options: AnalysisOptions | None = None
-    force: bool = False
+    language: str = Field(default="ja", pattern="^(ja|en)$", description="Output language")
+    custom_prompt: str | None = Field(default=None, max_length=2000, description="Custom focus")
+    force: bool = Field(default=False, description="Force re-generation even if cached")
 
 
-@router.post("/documents/{document_id}/analyze")
+@router.post("/documents/{document_id}/analyze", response_model=DocumentSummary)
 async def analyze_document(
     document_id: str,
     current_user: CurrentUserDep,
     analysis_service: AnalysisServiceDep,
     document_service: DocumentServiceDep,
     request: AnalyzeDocumentRequest | None = None,
-):
+) -> DocumentSummary:
     """
-    Analyze a specific document.
+    Analyze a specific document and return a summary.
 
-    Convenience endpoint that accepts document_id directly.
-    Accepts options including language selection in the request body.
+    Returns a DocumentSummary with summary text and key points.
+    Results are cached and shared with meeting summarization.
     """
     doc = await document_service.get(document_id)
     if not doc:
@@ -275,24 +276,51 @@ async def analyze_document(
 
     # Extract options from request body
     req = request or AnalyzeDocumentRequest()
-    options = req.options or AnalysisOptions()
-    force = req.force
 
     try:
-        result = await analysis_service.analyze_single(
+        summary = await analysis_service.generate_summary(
             document_id=document_id,
-            options=options,
-            force=force,
+            language=req.language,
+            custom_prompt=req.custom_prompt,
+            force=req.force,
             user_id=current_user.uid,
         )
 
-        return result.model_dump(mode="json")
+        return summary
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Analysis failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{document_id}/summary", response_model=DocumentSummary | None)
+async def get_document_summary(
+    document_id: str,
+    current_user: CurrentUserDep,
+    analysis_service: AnalysisServiceDep,
+    document_service: DocumentServiceDep,
+    language: str = Query("ja", pattern="^(ja|en)$", description="Output language"),
+    custom_prompt: str | None = Query(None, max_length=2000, description="Custom focus"),
+) -> DocumentSummary | None:
+    """
+    Get cached document summary.
+
+    Returns the cached summary if available, or null if not cached.
+    Use POST /documents/{document_id}/analyze to generate a new summary.
+    """
+    doc = await document_service.get(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    summary = await analysis_service.get_cached_summary(
+        document_id=document_id,
+        language=language,
+        custom_prompt=custom_prompt,
+    )
+
+    return summary
 
 
 @router.get("/documents/{document_id}/analysis")

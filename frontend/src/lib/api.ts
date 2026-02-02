@@ -15,6 +15,7 @@ import type {
   Document,
   DocumentListResponse,
   DocumentStatus,
+  DocumentSummary,
   DownloadResponse,
   FTPBrowseResponse,
   MeetingInfo,
@@ -241,18 +242,39 @@ export async function listAnalyses(limit = 20): Promise<AnalysisListResponse> {
   return fetchApi<AnalysisListResponse>(`/analysis?limit=${limit}`);
 }
 
+export interface AnalyzeDocumentOptions {
+  language?: AnalysisLanguage;
+  customPrompt?: string;
+  force?: boolean;
+}
+
 export async function analyzeDocument(
   documentId: string,
-  force = false,
-  options?: AnalysisOptions,
-): Promise<AnalysisResult> {
-  return fetchApi<AnalysisResult>(
+  options: AnalyzeDocumentOptions = {},
+): Promise<DocumentSummary> {
+  return fetchApi<DocumentSummary>(
     `/documents/${documentId}/analyze`,
     {
       method: "POST",
-      body: JSON.stringify({ options, force }),
+      body: JSON.stringify({
+        language: options.language || "ja",
+        custom_prompt: options.customPrompt || null,
+        force: options.force || false,
+      }),
     },
   );
+}
+
+export async function getDocumentSummary(
+  documentId: string,
+  language: AnalysisLanguage = "ja",
+  customPrompt?: string,
+): Promise<DocumentSummary | null> {
+  const params = new URLSearchParams({ language });
+  if (customPrompt) {
+    params.append("custom_prompt", customPrompt);
+  }
+  return fetchApi<DocumentSummary | null>(`/documents/${documentId}/summary?${params}`);
 }
 
 export async function getDocumentAnalyses(

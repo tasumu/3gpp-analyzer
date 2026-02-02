@@ -12,9 +12,26 @@ import type {
   AnalysisLanguage,
   AnalysisResult,
   CustomPrompt,
+  Evidence,
 } from "@/lib/types";
 import { isCustomAnalysis } from "@/lib/types";
-import { EvidenceCitation } from "./EvidenceCitation";
+
+function EvidenceCitation({ evidence }: { evidence: Evidence }) {
+  return (
+    <div className="text-sm p-3 bg-gray-50 rounded border border-gray-200">
+      <div className="flex items-start justify-between">
+        <span className="font-medium text-gray-700">
+          {evidence.clause_number || "Content"}
+          {evidence.clause_title && ` - ${evidence.clause_title}`}
+        </span>
+        {evidence.page_number && (
+          <span className="text-xs text-gray-500">Page {evidence.page_number}</span>
+        )}
+      </div>
+      <p className="text-gray-600 mt-1 line-clamp-3">{evidence.content}</p>
+    </div>
+  );
+}
 
 interface CustomAnalysisSectionProps {
   documentId: string;
