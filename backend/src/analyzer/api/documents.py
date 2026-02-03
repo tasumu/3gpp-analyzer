@@ -11,7 +11,7 @@ from analyzer.models.api import (
     DocumentResponse,
     ProcessRequest,
 )
-from analyzer.models.document import Document, DocumentStatus
+from analyzer.models.document import Document, DocumentStatus, DocumentType
 
 router = APIRouter()
 
@@ -21,6 +21,7 @@ def document_to_response(doc: Document) -> DocumentResponse:
     return DocumentResponse(
         id=doc.id,
         contribution_number=doc.contribution_number,
+        document_type=doc.document_type,
         title=doc.title,
         source=doc.source,
         meeting_id=doc.meeting.id if doc.meeting else None,
@@ -29,6 +30,7 @@ def document_to_response(doc: Document) -> DocumentResponse:
         error_message=doc.error_message,
         chunk_count=doc.chunk_count,
         filename=doc.source_file.filename,
+        ftp_path=doc.source_file.ftp_path,
         file_size_bytes=doc.source_file.size_bytes,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
@@ -41,6 +43,8 @@ async def list_documents(
     document_service: DocumentServiceDep,
     meeting_id: str | None = Query(None, description="Filter by meeting ID"),
     status: DocumentStatus | None = Query(None, description="Filter by status"),
+    document_type: DocumentType | None = Query(None, description="Filter by document type"),
+    path_prefix: str | None = Query(None, description="Filter by FTP path prefix"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
 ):
@@ -52,6 +56,8 @@ async def list_documents(
     documents, total = await document_service.list_documents(
         meeting_id=meeting_id,
         status=status,
+        document_type=document_type,
+        path_prefix=path_prefix,
         page=page,
         page_size=page_size,
     )

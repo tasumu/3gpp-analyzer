@@ -1,6 +1,7 @@
 """FTP synchronization service for 3GPP documents (P1-01)."""
 
 import asyncio
+import hashlib
 import logging
 import re
 from dataclasses import dataclass
@@ -8,7 +9,7 @@ from datetime import datetime
 from ftplib import FTP
 from typing import Callable
 
-from analyzer.models.document import Document, DocumentStatus, Meeting, SourceFile
+from analyzer.models.document import Document, DocumentStatus, DocumentType, Meeting, SourceFile
 from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.providers.storage_client import StorageClient
 
@@ -326,6 +327,29 @@ class FTPSyncService:
             return match.group(1)
         return None
 
+    def _generate_document_id(self, ftp_path: str, contribution_number: str | None) -> str:
+        """
+        Generate unique document ID.
+
+        For contribution documents, use the contribution number as ID.
+        For other documents, generate a stable hash from the FTP path.
+        """
+        if contribution_number:
+            return contribution_number
+        # Generate stable hash from ftp_path (first 16 chars of SHA256)
+        return hashlib.sha256(ftp_path.encode()).hexdigest()[:16]
+
+    def _determine_document_type(self, filename: str) -> DocumentType:
+        """
+        Determine document type based on filename pattern.
+
+        Documents matching SX-XXXXXX pattern are contributions.
+        All others are classified as OTHER.
+        """
+        if CONTRIBUTION_PATTERN.match(filename):
+            return DocumentType.CONTRIBUTION
+        return DocumentType.OTHER
+
     def _parse_meeting_path(self, path: str) -> Meeting | None:
         """Parse meeting information from FTP path."""
         # Expected format: /Meetings/{WG}/{meeting_name}/Docs/
@@ -460,29 +484,32 @@ class FTPSyncService:
         """
         return await asyncio.to_thread(self._list_meeting_files_sync, meeting_path)
 
-    async def sync_meeting(
+    async def sync_directory(
         self,
-        meeting_path: str,
+        directory_path: str,
         path_pattern: str | None = None,
+        include_non_contributions: bool = True,
         progress_callback: Callable[[str, int, int], None] | None = None,
     ) -> dict:
         """
-        Sync metadata for all documents in a meeting.
+        Sync metadata for all documents in a directory (recursively).
+
+        Works for any FTP directory - meeting docs, specs, or other paths.
 
         Args:
-            meeting_path: Path to meeting docs folder.
+            directory_path: Path to FTP directory (e.g., /Meetings/SA2/SA2_162/Docs).
             path_pattern: Optional regex pattern to filter files.
+            include_non_contributions: If True, include files without contribution numbers.
             progress_callback: Optional callback(message, current, total).
 
         Returns:
             Sync result with counts of found, new, and updated documents.
         """
-        meeting = self._parse_meeting_path(meeting_path)
-        if not meeting:
-            raise ValueError(f"Could not parse meeting from path: {meeting_path}")
+        # Try to parse meeting info from path (only works for /Meetings/... paths)
+        meeting = self._parse_meeting_path(directory_path)
 
-        # List files from FTP
-        files = await self.list_meeting_files(meeting_path)
+        # List files from FTP (reusing the existing method)
+        files = await self.list_meeting_files(directory_path)
 
         # Filter by pattern if provided
         if path_pattern:
@@ -490,10 +517,12 @@ class FTPSyncService:
             files = [f for f in files if pattern.search(f["filename"])]
 
         result = {
-            "meeting_id": meeting.id,
+            "meeting_id": meeting.id if meeting else None,
+            "directory_path": directory_path,
             "documents_found": len(files),
             "documents_new": 0,
             "documents_updated": 0,
+            "documents_skipped": 0,
             "errors": [],
         }
 
@@ -503,14 +532,18 @@ class FTPSyncService:
                 if progress_callback:
                     progress_callback(f"Processing {file_info['filename']}", i + 1, total)
 
-                # Extract contribution number
+                # Extract contribution number (may be None for non-contribution files)
                 contrib_num = self._parse_contribution_number(file_info["filename"])
-                if not contrib_num:
-                    logger.info(f"Skipped (invalid contribution number): {file_info['filename']}")
+
+                # Skip non-contribution files if not included
+                if not contrib_num and not include_non_contributions:
+                    logger.info(f"Skipped (no contribution number): {file_info['filename']}")
+                    result["documents_skipped"] += 1
                     continue
 
-                # Create document ID
-                doc_id = contrib_num
+                # Determine document type and generate ID
+                doc_type = self._determine_document_type(file_info["filename"])
+                doc_id = self._generate_document_id(file_info["ftp_path"], contrib_num)
 
                 # Check if document exists
                 existing = await self.firestore.get_document(doc_id)
@@ -539,6 +572,7 @@ class FTPSyncService:
                     doc = Document(
                         id=doc_id,
                         contribution_number=contrib_num,
+                        document_type=doc_type,
                         meeting=meeting,
                         source_file=source_file,
                         status=DocumentStatus.METADATA_ONLY,
@@ -550,6 +584,38 @@ class FTPSyncService:
                 result["errors"].append(f"Error processing {file_info['filename']}: {e}")
 
         return result
+
+    async def sync_meeting(
+        self,
+        meeting_path: str,
+        path_pattern: str | None = None,
+        progress_callback: Callable[[str, int, int], None] | None = None,
+    ) -> dict:
+        """
+        Sync metadata for all documents in a meeting (legacy method for backward compatibility).
+
+        This method is a wrapper around sync_directory for backward compatibility.
+        New code should use sync_directory directly.
+
+        Args:
+            meeting_path: Path to meeting docs folder.
+            path_pattern: Optional regex pattern to filter files.
+            progress_callback: Optional callback(message, current, total).
+
+        Returns:
+            Sync result with counts of found, new, and updated documents.
+        """
+        # For backward compatibility, validate that this is a meeting path
+        meeting = self._parse_meeting_path(meeting_path)
+        if not meeting:
+            raise ValueError(f"Could not parse meeting from path: {meeting_path}")
+
+        return await self.sync_directory(
+            directory_path=meeting_path,
+            path_pattern=path_pattern,
+            include_non_contributions=True,
+            progress_callback=progress_callback,
+        )
 
     async def download_document(self, document_id: str) -> str:
         """

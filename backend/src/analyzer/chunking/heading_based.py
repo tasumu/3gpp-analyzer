@@ -40,7 +40,7 @@ class HeadingBasedChunking(ChunkingStrategy):
         self,
         file_path: Path | str,
         document_id: str,
-        contribution_number: str,
+        contribution_number: str | None,
         meeting_id: str | None = None,
     ) -> list[Chunk]:
         """Split a document into chunks based on headings."""
@@ -104,7 +104,7 @@ class HeadingBasedChunking(ChunkingStrategy):
         self,
         section: list[StructureElement],
         document_id: str,
-        contribution_number: str,
+        contribution_number: str | None,
         meeting_id: str | None,
     ) -> list[Chunk]:
         """
@@ -164,7 +164,7 @@ class HeadingBasedChunking(ChunkingStrategy):
         self,
         elements: list[StructureElement],
         document_id: str,
-        contribution_number: str,
+        contribution_number: str | None,
         meeting_id: str | None,
         clause_number: str | None,
         clause_title: str | None,
@@ -278,7 +278,7 @@ class HeadingBasedChunking(ChunkingStrategy):
         self,
         content: str,
         document_id: str,
-        contribution_number: str,
+        contribution_number: str | None,
         meeting_id: str | None,
         clause_number: str | None,
         clause_title: str | None,

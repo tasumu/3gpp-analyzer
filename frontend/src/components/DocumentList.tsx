@@ -51,7 +51,7 @@ export function DocumentList({ documents, isLoading }: DocumentListProps) {
         <thead className="bg-gray-50">
           <tr>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Contribution
+              ID / Name
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Title
@@ -78,8 +78,13 @@ export function DocumentList({ documents, isLoading }: DocumentListProps) {
                   href={`/documents/${doc.id}`}
                   className="text-primary-600 hover:text-primary-900 font-medium"
                 >
-                  {doc.contribution_number}
+                  {doc.contribution_number || doc.filename}
                 </Link>
+                {doc.document_type !== "contribution" && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                    {doc.document_type}
+                  </span>
+                )}
               </td>
               <td className="px-6 py-4">
                 <div className="text-sm text-gray-900 truncate max-w-md">

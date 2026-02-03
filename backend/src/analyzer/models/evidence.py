@@ -8,7 +8,7 @@ class Evidence(BaseModel):
 
     chunk_id: str = Field(..., description="Source chunk ID")
     document_id: str = Field(..., description="Source document ID")
-    contribution_number: str = Field(..., description="3GPP contribution number")
+    contribution_number: str | None = Field(None, description="3GPP contribution number")
     content: str = Field(..., description="Evidence text content")
     clause_number: str | None = Field(None, description="Clause/section number")
     clause_title: str | None = Field(None, description="Clause/section title")
