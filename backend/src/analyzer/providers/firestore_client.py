@@ -74,16 +74,34 @@ class FirestoreClient:
     async def list_documents(
         self,
         filters: dict | None = None,
+        range_filters: dict | None = None,
         order_by: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict]:
-        """List documents with optional filtering."""
+        """
+        List documents with optional filtering.
+
+        Args:
+            filters: Equality filters as {field: value}.
+            range_filters: Range filter as {field, start, end} for prefix matching.
+            order_by: Field to order by.
+            limit: Maximum results.
+            offset: Number of results to skip.
+
+        Returns:
+            List of document dicts.
+        """
         query = self._client.collection(self.DOCUMENTS_COLLECTION)
 
         if filters:
             for field, value in filters.items():
                 query = query.where(field, "==", value)
+
+        if range_filters:
+            field = range_filters["field"]
+            query = query.where(field, ">=", range_filters["start"])
+            query = query.where(field, "<", range_filters["end"])
 
         if order_by:
             query = query.order_by(order_by)
@@ -93,13 +111,31 @@ class FirestoreClient:
 
         return [{"id": doc.id, **doc.to_dict()} for doc in docs]
 
-    async def count_documents(self, filters: dict | None = None) -> int:
-        """Count documents matching filters."""
+    async def count_documents(
+        self,
+        filters: dict | None = None,
+        range_filters: dict | None = None,
+    ) -> int:
+        """
+        Count documents matching filters.
+
+        Args:
+            filters: Equality filters as {field: value}.
+            range_filters: Range filter as {field, start, end} for prefix matching.
+
+        Returns:
+            Count of matching documents.
+        """
         query = self._client.collection(self.DOCUMENTS_COLLECTION)
 
         if filters:
             for field, value in filters.items():
                 query = query.where(field, "==", value)
+
+        if range_filters:
+            field = range_filters["field"]
+            query = query.where(field, ">=", range_filters["start"])
+            query = query.where(field, "<", range_filters["end"])
 
         # Use aggregation query for count
         count_query = query.count()

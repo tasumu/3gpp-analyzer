@@ -4,14 +4,15 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from analyzer.models.document import DocumentStatus
+from analyzer.models.document import DocumentStatus, DocumentType
 
 
 class DocumentResponse(BaseModel):
     """Response model for a single document."""
 
     id: str
-    contribution_number: str
+    contribution_number: str | None
+    document_type: DocumentType
     title: str | None
     source: str | None
     meeting_id: str | None
@@ -20,6 +21,7 @@ class DocumentResponse(BaseModel):
     error_message: str | None
     chunk_count: int
     filename: str
+    ftp_path: str
     file_size_bytes: int
     created_at: datetime
     updated_at: datetime
@@ -125,6 +127,9 @@ class FTPSyncRequest(BaseModel):
 
     path: str = Field(..., description="FTP directory path to sync")
     path_pattern: str | None = Field(None, description="Optional regex to filter files")
+    include_non_contributions: bool = Field(
+        True, description="Include files without contribution numbers"
+    )
 
 
 class FTPSyncProgress(BaseModel):
@@ -148,7 +153,7 @@ class ChunkMetadataResponse(BaseModel):
     """Response model for chunk metadata."""
 
     document_id: str
-    contribution_number: str
+    contribution_number: str | None = None
     meeting_id: str | None = None
     clause_number: str | None = None
     clause_title: str | None = None

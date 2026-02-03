@@ -46,15 +46,17 @@ class StorageClient:
         """Get the storage bucket."""
         return self._bucket
 
-    def get_original_path(self, meeting_id: str, filename: str) -> str:
+    def get_original_path(self, meeting_id: str | None, filename: str) -> str:
         """Get GCS path for original file."""
-        return f"{self.ORIGINAL_PREFIX}/{meeting_id}/{filename}"
+        folder = meeting_id if meeting_id else "_no_meeting"
+        return f"{self.ORIGINAL_PREFIX}/{folder}/{filename}"
 
-    def get_normalized_path(self, meeting_id: str, filename: str) -> str:
+    def get_normalized_path(self, meeting_id: str | None, filename: str) -> str:
         """Get GCS path for normalized file."""
         # Change extension to .docx for normalized files
         base_name = Path(filename).stem
-        return f"{self.NORMALIZED_PREFIX}/{meeting_id}/{base_name}.docx"
+        folder = meeting_id if meeting_id else "_no_meeting"
+        return f"{self.NORMALIZED_PREFIX}/{folder}/{base_name}.docx"
 
     async def upload_file(
         self,

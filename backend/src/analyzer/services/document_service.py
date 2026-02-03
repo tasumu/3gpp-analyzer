@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from analyzer.models.document import Document, DocumentStatus
+from analyzer.models.document import Document, DocumentStatus, DocumentType
 from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.providers.storage_client import StorageClient
 
@@ -50,6 +50,8 @@ class DocumentService:
         meeting_id: str | None = None,
         status: DocumentStatus | None = None,
         contribution_number: str | None = None,
+        document_type: DocumentType | None = None,
+        path_prefix: str | None = None,
         page: int = 1,
         page_size: int = 50,
     ) -> tuple[list[Document], int]:
@@ -60,6 +62,8 @@ class DocumentService:
             meeting_id: Filter by meeting ID.
             status: Filter by processing status.
             contribution_number: Filter by contribution number.
+            document_type: Filter by document type (contribution, other).
+            path_prefix: Filter by FTP path prefix (e.g., "/Specs/latest/Rel-20").
             page: Page number (1-indexed).
             page_size: Items per page.
 
@@ -73,14 +77,26 @@ class DocumentService:
             filters["status"] = status.value
         if contribution_number:
             filters["contribution_number"] = contribution_number
+        if document_type:
+            filters["document_type"] = document_type.value
+
+        # Path prefix requires special handling (range query)
+        range_filters = None
+        if path_prefix:
+            range_filters = {
+                "field": "source_file.ftp_path",
+                "start": path_prefix,
+                "end": path_prefix + "\uffff",
+            }
 
         # Get total count
-        total = await self.firestore.count_documents(filters)
+        total = await self.firestore.count_documents(filters, range_filters=range_filters)
 
         # Get paginated results
         offset = (page - 1) * page_size
         docs_data = await self.firestore.list_documents(
             filters=filters,
+            range_filters=range_filters,
             order_by="updated_at",
             limit=page_size,
             offset=offset,

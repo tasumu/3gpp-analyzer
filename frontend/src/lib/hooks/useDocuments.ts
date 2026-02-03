@@ -2,11 +2,13 @@
 
 import useSWR from "swr";
 import { listDocuments, listMeetings } from "../api";
-import type { Document, DocumentStatus, Meeting } from "../types";
+import type { Document, DocumentStatus, DocumentType, Meeting } from "../types";
 
 interface UseDocumentsOptions {
   meeting_id?: string;
   status?: DocumentStatus;
+  document_type?: DocumentType;
+  path_prefix?: string;
   page?: number;
   page_size?: number;
 }
@@ -22,10 +24,10 @@ interface UseDocumentsResult {
 }
 
 export function useDocuments(options: UseDocumentsOptions = {}): UseDocumentsResult {
-  const { meeting_id, status, page = 1, page_size = 50 } = options;
+  const { meeting_id, status, document_type, path_prefix, page = 1, page_size = 50 } = options;
 
   // Create a stable cache key based on parameters
-  const cacheKey = ["documents", meeting_id, status, page, page_size].filter(Boolean).join("-");
+  const cacheKey = ["documents", meeting_id, status, document_type, path_prefix, page, page_size].filter(Boolean).join("-");
 
   const { data, error, isLoading, mutate } = useSWR(
     cacheKey,
@@ -33,6 +35,8 @@ export function useDocuments(options: UseDocumentsOptions = {}): UseDocumentsRes
       listDocuments({
         meeting_id,
         status,
+        document_type,
+        path_prefix,
         page,
         page_size,
       }),
