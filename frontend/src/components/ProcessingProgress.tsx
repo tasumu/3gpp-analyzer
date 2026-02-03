@@ -121,7 +121,7 @@ export function ProcessingProgress({
       {/* Process button */}
       {canProcess && !isConnected && !isStarting && (
         <button
-          onClick={startProcessing}
+          onClick={() => startProcessing(currentStatus === "indexed")}
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           <svg
@@ -143,7 +143,7 @@ export function ProcessingProgress({
               d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          Process Document
+          {currentStatus === "indexed" ? "Reprocess Document" : "Process Document"}
         </button>
       )}
 
