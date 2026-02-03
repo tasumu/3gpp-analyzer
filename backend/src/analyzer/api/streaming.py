@@ -25,15 +25,21 @@ async def status_event_generator(
     Yields status updates as the document is processed.
     """
     try:
+        is_first_update = True
         async for update in processor.process_document_stream(document_id, force):
             yield {
                 "event": "status",
                 "data": json.dumps(update.model_dump(mode="json")),
             }
 
-            # If done or error, stop
-            if update.status in (DocumentStatus.INDEXED, DocumentStatus.ERROR):
+            # Don't stop on the first update (initial status before processing starts)
+            # Only stop on INDEXED/ERROR after processing has begun
+            if not is_first_update and update.status in (
+                DocumentStatus.INDEXED,
+                DocumentStatus.ERROR,
+            ):
                 break
+            is_first_update = False
 
     except ValueError as e:
         yield {

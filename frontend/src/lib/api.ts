@@ -167,27 +167,129 @@ export async function listMeetings(): Promise<MeetingsResponse> {
 
 // SSE helpers
 
+/**
+ * EventSource-like interface using fetch() for SSE.
+ * This works around browser-specific EventSource issues with HTTP/2.
+ */
+class FetchEventSource {
+  private abortController: AbortController | null = null;
+  private eventListeners: Map<string, ((event: MessageEvent) => void)[]> = new Map();
+  public readyState: number = 0; // 0=CONNECTING, 1=OPEN, 2=CLOSED
+  public onopen: (() => void) | null = null;
+  public onerror: ((error: Event) => void) | null = null;
+
+  constructor(private url: string) {
+    this.connect();
+  }
+
+  private async connect() {
+    this.abortController = new AbortController();
+
+    try {
+      const response = await fetch(this.url, {
+        signal: this.abortController.signal,
+        headers: {
+          Accept: "text/event-stream",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      if (!response.body) {
+        throw new Error("No response body");
+      }
+
+      this.readyState = 1; // OPEN
+      this.onopen?.();
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let currentEvent = "message";
+      let currentData = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            currentEvent = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            // Append data (SSE can have multiple data: lines)
+            if (currentData) {
+              currentData += "\n" + line.slice(5).trim();
+            } else {
+              currentData = line.slice(5).trim();
+            }
+          } else if (line === "" || line === "\r") {
+            // Empty line means end of event
+            if (currentData) {
+              const event = new MessageEvent(currentEvent, { data: currentData });
+              this.dispatchEvent(currentEvent, event);
+              currentEvent = "message";
+              currentData = "";
+            }
+          }
+        }
+      }
+
+      this.readyState = 2; // CLOSED
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") {
+        this.readyState = 2; // CLOSED
+        this.onerror?.(new Event("error"));
+      }
+    }
+  }
+
+  private dispatchEvent(type: string, event: MessageEvent) {
+    const listeners = this.eventListeners.get(type) || [];
+    for (const listener of listeners) {
+      listener(event);
+    }
+  }
+
+  addEventListener(type: string, listener: (event: MessageEvent) => void) {
+    if (!this.eventListeners.has(type)) {
+      this.eventListeners.set(type, []);
+    }
+    this.eventListeners.get(type)!.push(listener);
+  }
+
+  close() {
+    this.abortController?.abort();
+    this.readyState = 2; // CLOSED
+  }
+}
+
 export async function createStatusStream(
   documentId: string,
   force = false,
 ): Promise<EventSource> {
-  // SSE needs direct connection to backend with token in query param
   const token = await getAuthToken();
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
   const url = `${API_BASE}/documents/${documentId}/status/stream?force=${force}&token=${encodeURIComponent(token)}`;
-  return new EventSource(url);
+
+  // Use FetchEventSource instead of native EventSource to work around HTTP/2 issues
+  return new FetchEventSource(url) as unknown as EventSource;
 }
 
 export async function createStatusWatcher(documentId: string): Promise<EventSource> {
-  // SSE needs direct connection to backend with token in query param
   const token = await getAuthToken();
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
   const url = `${API_BASE}/documents/${documentId}/status/watch?token=${encodeURIComponent(token)}`;
-  return new EventSource(url);
+  return new FetchEventSource(url) as unknown as EventSource;
 }
 
 // FTP Browser APIs
@@ -207,13 +309,12 @@ export async function startFTPSync(
 }
 
 export async function createFTPSyncStream(syncId: string): Promise<EventSource> {
-  // SSE needs direct connection to backend with token in query param
   const token = await getAuthToken();
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
   const url = `${API_BASE}/ftp/sync/${syncId}/stream?token=${encodeURIComponent(token)}`;
-  return new EventSource(url);
+  return new FetchEventSource(url) as unknown as EventSource;
 }
 
 // Chunk APIs
@@ -291,7 +392,7 @@ export async function createAnalysisStream(analysisId: string): Promise<EventSou
     throw new Error("Authentication required for SSE connection");
   }
   const url = `${API_BASE}/analysis/${analysisId}/stream?token=${encodeURIComponent(token)}`;
-  return new EventSource(url);
+  return new FetchEventSource(url) as unknown as EventSource;
 }
 
 export function getReviewSheetUrl(analysisId: string): string {
@@ -419,7 +520,7 @@ export async function createQAStream(
   }
 
   const url = `${API_BASE}/qa/stream?${params.toString()}`;
-  return new EventSource(url);
+  return new FetchEventSource(url) as unknown as EventSource;
 }
 
 export async function getQAResult(resultId: string): Promise<QAResult> {
@@ -461,7 +562,7 @@ export async function createBatchProcessStream(
   });
 
   const url = `${API_BASE}/meetings/${encodeURIComponent(meetingId)}/process/stream?${params.toString()}`;
-  return new EventSource(url);
+  return new FetchEventSource(url) as unknown as EventSource;
 }
 
 export async function summarizeMeeting(
@@ -506,7 +607,7 @@ export async function createMeetingSummarizeStream(
   }
 
   const url = `${API_BASE}/meetings/${encodeURIComponent(meetingId)}/summarize/stream?${params.toString()}`;
-  return new EventSource(url);
+  return new FetchEventSource(url) as unknown as EventSource;
 }
 
 export async function getMeetingSummary(
