@@ -19,7 +19,7 @@ interface UseDocumentStatusResult {
   error: string | null;
   isConnected: boolean;
   isStarting: boolean;
-  startProcessing: () => void;
+  startProcessing: (forceReprocess?: boolean) => void;
   stopWatching: () => void;
 }
 
@@ -47,7 +47,7 @@ export function useDocumentStatus({
     }
   }, []);
 
-  const startProcessing = useCallback(async () => {
+  const startProcessing = useCallback(async (forceReprocess?: boolean) => {
     // Close any existing connection
     stopWatching();
 
@@ -59,7 +59,9 @@ export function useDocumentStatus({
 
     try {
       // Create new SSE connection (now async due to token retrieval)
-      const eventSource = await createStatusStream(documentId, force);
+      // Use forceReprocess argument if provided, otherwise fall back to hook option
+      const shouldForce = forceReprocess ?? force;
+      const eventSource = await createStatusStream(documentId, shouldForce);
       eventSourceRef.current = eventSource;
 
       // Set connected immediately after creating the EventSource

@@ -108,6 +108,7 @@ export function isProcessable(status: DocumentStatus): boolean {
     "normalized",
     "chunked",
     "error",
+    "indexed",
   ].includes(status);
 }
 
