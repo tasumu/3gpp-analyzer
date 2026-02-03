@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { DocumentSummary } from "@/lib/types";
 
@@ -22,9 +23,12 @@ export function DocumentSummaryCard({
     <div className="border border-gray-200 rounded-lg p-4 bg-white">
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-gray-900 truncate">
+          <Link
+            href={`/documents/${summary.document_id}`}
+            className="font-medium text-blue-600 hover:text-blue-800 hover:underline truncate block"
+          >
             {summary.contribution_number}
-          </h4>
+          </Link>
           <p className="text-sm text-gray-600 truncate">{summary.title}</p>
           {summary.source && (
             <p className="text-xs text-gray-400 mt-1">{summary.source}</p>

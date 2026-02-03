@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AnalysisPanel, CustomAnalysisSection } from "@/components/analysis";
 import { AuthGuard } from "@/components/AuthGuard";
+import { DocxPreview } from "@/components/DocxPreview";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
 import { deleteDocument, getDocument, getDownloadUrl } from "@/lib/api";
@@ -231,6 +232,13 @@ export default function DocumentDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Document Preview */}
+      <DocxPreview
+        documentId={document.id}
+        getDownloadUrl={getDownloadUrl}
+        isAvailable={["normalized", "chunking", "chunked", "indexing", "indexed"].includes(document.status)}
+      />
 
       {/* Document Analysis (only for indexed documents) */}
       {document.status === "indexed" && (
