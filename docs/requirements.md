@@ -341,3 +341,41 @@ async def summarize_meeting(meeting: str):
     ])
     return await generate_meeting_report(summaries)
 ```
+
+---
+
+## 7. 既知の問題・将来のTODO
+
+### 7.1 Document Preview機能
+
+**状態**: 実装済み、動作未確認
+
+DocxPreview コンポーネントを実装したが、既存のINDEXED状態のドキュメントでは `gcs_normalized_path` がFirestoreに保存されていない可能性があり、プレビュー表示時に404エラーが発生する場合がある。
+
+**対応案**:
+- 再処理（Reprocess）機能で `gcs_normalized_path` を再設定
+- または、手動でFirestoreのドキュメントを更新
+
+### 7.2 Reprocess機能（処理済みドキュメントの再処理）
+
+**状態**: 実装済み、動作不完全
+
+既にINDEXEDのドキュメントを再処理する機能を実装したが、フロントエンドでSSEイベントが正しく受信されない問題がある。
+
+**実装済み部分**:
+- `frontend/src/lib/types.ts`: `isProcessable()` に `"indexed"` を追加
+- `frontend/src/components/ProcessingProgress.tsx`: 「Reprocess Document」ボタン表示
+- `backend/src/analyzer/api/streaming.py`: 初回の `indexed` ステータスでストリームを終了しないように修正
+- `frontend/src/lib/api.ts`: `FetchEventSource` クラス（HTTP/2対応のSSE実装）
+
+**調査結果**:
+- バックエンドは正常に処理を実行している（Cloud Runログで確認済み、latency 12秒以上）
+- ネイティブ `EventSource` APIがHTTP/2環境で接続に失敗する問題を発見
+- `fetch()` ベースの `FetchEventSource` に置き換えたが、SSEイベントのパースに問題がある可能性
+
+**次のデバッグステップ**:
+1. `FetchEventSource` にコンソールログを追加してイベント受信を確認
+2. バックエンドのSSEレスポンス形式を確認（`event:` と `data:` の改行・空行）
+3. 必要に応じてSSEパース処理を修正
+
+**優先度**: 低（新規ドキュメントの処理は正常に動作するため）

@@ -266,4 +266,18 @@ firebase emulators:start
 | API | 用途 | ブラウザサポート |
 |-----|------|-----------------|
 | Web Speech API | 音声入力 | Chrome/Edge推奨 |
-| EventSource | SSEストリーミング | 全モダンブラウザ |
+| Fetch API (SSE) | SSEストリーミング | 全モダンブラウザ |
+
+### SSE実装について
+
+本プロジェクトでは、ネイティブの`EventSource` APIではなく、`fetch()` APIを使用したカスタム実装（`FetchEventSource`）でSSEを処理しています。
+
+**背景:**
+- Cloud Run（バックエンド）はHTTP/2で応答する
+- 一部のブラウザでは、HTTP/2環境でネイティブ`EventSource`が正常に接続できない問題が発生
+- `fetch()`は`EventSource`と異なり、HTTP/2でも安定して動作する
+
+**実装:**
+- `frontend/src/lib/api.ts`の`FetchEventSource`クラス
+- EventSourceと同じインターフェース（`addEventListener`, `close`, `readyState`など）を提供
+- すべてのSSEエンドポイントでこの実装を使用
