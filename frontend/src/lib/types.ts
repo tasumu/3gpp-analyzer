@@ -14,9 +14,12 @@ export type DocumentStatus =
   | "indexed"
   | "error";
 
+export type DocumentType = "contribution" | "other";
+
 export interface Document {
   id: string;
-  contribution_number: string;
+  contribution_number: string | null;
+  document_type: DocumentType;
   title: string | null;
   source: string | null;
   meeting_id: string | null;
@@ -25,6 +28,7 @@ export interface Document {
   error_message: string | null;
   chunk_count: number;
   filename: string;
+  ftp_path: string;
   file_size_bytes: number;
   created_at: string;
   updated_at: string;
@@ -161,7 +165,7 @@ export interface FTPSyncProgress {
 
 export interface ChunkMetadata {
   document_id: string;
-  contribution_number: string;
+  contribution_number: string | null;
   meeting_id: string | null;
   clause_number: string | null;
   clause_title: string | null;
@@ -217,7 +221,7 @@ export interface Difference {
 export interface Evidence {
   chunk_id: string;
   document_id: string;
-  contribution_number: string;
+  contribution_number: string | null;
   content: string;
   clause_number: string | null;
   clause_title: string | null;
@@ -394,7 +398,7 @@ export interface QARequest {
 
 export interface QAEvidence {
   chunk_id: string;
-  contribution_number: string;
+  contribution_number: string | null;
   content: string;
   clause_number: string | null;
   clause_title: string | null;

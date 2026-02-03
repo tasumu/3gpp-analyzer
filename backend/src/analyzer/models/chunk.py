@@ -26,7 +26,7 @@ class ChunkMetadata(BaseModel):
     """Metadata for a document chunk."""
 
     document_id: str = Field(..., description="Parent document ID")
-    contribution_number: str = Field(..., description="3GPP contribution number")
+    contribution_number: str | None = Field(None, description="3GPP contribution number")
     meeting_id: str | None = Field(None, description="Meeting identifier")
     clause_number: str | None = Field(None, description="Clause/section number (e.g., '5.2.1')")
     clause_title: str | None = Field(None, description="Clause/section title")

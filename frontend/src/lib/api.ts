@@ -13,6 +13,7 @@ import type {
   CustomPrompt,
   CustomPromptsResponse,
   Document,
+  DocumentType,
   ReportPrompt,
   ReportPromptsResponse,
   DocumentListResponse,
@@ -116,12 +117,16 @@ async function fetchApi<T>(
 export async function listDocuments(params?: {
   meeting_id?: string;
   status?: DocumentStatus;
+  document_type?: DocumentType;
+  path_prefix?: string;
   page?: number;
   page_size?: number;
 }): Promise<DocumentListResponse> {
   const searchParams = new URLSearchParams();
   if (params?.meeting_id) searchParams.set("meeting_id", params.meeting_id);
   if (params?.status) searchParams.set("status", params.status);
+  if (params?.document_type) searchParams.set("document_type", params.document_type);
+  if (params?.path_prefix) searchParams.set("path_prefix", params.path_prefix);
   if (params?.page) searchParams.set("page", params.page.toString());
   if (params?.page_size) searchParams.set("page_size", params.page_size.toString());
 
@@ -301,10 +306,15 @@ export async function browseFTP(path: string = "/"): Promise<FTPBrowseResponse> 
 export async function startFTPSync(
   path: string,
   pathPattern?: string,
+  includeNonContributions: boolean = true,
 ): Promise<{ sync_id: string }> {
   return fetchApi<{ sync_id: string }>("/ftp/sync", {
     method: "POST",
-    body: JSON.stringify({ path, path_pattern: pathPattern }),
+    body: JSON.stringify({
+      path,
+      path_pattern: pathPattern,
+      include_non_contributions: includeNonContributions,
+    }),
   });
 }
 

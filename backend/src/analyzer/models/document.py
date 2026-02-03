@@ -6,6 +6,13 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
+class DocumentType(str, Enum):
+    """Type of document based on filename pattern."""
+
+    CONTRIBUTION = "contribution"  # Standard SX-XXXXXX format (e.g., S2-2401234)
+    OTHER = "other"  # Other documents without contribution number
+
+
 class DocumentStatus(str, Enum):
     """Status of document processing pipeline."""
 
@@ -44,10 +51,13 @@ class SourceFile(BaseModel):
 
 
 class Document(BaseModel):
-    """3GPP contribution document."""
+    """3GPP document (contribution or other)."""
 
     id: str = Field(..., description="Firestore document ID")
-    contribution_number: str = Field(..., description="3GPP contribution number")
+    contribution_number: str | None = Field(None, description="3GPP contribution number")
+    document_type: DocumentType = Field(
+        default=DocumentType.CONTRIBUTION, description="Document type based on filename pattern"
+    )
     title: str | None = Field(None, description="Document title")
     source: str | None = Field(None, description="Source company/organization")
     meeting: Meeting | None = Field(None, description="Associated meeting")

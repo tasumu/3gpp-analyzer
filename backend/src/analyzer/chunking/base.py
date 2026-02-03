@@ -21,7 +21,7 @@ class ChunkingStrategy(ABC):
         self,
         file_path: Path | str,
         document_id: str,
-        contribution_number: str,
+        contribution_number: str | None,
         meeting_id: str | None = None,
     ) -> list[Chunk]:
         """
@@ -30,7 +30,7 @@ class ChunkingStrategy(ABC):
         Args:
             file_path: Path to the normalized docx file.
             document_id: Parent document ID.
-            contribution_number: 3GPP contribution number.
+            contribution_number: 3GPP contribution number (may be None for non-contribution docs).
             meeting_id: Optional meeting identifier.
 
         Returns:

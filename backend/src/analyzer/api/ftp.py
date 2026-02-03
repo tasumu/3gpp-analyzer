@@ -76,6 +76,7 @@ async def start_sync(
         "status": "pending",
         "path": request.path,
         "path_pattern": request.path_pattern,
+        "include_non_contributions": request.include_non_contributions,
         "ftp_service": ftp_service,
         "current": 0,
         "total": 0,
@@ -118,9 +119,10 @@ async def stream_sync_progress(
                 sync_state["total"] = total
                 sync_state["message"] = message
 
-            result = await ftp_service.sync_meeting(
-                meeting_path=sync_state["path"],
+            result = await ftp_service.sync_directory(
+                directory_path=sync_state["path"],
                 path_pattern=sync_state["path_pattern"],
+                include_non_contributions=sync_state.get("include_non_contributions", True),
                 progress_callback=progress_callback,
             )
 
