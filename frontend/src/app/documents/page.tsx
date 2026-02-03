@@ -5,7 +5,7 @@ import { AuthGuard } from "@/components/AuthGuard";
 import { DocumentList } from "@/components/DocumentList";
 import { MeetingSelector } from "@/components/MeetingSelector";
 import { useDocuments } from "@/lib/hooks/useDocuments";
-import type { DocumentStatus } from "@/lib/types";
+import type { DocumentStatus, DocumentType } from "@/lib/types";
 
 const statusOptions: { value: DocumentStatus | ""; label: string }[] = [
   { value: "", label: "All Statuses" },
@@ -16,14 +16,24 @@ const statusOptions: { value: DocumentStatus | ""; label: string }[] = [
   { value: "error", label: "Error" },
 ];
 
+const documentTypeOptions: { value: DocumentType | ""; label: string }[] = [
+  { value: "", label: "All Types" },
+  { value: "contribution", label: "Contribution" },
+  { value: "other", label: "Other" },
+];
+
 export default function DocumentsPage() {
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [status, setStatus] = useState<DocumentStatus | "">("");
+  const [documentType, setDocumentType] = useState<DocumentType | "">("");
+  const [pathPrefix, setPathPrefix] = useState<string>("");
   const [page, setPage] = useState(1);
 
   const { documents, total, isLoading, error, refresh } = useDocuments({
     meeting_id: meetingId || undefined,
     status: status || undefined,
+    document_type: documentType || undefined,
+    path_prefix: pathPrefix || undefined,
     page,
     page_size: 50,
   });
@@ -80,6 +90,38 @@ export default function DocumentsPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <label htmlFor="type-select" className="text-sm font-medium text-gray-700">
+              Type:
+            </label>
+            <select
+              id="type-select"
+              value={documentType}
+              onChange={(e) => setDocumentType(e.target.value as DocumentType | "")}
+              className="block w-40 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+            >
+              {documentTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <label htmlFor="path-prefix" className="text-sm font-medium text-gray-700">
+              Path:
+            </label>
+            <input
+              id="path-prefix"
+              type="text"
+              value={pathPrefix}
+              onChange={(e) => setPathPrefix(e.target.value)}
+              placeholder="/Specs/latest/..."
+              className="block w-48 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+            />
           </div>
 
           <div className="ml-auto text-sm text-gray-500">
