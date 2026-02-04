@@ -348,13 +348,13 @@ async def summarize_meeting(meeting: str):
 
 ### 7.1 Document Preview機能
 
-**状態**: 実装済み、動作未確認
+**状態**: 実装済み、動作確認済み
 
-DocxPreview コンポーネントを実装したが、既存のINDEXED状態のドキュメントでは `gcs_normalized_path` がFirestoreに保存されていない可能性があり、プレビュー表示時に404エラーが発生する場合がある。
+DocxPreview コンポーネントを実装済み。GCSバケットへのCORS設定（`gcs-cors.json`）を適用することでブラウザからの直接取得が可能になった。
 
-**対応案**:
-- 再処理（Reprocess）機能で `gcs_normalized_path` を再設定
-- または、手動でFirestoreのドキュメントを更新
+**注意点**:
+- 既存のINDEXED状態のドキュメントでは `gcs_normalized_path` がFirestoreに保存されていない可能性があり、プレビュー表示時に404エラーが発生する場合がある
+- その場合は再処理（Reprocess）機能で `gcs_normalized_path` を再設定するか、手動でFirestoreのドキュメントを更新する
 
 ### 7.2 Reprocess機能（処理済みドキュメントの再処理）
 
