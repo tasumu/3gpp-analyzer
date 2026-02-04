@@ -548,17 +548,20 @@ class FTPSyncService:
                 # Check if document exists
                 existing = await self.firestore.get_document(doc_id)
 
-                source_file = SourceFile(
-                    filename=file_info["filename"],
-                    ftp_path=file_info["ftp_path"],
-                    size_bytes=file_info["size_bytes"],
-                    modified_at=file_info["modified_at"],
-                )
-
                 if existing:
                     # Update if file has changed
                     existing_modified = existing.get("source_file", {}).get("modified_at")
                     if existing_modified != file_info["modified_at"].isoformat():
+                        # Preserve existing GCS paths when updating metadata
+                        existing_source = existing.get("source_file", {})
+                        source_file = SourceFile(
+                            filename=file_info["filename"],
+                            ftp_path=file_info["ftp_path"],
+                            size_bytes=file_info["size_bytes"],
+                            modified_at=file_info["modified_at"],
+                            gcs_original_path=existing_source.get("gcs_original_path"),
+                            gcs_normalized_path=existing_source.get("gcs_normalized_path"),
+                        )
                         await self.firestore.update_document(
                             doc_id,
                             {
@@ -568,6 +571,13 @@ class FTPSyncService:
                         )
                         result["documents_updated"] += 1
                 else:
+                    # Create new document - no existing GCS paths to preserve
+                    source_file = SourceFile(
+                        filename=file_info["filename"],
+                        ftp_path=file_info["ftp_path"],
+                        size_bytes=file_info["size_bytes"],
+                        modified_at=file_info["modified_at"],
+                    )
                     # Create new document with metadata only
                     doc = Document(
                         id=doc_id,
