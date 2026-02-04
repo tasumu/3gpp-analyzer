@@ -432,6 +432,30 @@ export default function MeetingDetailPage() {
         <div className="bg-white shadow-sm rounded-lg p-6 border border-gray-200">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Analysis Settings</h2>
 
+          {/* Settings Help Text */}
+          <div className="mb-4 p-3 bg-gray-50 rounded-md text-sm text-gray-600 space-y-2">
+            <p className="font-medium text-gray-700">プロンプト設定について:</p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>
+                <strong>Custom Report Prompt</strong>: ミーティング全体のサマリーとレポート生成時に使用されます。
+                設定すると、指定した観点（例: セキュリティ影響）に焦点を当てたレポートが生成されます。
+              </li>
+              <li>
+                <strong>Custom Analysis Prompt</strong>: 各個別文書の分析・要約時に使用されます。
+                設定すると、指定した観点で各文書が分析されます。
+              </li>
+              <li>
+                <strong>両方未設定</strong>: デフォルトのプロンプトで汎用的な分析・レポートが生成されます。
+              </li>
+              <li>
+                <strong>片方のみ設定</strong>: 設定した方のみカスタム観点が適用され、未設定の方はデフォルト動作になります。
+              </li>
+            </ul>
+            <p className="text-xs text-gray-500 mt-1">
+              ※ 異なるプロンプトで分析した結果は別々にキャッシュされます。
+            </p>
+          </div>
+
           <div className="space-y-4">
             {/* Custom Report Prompt */}
             <div>
@@ -493,6 +517,13 @@ export default function MeetingDetailPage() {
                 </label>
               </div>
             </div>
+
+            {/* Force re-analyze explanation */}
+            <p className="text-xs text-gray-500">
+              ※ Force re-analyze は <strong>Summarize Meeting</strong> ボタンにのみ影響します。
+              チェックすると、キャッシュを無視して再分析を実行します。
+              Process All Documents と Generate Full Report には影響しません。
+            </p>
 
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-3 pt-2">
