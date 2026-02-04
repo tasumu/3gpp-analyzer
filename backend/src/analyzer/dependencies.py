@@ -61,6 +61,7 @@ def get_evidence_provider(
         project_id=settings.gcp_project_id,
         location=settings.vertex_ai_location,
         embedding_model=settings.embedding_model,
+        embedding_dimensions=settings.embedding_dimensions,
     )
 
 

@@ -61,7 +61,7 @@ select = ["E", "F", "I", "N", "W"]
 | Agent Framework | Google ADK | 1.x | Agent Development Kit |
 | LLM SDK | google-genai | 1.x | Gemini / Embedding API クライアント |
 | LLMモデル | Gemini | - | `gemini-3-flash-preview` 等 |
-| Embeddingモデル | text-embedding-004 | - | 768次元、Vertex AI 経由 |
+| Embeddingモデル | gemini-embedding-001 | - | 768次元、Vertex AI 経由 |
 | LLM接続 | Vertex AI | - | 本番環境で使用（サービスアカウント認証） |
 
 ### Vertex AI 初期化
@@ -79,7 +79,7 @@ client = genai.Client(
 
 # Embedding生成
 response = client.models.embed_content(
-    model="text-embedding-004",
+    model="gemini-embedding-001",
     contents=["テキスト"],
     config={"output_dimensionality": 768},
 )

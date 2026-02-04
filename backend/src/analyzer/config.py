@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # Vertex AI / Embedding
     vertex_ai_location: str = "asia-northeast1"
-    embedding_model: str = "text-embedding-004"
+    embedding_model: str = "gemini-embedding-001"
     embedding_dimensions: int = 768
     embedding_batch_size: int = 100
 

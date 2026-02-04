@@ -42,6 +42,34 @@ class ProcessRequest(BaseModel):
     force: bool = Field(default=False, description="Force reprocessing even if already processed")
 
 
+class BatchProcessRequest(BaseModel):
+    """Request to batch process multiple documents."""
+
+    document_ids: list[str] = Field(
+        ..., min_length=1, max_length=100, description="Document IDs to process"
+    )
+    force: bool = Field(default=False, description="Force reprocessing even if already processed")
+
+
+class BatchDeleteRequest(BaseModel):
+    """Request to batch delete multiple documents."""
+
+    document_ids: list[str] = Field(
+        ..., min_length=1, max_length=100, description="Document IDs to delete"
+    )
+
+
+class BatchOperationResponse(BaseModel):
+    """Response for batch operations."""
+
+    total: int = Field(..., description="Total number of documents in the request")
+    success_count: int = Field(..., description="Number of successfully processed documents")
+    failed_count: int = Field(..., description="Number of failed documents")
+    errors: dict[str, str] = Field(
+        default_factory=dict, description="Map of document_id to error message"
+    )
+
+
 class SyncRequest(BaseModel):
     """Request to sync documents from FTP."""
 
