@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DocumentList } from "@/components/DocumentList";
 import { MeetingSelector } from "@/components/MeetingSelector";
 import { useDocuments } from "@/lib/hooks/useDocuments";
-import type { DocumentStatus, DocumentType } from "@/lib/types";
+import { batchProcessDocuments, batchDeleteDocuments } from "@/lib/api";
+import type { DocumentStatus, DocumentType, BatchOperationResponse } from "@/lib/types";
 
 const statusOptions: { value: DocumentStatus | ""; label: string }[] = [
   { value: "", label: "All Statuses" },
@@ -29,6 +31,14 @@ export default function DocumentsPage() {
   const [pathPrefix, setPathPrefix] = useState<string>("");
   const [page, setPage] = useState(1);
 
+  // Batch operation states
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
+  const [batchResult, setBatchResult] = useState<{
+    type: "process" | "delete";
+    result: BatchOperationResponse;
+  } | null>(null);
+
   const { documents, total, isLoading, error, refresh } = useDocuments({
     meeting_id: meetingId || undefined,
     status: status || undefined,
@@ -39,6 +49,65 @@ export default function DocumentsPage() {
   });
 
   const totalPages = Math.ceil(total / 50);
+
+  const handleBatchProcess = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+
+    setBatchLoading(true);
+    setBatchResult(null);
+
+    try {
+      const result = await batchProcessDocuments(ids);
+      setBatchResult({ type: "process", result });
+      refresh();
+    } catch (err) {
+      console.error("Batch process error:", err);
+      setBatchResult({
+        type: "process",
+        result: {
+          total: ids.length,
+          success_count: 0,
+          failed_count: ids.length,
+          errors: { "error": err instanceof Error ? err.message : "Unknown error" },
+        },
+      });
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [refresh]);
+
+  const handleBatchDelete = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setConfirmDelete(ids);
+  }, []);
+
+  const confirmBatchDelete = useCallback(async () => {
+    if (!confirmDelete) return;
+
+    setBatchLoading(true);
+    setBatchResult(null);
+
+    try {
+      const result = await batchDeleteDocuments(confirmDelete);
+      setBatchResult({ type: "delete", result });
+      setConfirmDelete(null);
+      refresh();
+    } catch (err) {
+      console.error("Batch delete error:", err);
+      setBatchResult({
+        type: "delete",
+        result: {
+          total: confirmDelete.length,
+          success_count: 0,
+          failed_count: confirmDelete.length,
+          errors: { "error": err instanceof Error ? err.message : "Unknown error" },
+        },
+      });
+      setConfirmDelete(null);
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [confirmDelete, refresh]);
 
   return (
     <AuthGuard>
@@ -137,8 +206,82 @@ export default function DocumentsPage() {
         </div>
       )}
 
+      {/* Batch operation result notification */}
+      {batchResult && (
+        <div
+          className={`rounded-md p-4 ${
+            batchResult.result.failed_count === 0
+              ? "bg-green-50 border border-green-200"
+              : batchResult.result.success_count === 0
+                ? "bg-red-50 border border-red-200"
+                : "bg-yellow-50 border border-yellow-200"
+          }`}
+        >
+          <div className="flex justify-between items-start">
+            <div>
+              <h4
+                className={`text-sm font-medium ${
+                  batchResult.result.failed_count === 0
+                    ? "text-green-800"
+                    : batchResult.result.success_count === 0
+                      ? "text-red-800"
+                      : "text-yellow-800"
+                }`}
+              >
+                {batchResult.type === "process" ? "Batch Process" : "Batch Delete"} Complete
+              </h4>
+              <p
+                className={`text-sm mt-1 ${
+                  batchResult.result.failed_count === 0
+                    ? "text-green-700"
+                    : batchResult.result.success_count === 0
+                      ? "text-red-700"
+                      : "text-yellow-700"
+                }`}
+              >
+                {batchResult.result.success_count} of {batchResult.result.total} documents{" "}
+                {batchResult.type === "process" ? "processed" : "deleted"} successfully.
+                {batchResult.result.failed_count > 0 && (
+                  <> {batchResult.result.failed_count} failed.</>
+                )}
+              </p>
+              {Object.keys(batchResult.result.errors).length > 0 && (
+                <ul className="mt-2 text-sm text-red-600 list-disc list-inside">
+                  {Object.entries(batchResult.result.errors).slice(0, 5).map(([id, err]) => (
+                    <li key={id}>
+                      {id}: {err}
+                    </li>
+                  ))}
+                  {Object.keys(batchResult.result.errors).length > 5 && (
+                    <li>...and {Object.keys(batchResult.result.errors).length - 5} more errors</li>
+                  )}
+                </ul>
+              )}
+            </div>
+            <button
+              onClick={() => setBatchResult(null)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Document list */}
-      <DocumentList documents={documents} isLoading={isLoading} />
+      <DocumentList
+        documents={documents}
+        isLoading={isLoading}
+        onBatchProcess={handleBatchProcess}
+        onBatchDelete={handleBatchDelete}
+        batchLoading={batchLoading}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -205,6 +348,19 @@ export default function DocumentsPage() {
           </div>
         </div>
       )}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title="Delete Documents"
+        message={`Are you sure you want to delete ${confirmDelete?.length || 0} document(s)?\n\nThis will permanently remove all associated data including chunks and storage files. This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        destructive
+        loading={batchLoading}
+        onConfirm={confirmBatchDelete}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
     </AuthGuard>
   );

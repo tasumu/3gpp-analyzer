@@ -62,6 +62,7 @@ class VectorizerService:
         response = self._client.models.embed_content(
             model=self.model,
             contents=text,
+            config={"output_dimensionality": self.dimensions},
         )
         return response.embeddings[0].values
 
@@ -81,6 +82,7 @@ class VectorizerService:
         response = self._client.models.embed_content(
             model=self.model,
             contents=texts,
+            config={"output_dimensionality": self.dimensions},
         )
         return [emb.values for emb in response.embeddings]
 

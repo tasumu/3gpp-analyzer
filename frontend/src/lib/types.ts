@@ -518,3 +518,11 @@ export const qaScopeLabelsJa: Record<QAScope, string> = {
   meeting: "会合内",
   global: "全体",
 };
+
+// Batch Operation Types
+export interface BatchOperationResponse {
+  total: number;
+  success_count: number;
+  failed_count: number;
+  errors: Record<string, string>;
+}

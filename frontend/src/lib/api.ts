@@ -9,6 +9,7 @@ import type {
   AnalysisRequest,
   AnalysisResult,
   AnalysisStartResponse,
+  BatchOperationResponse,
   ChunkListResponse,
   CustomPrompt,
   CustomPromptsResponse,
@@ -151,6 +152,27 @@ export async function processDocument(
 export async function deleteDocument(documentId: string): Promise<void> {
   await fetchApi(`/documents/${documentId}`, {
     method: "DELETE",
+  });
+}
+
+// Batch Document Operations
+
+export async function batchProcessDocuments(
+  documentIds: string[],
+  force = false,
+): Promise<BatchOperationResponse> {
+  return fetchApi<BatchOperationResponse>("/documents/batch/process", {
+    method: "POST",
+    body: JSON.stringify({ document_ids: documentIds, force }),
+  });
+}
+
+export async function batchDeleteDocuments(
+  documentIds: string[],
+): Promise<BatchOperationResponse> {
+  return fetchApi<BatchOperationResponse>("/documents/batch", {
+    method: "DELETE",
+    body: JSON.stringify({ document_ids: documentIds }),
   });
 }
 

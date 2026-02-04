@@ -20,7 +20,8 @@ class FirestoreEvidenceProvider(EvidenceProvider):
         firestore: FirestoreClient,
         project_id: str,
         location: str = "asia-northeast1",
-        embedding_model: str = "text-embedding-004",
+        embedding_model: str = "gemini-embedding-001",
+        embedding_dimensions: int = 768,
     ):
         """
         Initialize the provider.
@@ -30,9 +31,11 @@ class FirestoreEvidenceProvider(EvidenceProvider):
             project_id: GCP project ID for Vertex AI.
             location: GCP region for Vertex AI.
             embedding_model: Model name for query embedding.
+            embedding_dimensions: Embedding vector dimensions.
         """
         self.firestore = firestore
         self.embedding_model = embedding_model
+        self.embedding_dimensions = embedding_dimensions
         self._genai_client = genai.Client(
             vertexai=True,
             project=project_id,
@@ -44,6 +47,7 @@ class FirestoreEvidenceProvider(EvidenceProvider):
         response = self._genai_client.models.embed_content(
             model=self.embedding_model,
             contents=query,
+            config={"output_dimensionality": self.embedding_dimensions},
         )
         return response.embeddings[0].values
 

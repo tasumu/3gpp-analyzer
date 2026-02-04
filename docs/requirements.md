@@ -379,3 +379,21 @@ DocxPreview コンポーネントを実装済み。GCSバケットへのCORS設�
 3. 必要に応じてSSEパース処理を修正
 
 **優先度**: 低（新規ドキュメントの処理は正常に動作するため）
+
+### 7.3 バッチ操作のSSEストリーミング
+
+**状態**: 未実装（将来の拡張候補）
+
+Documents一覧ページのバッチ操作（Reprocess/Delete）は同期的なAPIで実装済み。現在は処理開始→完了/エラーの結果のみを表示。
+
+**将来の拡張**:
+- `POST /documents/batch/process/stream` - SSEストリーミングによるバッチ処理進捗
+- Meeting一括処理（`/meetings/{id}/process/stream`）と同様のUI
+- 処理中のドキュメント名、進捗パーセンテージをリアルタイム表示
+
+**実装時の考慮点**:
+- 既存の `FetchEventSource` クラスを再利用
+- `BatchProcessEvent` 型（types.ts）を活用
+- UIコンポーネントは `ProcessingProgress` パターンを参考に
+
+**優先度**: 低（現在のシンプルな実装で実用上問題なし）

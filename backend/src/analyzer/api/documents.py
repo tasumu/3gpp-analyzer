@@ -4,6 +4,9 @@ from fastapi import APIRouter, HTTPException, Query
 
 from analyzer.dependencies import CurrentUserDep, DocumentServiceDep, ProcessorServiceDep
 from analyzer.models.api import (
+    BatchDeleteRequest,
+    BatchOperationResponse,
+    BatchProcessRequest,
     ChunkListResponse,
     ChunkMetadataResponse,
     ChunkResponse,
@@ -211,3 +214,71 @@ async def list_meetings(
     """
     meetings = await document_service.get_meetings()
     return {"meetings": meetings}
+
+
+@router.post("/documents/batch/process", response_model=BatchOperationResponse)
+async def batch_process_documents(
+    request: BatchProcessRequest,
+    current_user: CurrentUserDep,
+    processor: ProcessorServiceDep,
+):
+    """
+    Batch process multiple documents.
+
+    Processes each document through the pipeline: normalize → chunk → vectorize → index.
+    Returns summary of successes and failures.
+    """
+    success_count = 0
+    failed_count = 0
+    errors: dict[str, str] = {}
+
+    for doc_id in request.document_ids:
+        try:
+            await processor.process_document(doc_id, force=request.force)
+            success_count += 1
+        except Exception as e:
+            failed_count += 1
+            errors[doc_id] = str(e)
+
+    return BatchOperationResponse(
+        total=len(request.document_ids),
+        success_count=success_count,
+        failed_count=failed_count,
+        errors=errors,
+    )
+
+
+@router.delete("/documents/batch", response_model=BatchOperationResponse)
+async def batch_delete_documents(
+    request: BatchDeleteRequest,
+    current_user: CurrentUserDep,
+    document_service: DocumentServiceDep,
+):
+    """
+    Batch delete multiple documents.
+
+    Deletes each document and all associated data (chunks, storage files).
+    Returns summary of successes and failures.
+    """
+    success_count = 0
+    failed_count = 0
+    errors: dict[str, str] = {}
+
+    for doc_id in request.document_ids:
+        try:
+            deleted = await document_service.delete(doc_id)
+            if deleted:
+                success_count += 1
+            else:
+                failed_count += 1
+                errors[doc_id] = "Document not found"
+        except Exception as e:
+            failed_count += 1
+            errors[doc_id] = str(e)
+
+    return BatchOperationResponse(
+        total=len(request.document_ids),
+        success_count=success_count,
+        failed_count=failed_count,
+        errors=errors,
+    )
