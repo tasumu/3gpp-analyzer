@@ -107,7 +107,7 @@ class MeetingService:
 
         # Check cache unless forced
         if not force:
-            cached = await self._get_cached_summary(meeting_id, report_prompt, language)
+            cached = await self._get_cached_summary(meeting_id, analysis_prompt, language)
             if cached:
                 logger.info(f"Returning cached summary for meeting {meeting_id}")
                 return cached
@@ -158,7 +158,7 @@ class MeetingService:
         result = MeetingSummary(
             id=str(uuid.uuid4()),
             meeting_id=meeting_id,
-            custom_prompt=report_prompt,
+            custom_prompt=analysis_prompt,
             individual_summaries=valid_summaries,
             overall_report=overall_report,
             key_topics=key_topics,
@@ -279,7 +279,7 @@ class MeetingService:
         result = MeetingSummary(
             id=str(uuid.uuid4()),
             meeting_id=meeting_id,
-            custom_prompt=report_prompt,
+            custom_prompt=analysis_prompt,
             individual_summaries=valid_summaries,
             overall_report=overall_report,
             key_topics=key_topics,
