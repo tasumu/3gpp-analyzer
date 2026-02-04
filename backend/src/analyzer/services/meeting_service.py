@@ -105,15 +105,8 @@ class MeetingService:
         """
         logger.info(f"Starting meeting summarization: {meeting_id}")
 
-        # Check cache unless forced
-        if not force:
-            cached = await self._get_cached_summary(meeting_id, analysis_prompt, language)
-            if cached:
-                logger.info(f"Returning cached summary for meeting {meeting_id}")
-                return cached
-
         # Get all indexed documents
-        documents, total = await self.document_service.list_documents(
+        documents, _ = await self.document_service.list_documents(
             meeting_id=meeting_id,
             status=DocumentStatus.INDEXED,
             page_size=1000,
@@ -122,29 +115,56 @@ class MeetingService:
         if not documents:
             raise ValueError(f"No indexed documents found for meeting: {meeting_id}")
 
+        current_doc_ids = {d.id for d in documents}
         logger.info(f"Found {len(documents)} indexed documents for {meeting_id}")
 
-        # Summarize each document (with concurrency limit)
-        semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_SUMMARIES)
+        # Check cache unless forced
+        if not force:
+            cached = await self._get_cached_summary(meeting_id, analysis_prompt, language)
+            if cached:
+                cached_doc_ids = {s.document_id for s in cached.individual_summaries}
 
-        async def summarize_with_limit(doc: Document) -> DocumentSummary:
-            async with semaphore:
-                return await self._summarize_document(doc, analysis_prompt, language)
+                # Check for differences
+                new_doc_ids = current_doc_ids - cached_doc_ids
+                removed_doc_ids = cached_doc_ids - current_doc_ids
 
-        individual_summaries = await asyncio.gather(
-            *[summarize_with_limit(doc) for doc in documents],
-            return_exceptions=True,
-        )
+                if not new_doc_ids and not removed_doc_ids:
+                    # No changes, return cached
+                    logger.info(f"Returning cached summary for meeting {meeting_id}")
+                    return cached
 
-        # Filter out failed summaries
-        valid_summaries: list[DocumentSummary] = []
-        for i, result in enumerate(individual_summaries):
-            if isinstance(result, Exception):
-                logger.error(f"Failed to summarize {documents[i].id}: {result}")
+                # Incremental update needed
+                logger.info(
+                    f"Incremental update: {len(new_doc_ids)} new, "
+                    f"{len(removed_doc_ids)} removed documents"
+                )
+
+                # Filter out removed documents from cache
+                valid_summaries = [
+                    s for s in cached.individual_summaries if s.document_id not in removed_doc_ids
+                ]
+
+                # Summarize new documents only
+                if new_doc_ids:
+                    new_documents = [d for d in documents if d.id in new_doc_ids]
+                    new_summaries = await self._summarize_documents(
+                        new_documents, analysis_prompt, language
+                    )
+                    valid_summaries.extend(new_summaries)
+
+                logger.info(f"Total summaries after incremental update: {len(valid_summaries)}")
             else:
-                valid_summaries.append(result)
-
-        logger.info(f"Successfully summarized {len(valid_summaries)} documents")
+                # No cache, summarize all
+                valid_summaries = await self._summarize_documents(
+                    documents, analysis_prompt, language
+                )
+                logger.info(f"Successfully summarized {len(valid_summaries)} documents")
+        else:
+            # Force mode, summarize all
+            valid_summaries = await self._summarize_documents(
+                documents, analysis_prompt, language
+            )
+            logger.info(f"Successfully summarized {len(valid_summaries)} documents")
 
         # Generate overall report
         overall_report, key_topics = await self._generate_overall_report(
@@ -314,6 +334,46 @@ class MeetingService:
             custom_prompt=custom_prompt,
             force=False,  # Use cache when available
         )
+
+    async def _summarize_documents(
+        self,
+        documents: list[Document],
+        custom_prompt: str | None,
+        language: str,
+    ) -> list[DocumentSummary]:
+        """
+        Summarize multiple documents with concurrency limit.
+
+        Args:
+            documents: List of documents to summarize.
+            custom_prompt: Custom prompt for analysis.
+            language: Output language.
+
+        Returns:
+            List of valid DocumentSummary objects (failed ones are filtered out).
+        """
+        if not documents:
+            return []
+
+        semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_SUMMARIES)
+
+        async def summarize_with_limit(doc: Document) -> DocumentSummary:
+            async with semaphore:
+                return await self._summarize_document(doc, custom_prompt, language)
+
+        results = await asyncio.gather(
+            *[summarize_with_limit(doc) for doc in documents],
+            return_exceptions=True,
+        )
+
+        valid_summaries: list[DocumentSummary] = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(f"Failed to summarize {documents[i].id}: {result}")
+            else:
+                valid_summaries.append(result)
+
+        return valid_summaries
 
     async def _generate_overall_report(
         self,
