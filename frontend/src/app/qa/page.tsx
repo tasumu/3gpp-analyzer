@@ -62,6 +62,7 @@ export default function QAPage() {
   const [language, setLanguage] = useState<AnalysisLanguage>("ja");
   const [isLoading, setIsLoading] = useState(false);
   const [useStreaming, setUseStreaming] = useState(true);
+  const [expandedEvidences, setExpandedEvidences] = useState<Record<string, boolean>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -73,6 +74,13 @@ export default function QAPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const toggleEvidences = (messageId: string) => {
+    setExpandedEvidences((prev) => ({
+      ...prev,
+      [messageId]: !prev[messageId],
+    }));
+  };
 
   const handleScopeChange = (newScope: QAScope) => {
     setScope(newScope);
@@ -408,13 +416,20 @@ export default function QAPage() {
                           References ({message.evidences.length})
                         </div>
                         <div className="space-y-2">
-                          {message.evidences.slice(0, 5).map((ev, idx) => (
-                            <QAEvidenceItem key={idx} evidence={ev} />
-                          ))}
+                          {message.evidences
+                            .slice(0, expandedEvidences[message.id] ? undefined : 5)
+                            .map((ev, idx) => (
+                              <QAEvidenceItem key={idx} evidence={ev} />
+                            ))}
                           {message.evidences.length > 5 && (
-                            <div className="text-xs text-gray-500">
-                              +{message.evidences.length - 5} more references
-                            </div>
+                            <button
+                              onClick={() => toggleEvidences(message.id)}
+                              className="text-xs text-blue-600 hover:text-blue-800 mt-1"
+                            >
+                              {expandedEvidences[message.id]
+                                ? "Show less"
+                                : `+${message.evidences.length - 5} more references`}
+                            </button>
                           )}
                         </div>
                       </>
