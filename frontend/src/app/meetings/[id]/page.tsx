@@ -104,7 +104,8 @@ export default function MeetingDetailPage() {
         force,
       });
 
-      eventSource.onmessage = (event) => {
+      // Helper to handle SSE events (backend sends named events)
+      const handleSummarizeEvent = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
 
@@ -114,8 +115,6 @@ export default function MeetingDetailPage() {
               total: data.total,
               currentDocument: data.contribution_number || "",
             });
-          } else if (data.event === "document_summary") {
-            // Individual document summary received
           } else if (data.event === "complete") {
             setCurrentSummary(data.summary);
             setLatestSummary(data.summary);
@@ -123,15 +122,30 @@ export default function MeetingDetailPage() {
             setIsSummarizing(false);
             toast.success("Meeting summary completed");
             eventSource.close();
-          } else if (data.event === "error") {
-            toast.error(data.message || "Summarization failed");
-            setIsSummarizing(false);
-            eventSource.close();
           }
         } catch {
           console.error("Failed to parse SSE data");
         }
       };
+
+      const handleErrorEvent = (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          toast.error(data.error || "Summarization failed");
+        } catch {
+          toast.error("Summarization failed");
+        }
+        setIsSummarizing(false);
+        setSummaryProgress(null);
+        eventSource.close();
+      };
+
+      // Listen to named events (backend sends event: progress, complete, etc.)
+      eventSource.addEventListener("progress", handleSummarizeEvent);
+      eventSource.addEventListener("document_summary", handleSummarizeEvent);
+      eventSource.addEventListener("complete", handleSummarizeEvent);
+      eventSource.addEventListener("overall_report", handleSummarizeEvent);
+      eventSource.addEventListener("error", handleErrorEvent);
 
       eventSource.onerror = () => {
         eventSource.close();
