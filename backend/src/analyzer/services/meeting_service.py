@@ -115,56 +115,14 @@ class MeetingService:
         if not documents:
             raise ValueError(f"No indexed documents found for meeting: {meeting_id}")
 
-        current_doc_ids = {d.id for d in documents}
         logger.info(f"Found {len(documents)} indexed documents for {meeting_id}")
 
-        # Check cache unless forced
-        if not force:
-            cached = await self._get_cached_summary(meeting_id, analysis_prompt, language)
-            if cached:
-                cached_doc_ids = {s.document_id for s in cached.individual_summaries}
-
-                # Check for differences
-                new_doc_ids = current_doc_ids - cached_doc_ids
-                removed_doc_ids = cached_doc_ids - current_doc_ids
-
-                if not new_doc_ids and not removed_doc_ids:
-                    # No changes, return cached
-                    logger.info(f"Returning cached summary for meeting {meeting_id}")
-                    return cached
-
-                # Incremental update needed
-                logger.info(
-                    f"Incremental update: {len(new_doc_ids)} new, "
-                    f"{len(removed_doc_ids)} removed documents"
-                )
-
-                # Filter out removed documents from cache
-                valid_summaries = [
-                    s for s in cached.individual_summaries if s.document_id not in removed_doc_ids
-                ]
-
-                # Summarize new documents only
-                if new_doc_ids:
-                    new_documents = [d for d in documents if d.id in new_doc_ids]
-                    new_summaries = await self._summarize_documents(
-                        new_documents, analysis_prompt, language
-                    )
-                    valid_summaries.extend(new_summaries)
-
-                logger.info(f"Total summaries after incremental update: {len(valid_summaries)}")
-            else:
-                # No cache, summarize all
-                valid_summaries = await self._summarize_documents(
-                    documents, analysis_prompt, language
-                )
-                logger.info(f"Successfully summarized {len(valid_summaries)} documents")
-        else:
-            # Force mode, summarize all
-            valid_summaries = await self._summarize_documents(
-                documents, analysis_prompt, language
-            )
-            logger.info(f"Successfully summarized {len(valid_summaries)} documents")
+        # Summarize each document (uses document_summaries cache internally)
+        # force=True will bypass the individual document cache
+        valid_summaries = await self._summarize_documents(
+            documents, analysis_prompt, language, force=force
+        )
+        logger.info(f"Successfully summarized {len(valid_summaries)} documents")
 
         # Generate overall report
         overall_report, key_topics = await self._generate_overall_report(
@@ -246,7 +204,7 @@ class MeetingService:
 
         for doc in documents:
             try:
-                summary = await self._summarize_document(doc, analysis_prompt, language)
+                summary = await self._summarize_document(doc, analysis_prompt, language, force)
                 valid_summaries.append(summary)
                 processed += 1
 
@@ -321,18 +279,25 @@ class MeetingService:
         document: Document,
         custom_prompt: str | None,
         language: str,
+        force: bool = False,
     ) -> DocumentSummary:
         """
         Summarize a single document using the unified analysis service.
 
         Uses the shared document summary cache for consistency between
         meeting summarization and individual document analysis.
+
+        Args:
+            document: Document to summarize.
+            custom_prompt: Custom prompt for analysis.
+            language: Output language.
+            force: Force re-analysis even if cached.
         """
         return await self.analysis_service.generate_summary(
             document_id=document.id,
             language=language,
             custom_prompt=custom_prompt,
-            force=False,  # Use cache when available
+            force=force,
         )
 
     async def _summarize_documents(
@@ -340,6 +305,7 @@ class MeetingService:
         documents: list[Document],
         custom_prompt: str | None,
         language: str,
+        force: bool = False,
     ) -> list[DocumentSummary]:
         """
         Summarize multiple documents with concurrency limit.
@@ -348,6 +314,7 @@ class MeetingService:
             documents: List of documents to summarize.
             custom_prompt: Custom prompt for analysis.
             language: Output language.
+            force: Force re-analysis even if cached.
 
         Returns:
             List of valid DocumentSummary objects (failed ones are filtered out).
@@ -359,7 +326,7 @@ class MeetingService:
 
         async def summarize_with_limit(doc: Document) -> DocumentSummary:
             async with semaphore:
-                return await self._summarize_document(doc, custom_prompt, language)
+                return await self._summarize_document(doc, custom_prompt, language, force)
 
         results = await asyncio.gather(
             *[summarize_with_limit(doc) for doc in documents],
