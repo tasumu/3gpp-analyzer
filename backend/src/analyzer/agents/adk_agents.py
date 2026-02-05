@@ -10,7 +10,12 @@ from google.adk.runners import Runner
 from google.genai.types import Content, Part
 
 from analyzer.agents.context import AgentToolContext, set_current_agent_context
-from analyzer.agents.session_manager import get_session_service
+from analyzer.agents.session_manager import (
+    cleanup_expired_sessions,
+    get_session_service,
+    touch_session,
+    track_session,
+)
 from analyzer.agents.tools.adk_document_tools import (
     get_document_content,
     get_document_summary,
@@ -286,6 +291,9 @@ class ADKAgentRunner:
         set_current_agent_context(self.agent_context)
 
         try:
+            # Periodically cleanup expired sessions
+            await cleanup_expired_sessions()
+
             # Reuse existing session or create new one
             session_id = session_id or str(uuid.uuid4())
             existing_session = await self.session_service.get_session(
@@ -300,8 +308,10 @@ class ADKAgentRunner:
                     session_id=session_id,
                     state={},  # Empty state - context is in contextvar
                 )
+                track_session(session_id)
                 logger.debug(f"Created new session: {session_id}")
             else:
+                touch_session(session_id)
                 logger.debug(
                     f"Reusing existing session: {session_id} "
                     f"with {len(existing_session.events)} events"
@@ -355,6 +365,9 @@ class ADKAgentRunner:
         set_current_agent_context(self.agent_context)
 
         try:
+            # Periodically cleanup expired sessions
+            await cleanup_expired_sessions()
+
             # Reuse existing session or create new one
             session_id = session_id or str(uuid.uuid4())
             existing_session = await self.session_service.get_session(
@@ -369,8 +382,10 @@ class ADKAgentRunner:
                     session_id=session_id,
                     state={},  # Empty state - context is in contextvar
                 )
+                track_session(session_id)
                 logger.debug(f"Created new session: {session_id}")
             else:
+                touch_session(session_id)
                 logger.debug(
                     f"Reusing existing session: {session_id} "
                     f"with {len(existing_session.events)} events"
