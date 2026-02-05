@@ -65,6 +65,7 @@ class QAService:
         filters: dict[str, Any] | None = None,
         language: str = "ja",
         user_id: str | None = None,
+        session_id: str | None = None,
     ) -> QAResult:
         """
         Answer a question using RAG.
@@ -76,6 +77,7 @@ class QAService:
             filters: Additional metadata filters.
             language: Response language (ja or en).
             user_id: User ID who initiated the Q&A.
+            session_id: Session ID for conversation continuity.
 
         Returns:
             QAResult with the answer and supporting evidence.
@@ -115,6 +117,7 @@ class QAService:
             answer_text, unique_evidences = await runner.run(
                 user_input=question,
                 user_id=user_id or "anonymous",
+                session_id=session_id,
             )
         except Exception as e:
             logger.error(f"Error running Q&A agent: {e}")
@@ -146,6 +149,7 @@ class QAService:
         filters: dict[str, Any] | None = None,
         language: str = "ja",
         user_id: str | None = None,
+        session_id: str | None = None,
     ) -> AsyncGenerator[QAStreamEvent, None]:
         """
         Answer a question with streaming response.
@@ -157,6 +161,7 @@ class QAService:
             filters: Additional metadata filters.
             language: Response language (ja or en).
             user_id: User ID who initiated the Q&A.
+            session_id: Session ID for conversation continuity.
 
         Yields:
             QAStreamEvent objects with answer chunks and evidence.
@@ -200,6 +205,7 @@ class QAService:
             async for event in runner.run_stream(
                 user_input=question,
                 user_id=user_id or "anonymous",
+                session_id=session_id,
             ):
                 if event["type"] == "chunk":
                     full_answer += event.get("content", "")

@@ -54,6 +54,10 @@ function QAEvidenceItem({ evidence }: { evidence: QAEvidence }) {
   );
 }
 
+function generateSessionId(): string {
+  return crypto.randomUUID();
+}
+
 export default function QAPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
@@ -63,6 +67,7 @@ export default function QAPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [useStreaming, setUseStreaming] = useState(true);
   const [expandedEvidences, setExpandedEvidences] = useState<Record<string, boolean>>({});
+  const [sessionId, setSessionId] = useState<string>(generateSessionId);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -131,7 +136,8 @@ export default function QAPage() {
           userMessage.content,
           scope,
           scopeId || undefined,
-          language
+          language,
+          sessionId
         );
 
         let fullAnswer = "";
@@ -229,6 +235,7 @@ export default function QAPage() {
           scope,
           scope_id: scopeId,
           language,
+          session_id: sessionId,
         });
 
         setMessages((prev) => [
@@ -268,6 +275,8 @@ export default function QAPage() {
 
   const clearChat = () => {
     setMessages([]);
+    // Generate a new session ID to start fresh
+    setSessionId(generateSessionId());
   };
 
   const scopeLabels = language === "ja" ? qaScopeLabelsJa : qaScopeLabels;

@@ -535,6 +535,7 @@ export async function createQAStream(
   scope: QAScope = "global",
   scopeId?: string,
   language: AnalysisLanguage = "ja",
+  sessionId?: string,
 ): Promise<EventSource> {
   const token = await getAuthToken();
   if (!token) {
@@ -549,6 +550,9 @@ export async function createQAStream(
   });
   if (scopeId) {
     params.set("scope_id", scopeId);
+  }
+  if (sessionId) {
+    params.set("session_id", sessionId);
   }
 
   const url = `${API_BASE}/qa/stream?${params.toString()}`;
