@@ -108,14 +108,17 @@ export default function MeetingDetailPage() {
       const handleSummarizeEvent = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
+          console.log("[SSE] Received event:", event.type, data);
 
           if (data.event === "progress") {
+            console.log("[SSE] Progress update:", data.current, "/", data.total);
             setSummaryProgress({
               current: data.current,
               total: data.total,
               currentDocument: data.contribution_number || "",
             });
           } else if (data.event === "complete") {
+            console.log("[SSE] Complete received");
             setCurrentSummary(data.summary);
             setLatestSummary(data.summary);
             setSummaryProgress(null);
@@ -123,8 +126,8 @@ export default function MeetingDetailPage() {
             toast.success("Meeting summary completed");
             eventSource.close();
           }
-        } catch {
-          console.error("Failed to parse SSE data");
+        } catch (e) {
+          console.error("Failed to parse SSE data:", e, event.data);
         }
       };
 
@@ -708,7 +711,11 @@ export default function MeetingDetailPage() {
                   ? currentSummary.summaries
                   : currentSummary.summaries.slice(0, 6)
                 ).map((summary) => (
-                  <DocumentSummaryCard key={summary.document_id} summary={summary} />
+                  <DocumentSummaryCard
+                    key={summary.document_id}
+                    summary={summary}
+                    customPrompt={currentSummary.custom_prompt}
+                  />
                 ))}
               </div>
 

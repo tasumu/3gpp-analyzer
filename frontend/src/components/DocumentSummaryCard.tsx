@@ -7,11 +7,13 @@ import type { DocumentSummary } from "@/lib/types";
 interface DocumentSummaryCardProps {
   summary: DocumentSummary;
   showCachedBadge?: boolean;
+  customPrompt?: string | null;
 }
 
 export function DocumentSummaryCard({
   summary,
   showCachedBadge = true,
+  customPrompt,
 }: DocumentSummaryCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -32,6 +34,11 @@ export function DocumentSummaryCard({
           <p className="text-sm text-gray-600 truncate">{summary.title}</p>
           {summary.source && (
             <p className="text-xs text-gray-400 mt-1">{summary.source}</p>
+          )}
+          {customPrompt && (
+            <p className="text-xs text-purple-600 mt-1 truncate" title={customPrompt}>
+              <span className="font-medium">Custom Focus:</span> {customPrompt}
+            </p>
           )}
         </div>
         {showCachedBadge && summary.from_cache && (
