@@ -79,6 +79,7 @@ async def ask_question(
             filters=request.filters,
             language=request.language,
             user_id=current_user.uid,
+            session_id=request.session_id,
         )
         return qa_result_to_response(result)
     except ValueError as e:
@@ -96,6 +97,7 @@ async def ask_question_stream(
     scope: str = Query("global", description="Search scope: document, meeting, or global"),
     scope_id: str | None = Query(None, description="Scope identifier"),
     language: str = Query("ja", pattern="^(ja|en)$", description="Response language"),
+    session_id: str | None = Query(None, description="Session ID for conversation continuity"),
 ):
     """
     Answer a question with streaming response (SSE).
@@ -126,6 +128,7 @@ async def ask_question_stream(
                 scope_id=scope_id,
                 language=language,
                 user_id=current_user.uid,
+                session_id=session_id,
             ):
                 if event.type == "chunk":
                     yield {

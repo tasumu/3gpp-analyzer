@@ -43,6 +43,10 @@ class QARequest(BaseModel):
         pattern="^(ja|en)$",
         description="Response language: ja (Japanese) or en (English)",
     )
+    session_id: str | None = Field(
+        default=None,
+        description="Session ID for conversation continuity",
+    )
 
 
 class QAResult(BaseModel):

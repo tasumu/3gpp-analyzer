@@ -394,6 +394,7 @@ export interface QARequest {
   scope_id?: string | null;
   filters?: Record<string, unknown> | null;
   language: AnalysisLanguage;
+  session_id?: string | null;
 }
 
 export interface QAEvidence {

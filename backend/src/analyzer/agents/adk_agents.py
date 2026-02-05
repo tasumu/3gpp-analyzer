@@ -7,10 +7,10 @@ from typing import Any
 
 from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 
 from analyzer.agents.context import AgentToolContext, set_current_agent_context
+from analyzer.agents.session_manager import get_session_service
 from analyzer.agents.tools.adk_document_tools import (
     get_document_content,
     get_document_summary,
@@ -255,7 +255,7 @@ class ADKAgentRunner:
         """
         self.agent = agent
         self.agent_context = agent_context
-        self.session_service = InMemorySessionService()
+        self.session_service = get_session_service()
         self.runner = Runner(
             agent=agent,
             app_name=APP_NAME,
@@ -286,14 +286,26 @@ class ADKAgentRunner:
         set_current_agent_context(self.agent_context)
 
         try:
-            # Create session without unpicklable objects in state
+            # Reuse existing session or create new one
             session_id = session_id or str(uuid.uuid4())
-            await self.session_service.create_session(
+            existing_session = await self.session_service.get_session(
                 app_name=APP_NAME,
                 user_id=user_id,
                 session_id=session_id,
-                state={},  # Empty state - context is in contextvar
             )
+            if existing_session is None:
+                await self.session_service.create_session(
+                    app_name=APP_NAME,
+                    user_id=user_id,
+                    session_id=session_id,
+                    state={},  # Empty state - context is in contextvar
+                )
+                logger.debug(f"Created new session: {session_id}")
+            else:
+                logger.debug(
+                    f"Reusing existing session: {session_id} "
+                    f"with {len(existing_session.events)} events"
+                )
 
             # Build message
             user_message = Content(parts=[Part(text=user_input)])
@@ -343,14 +355,26 @@ class ADKAgentRunner:
         set_current_agent_context(self.agent_context)
 
         try:
-            # Create session without unpicklable objects in state
+            # Reuse existing session or create new one
             session_id = session_id or str(uuid.uuid4())
-            await self.session_service.create_session(
+            existing_session = await self.session_service.get_session(
                 app_name=APP_NAME,
                 user_id=user_id,
                 session_id=session_id,
-                state={},  # Empty state - context is in contextvar
             )
+            if existing_session is None:
+                await self.session_service.create_session(
+                    app_name=APP_NAME,
+                    user_id=user_id,
+                    session_id=session_id,
+                    state={},  # Empty state - context is in contextvar
+                )
+                logger.debug(f"Created new session: {session_id}")
+            else:
+                logger.debug(
+                    f"Reusing existing session: {session_id} "
+                    f"with {len(existing_session.events)} events"
+                )
 
             # Build message
             user_message = Content(parts=[Part(text=user_input)])
