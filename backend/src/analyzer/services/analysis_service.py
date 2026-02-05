@@ -237,8 +237,8 @@ class AnalysisService:
             raise ValueError(f"Document is not indexed: {document_id}")
 
         # Extract document info
-        contribution_number = doc_data.get("contribution_number", "")
-        title = doc_data.get("title", "Unknown")
+        contribution_number = doc_data.get("contribution_number") or ""
+        title = doc_data.get("title") or "Unknown"
         source = doc_data.get("source")
 
         # Get document content via evidence provider
