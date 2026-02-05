@@ -57,7 +57,7 @@ export default function DocumentsPage() {
     setBatchResult(null);
 
     try {
-      const result = await batchProcessDocuments(ids);
+      const result = await batchProcessDocuments(ids, true);
       setBatchResult({ type: "process", result });
       refresh();
     } catch (err) {
