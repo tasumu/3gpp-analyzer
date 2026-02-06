@@ -120,7 +120,7 @@ class AnalysisService:
 
         # Create analysis record
         analysis_id = str(uuid.uuid4())
-        contribution_number = doc_data.get("contribution_number", "")
+        contribution_number = doc_data.get("contribution_number") or ""
 
         analysis = AnalysisResult(
             id=analysis_id,
@@ -517,7 +517,7 @@ Return JSON with "summary" and "key_points" fields."""
             )
             return
 
-        contribution_number = doc_data.get("contribution_number", "")
+        contribution_number = doc_data.get("contribution_number") or ""
 
         # Create analysis record
         analysis_id = str(uuid.uuid4())
@@ -651,7 +651,7 @@ Return JSON with "summary" and "key_points" fields."""
         if doc_data.get("status") != "indexed":
             raise ValueError(f"Document is not indexed: {document_id}")
 
-        contribution_number = doc_data.get("contribution_number", "")
+        contribution_number = doc_data.get("contribution_number") or ""
 
         # Create analysis record
         analysis_id = str(uuid.uuid4())
