@@ -161,6 +161,23 @@ export interface FTPSyncProgress {
   errors: string[];
 }
 
+// Sync history types
+
+export interface SyncHistoryEntry {
+  id: string;
+  directory_path: string;
+  last_synced_at: string;
+  documents_found: number;
+  documents_new: number;
+  documents_updated: number;
+  synced_count: number;
+}
+
+export interface SyncHistoryResponse {
+  entries: SyncHistoryEntry[];
+  total: number;
+}
+
 // Chunk types
 
 export interface ChunkMetadata {
