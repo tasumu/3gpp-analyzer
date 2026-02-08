@@ -370,6 +370,16 @@ class FTPSyncService:
                 name=meeting_name,
                 working_group=wg,
             )
+
+        # Fallback: use the last path component as meeting name
+        if parts:
+            dir_name = parts[-1]
+            return Meeting(
+                id=dir_name,
+                name=dir_name,
+                working_group=dir_name,
+            )
+
         return None
 
     def _download_file_sync(self, ftp_path: str) -> bytes:
