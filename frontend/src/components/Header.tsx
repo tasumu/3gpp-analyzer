@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { usePathname } from "next/navigation";
 
@@ -17,41 +18,41 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <a href="/" className="text-xl font-bold text-primary-600">
+            <Link href="/" className="text-xl font-bold text-primary-600">
               3GPP Analyzer
-            </a>
+            </Link>
           </div>
           <nav className="flex items-center space-x-4">
-            <a
+            <Link
               href="/documents"
               className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
             >
               Documents
-            </a>
-            <a
+            </Link>
+            <Link
               href="/meetings"
               className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
             >
               Meetings
-            </a>
-            <a
+            </Link>
+            <Link
               href="/qa"
               className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
             >
               Q&A
-            </a>
-            <a
+            </Link>
+            <Link
               href="/analysis"
               className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
             >
               Analysis
-            </a>
-            <a
+            </Link>
+            <Link
               href="/sync"
               className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
             >
               Sync
-            </a>
+            </Link>
             {!loading && user && (
               <div className="flex items-center space-x-3 ml-4 pl-4 border-l border-gray-200">
                 <span className="text-sm text-gray-600">{user.email}</span>

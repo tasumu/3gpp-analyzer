@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
 import { DocumentSummaryCard } from "@/components/DocumentSummaryCard";
@@ -62,11 +62,7 @@ export default function MeetingDetailPage() {
   const [force, setForce] = useState(false);
   const [showAllSummaries, setShowAllSummaries] = useState(false);
 
-  useEffect(() => {
-    loadMeetingData();
-  }, [meetingId]);
-
-  async function loadMeetingData() {
+  const loadMeetingData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -88,7 +84,11 @@ export default function MeetingDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [meetingId]);
+
+  useEffect(() => {
+    loadMeetingData();
+  }, [loadMeetingData]);
 
   async function handleSummarize() {
     if (isSummarizing) return;
