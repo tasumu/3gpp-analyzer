@@ -22,6 +22,7 @@ import type {
   DocumentSummary,
   DownloadResponse,
   FTPBrowseResponse,
+  SyncHistoryResponse,
   MeetingInfo,
   MeetingReportRequest,
   MeetingReportResponse,
@@ -338,6 +339,12 @@ export async function startFTPSync(
       include_non_contributions: includeNonContributions,
     }),
   });
+}
+
+export async function getFTPSyncHistory(
+  limit: number = 20,
+): Promise<SyncHistoryResponse> {
+  return fetchApi<SyncHistoryResponse>(`/ftp/sync-history?limit=${limit}`);
 }
 
 export async function createFTPSyncStream(syncId: string): Promise<EventSource> {

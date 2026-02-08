@@ -14,6 +14,8 @@ from analyzer.models.api import (
     FTPDirectoryEntry,
     FTPSyncProgress,
     FTPSyncRequest,
+    SyncHistoryEntry,
+    SyncHistoryResponse,
 )
 
 router = APIRouter(prefix="/ftp")
@@ -133,6 +135,12 @@ async def stream_sync_progress(
             sync_state["errors"] = result.get("errors", [])
             sync_state["result"] = result
 
+            # Record sync history
+            await ftp_service.record_sync(
+                directory_path=sync_state["path"],
+                result=result,
+            )
+
         except Exception as e:
             sync_state["status"] = "error"
             sync_state["errors"].append(str(e))
@@ -227,6 +235,38 @@ async def stream_sync_progress(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/sync-history", response_model=SyncHistoryResponse)
+async def get_sync_history(
+    current_user: CurrentUserDep,
+    ftp_service: FTPSyncServiceDep,
+    limit: int = Query(20, ge=1, le=100),
+):
+    """
+    Get list of previously synced directories.
+
+    Returns directories sorted by last_synced_at descending.
+    """
+    try:
+        entries = await ftp_service.get_sync_history(limit=limit)
+        return SyncHistoryResponse(
+            entries=[
+                SyncHistoryEntry(
+                    id=e.id,
+                    directory_path=e.directory_path,
+                    last_synced_at=e.last_synced_at,
+                    documents_found=e.documents_found,
+                    documents_new=e.documents_new,
+                    documents_updated=e.documents_updated,
+                    synced_count=e.synced_count,
+                )
+                for e in entries
+            ],
+            total=len(entries),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get sync history: {e}")
 
 
 def _format_sse(data: FTPSyncProgress) -> str:
