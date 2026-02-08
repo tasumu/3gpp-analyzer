@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     gcp_project_id: str = ""
     firebase_credentials_path: str = ""
     use_firebase_emulator: bool = False
+    firebase_auth_emulator_host: str = ""
 
     # Firestore
     firestore_emulator_host: str = "localhost:8080"

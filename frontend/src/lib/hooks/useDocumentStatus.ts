@@ -113,6 +113,7 @@ export function useDocumentStatus({
   // Auto-start if requested
   useEffect(() => {
     if (autoStart) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- legitimate async operation triggered on mount
       startProcessing();
     }
 
