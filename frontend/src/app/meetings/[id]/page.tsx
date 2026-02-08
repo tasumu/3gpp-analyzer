@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
 import { DocumentSummaryCard } from "@/components/DocumentSummaryCard";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 import { SavedPromptSelector } from "@/components/meeting/SavedPromptSelector";
 import { SavedReportPromptSelector } from "@/components/meeting/SavedReportPromptSelector";
 import {
@@ -684,9 +685,7 @@ export default function MeetingDetailPage() {
             {/* Overall Report */}
             <div className="p-6 border-b border-gray-200">
               <h3 className="text-sm font-medium text-gray-700 mb-2">Overall Summary</h3>
-              <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
-                {currentSummary.overall_report}
-              </div>
+              <MarkdownRenderer content={currentSummary.overall_report} />
             </div>
 
             {/* Individual Summaries */}
