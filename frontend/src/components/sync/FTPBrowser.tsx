@@ -5,6 +5,7 @@ import { browseFTP, createFTPSyncStream, startFTPSync } from "@/lib/api";
 import type { FTPBrowseResponse, FTPSyncProgress } from "@/lib/types";
 import { Breadcrumb } from "./Breadcrumb";
 import { DirectoryEntry } from "./DirectoryEntry";
+import { SyncedDirectories } from "./SyncedDirectories";
 import { SyncProgress } from "./SyncProgress";
 
 export function FTPBrowser() {
@@ -16,6 +17,7 @@ export function FTPBrowser() {
   const [syncProgress, setSyncProgress] = useState<FTPSyncProgress | null>(
     null
   );
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const loadDirectory = useCallback(async (path: string) => {
     setIsLoading(true);
@@ -51,11 +53,9 @@ export function FTPBrowser() {
     }
   };
 
-  const handleSync = async () => {
-    if (!selectedPath) return;
-
+  const handleSyncPath = async (path: string) => {
     try {
-      const { sync_id } = await startFTPSync(selectedPath);
+      const { sync_id } = await startFTPSync(path);
 
       // Start SSE stream (now async due to token retrieval)
       const eventSource = await createFTPSyncStream(sync_id);
@@ -68,6 +68,8 @@ export function FTPBrowser() {
           eventSource.close();
           // Refresh directory to show updated sync status
           loadDirectory(currentPath);
+          // Refresh sync history
+          setRefreshTrigger((prev) => prev + 1);
         }
       };
 
@@ -82,6 +84,11 @@ export function FTPBrowser() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start sync");
     }
+  };
+
+  const handleSync = async () => {
+    if (!selectedPath) return;
+    await handleSyncPath(selectedPath);
   };
 
   const handleCloseProgress = () => {
@@ -222,6 +229,13 @@ export function FTPBrowser() {
           </div>
         </div>
       )}
+
+      {/* Synced directories for re-sync */}
+      <SyncedDirectories
+        onResync={handleSyncPath}
+        isSyncing={syncProgress?.status === "running"}
+        refreshTrigger={refreshTrigger}
+      />
     </div>
   );
 }
