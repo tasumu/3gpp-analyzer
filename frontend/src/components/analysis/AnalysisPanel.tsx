@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { analyzeDocument, getDocumentSummary } from "@/lib/api";
 import type { AnalysisLanguage, Document, DocumentSummary } from "@/lib/types";
@@ -35,11 +35,7 @@ export function AnalysisPanel({
     }
   };
 
-  useEffect(() => {
-    loadSummary();
-  }, [document.id, language]);
-
-  async function loadSummary() {
+  const loadSummary = useCallback(async () => {
     try {
       setIsLoading(true);
       const result = await getDocumentSummary(document.id, language);
@@ -50,7 +46,11 @@ export function AnalysisPanel({
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [document.id, language]);
+
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
 
   async function handleAnalyze(force = false) {
     if (isAnalyzing) return;

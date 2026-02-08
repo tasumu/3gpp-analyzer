@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { DocumentStatusBadge } from "./DocumentStatusBadge";
 import type { Document } from "@/lib/types";
@@ -22,11 +22,11 @@ export function DocumentList({
   batchLoading = false,
 }: DocumentListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  // Clear selection when documents change
-  useEffect(() => {
+  const [prevDocuments, setPrevDocuments] = useState(documents);
+  if (documents !== prevDocuments) {
+    setPrevDocuments(documents);
     setSelectedIds(new Set());
-  }, [documents]);
+  }
 
   const toggleSelectAll = useCallback(() => {
     if (selectedIds.size === documents.length) {
