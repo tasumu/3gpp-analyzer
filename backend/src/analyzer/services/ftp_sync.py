@@ -10,6 +10,7 @@ from ftplib import FTP
 from typing import Callable
 
 from analyzer.models.document import Document, DocumentStatus, DocumentType, Meeting, SourceFile
+from analyzer.models.sync_history import SyncHistory
 from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.providers.storage_client import StorageClient
 
@@ -41,6 +42,8 @@ class FTPSyncService:
 
     FTP structure: ftp.3gpp.org/Meetings/{WG}/{meeting}/Docs/
     """
+
+    SYNC_HISTORY_COLLECTION = "sync_history"
 
     # Mock data for development when FTP is unavailable
     MOCK_DIRECTORIES: dict[str, list[tuple[str, str, int | None]]] = {
@@ -594,6 +597,51 @@ class FTPSyncService:
                 result["errors"].append(f"Error processing {file_info['filename']}: {e}")
 
         return result
+
+    async def record_sync(
+        self,
+        directory_path: str,
+        result: dict,
+    ) -> None:
+        """
+        Record a sync operation in sync_history collection.
+
+        Creates or updates the sync history entry for the given directory.
+        """
+        doc_id = SyncHistory.generate_id(directory_path)
+        synced_count = await self._count_synced_documents(directory_path)
+
+        history = SyncHistory(
+            id=doc_id,
+            directory_path=directory_path,
+            last_synced_at=datetime.utcnow(),
+            documents_found=result.get("documents_found", 0),
+            documents_new=result.get("documents_new", 0),
+            documents_updated=result.get("documents_updated", 0),
+            synced_count=synced_count,
+        )
+
+        doc_ref = self.firestore.client.collection(self.SYNC_HISTORY_COLLECTION).document(doc_id)
+        doc_ref.set(history.to_firestore())
+        logger.info(f"Recorded sync history for {directory_path}")
+
+    async def get_sync_history(self, limit: int = 20) -> list[SyncHistory]:
+        """
+        Get list of previously synced directories.
+
+        Returns entries sorted by last_synced_at descending.
+        """
+        query = (
+            self.firestore.client.collection(self.SYNC_HISTORY_COLLECTION)
+            .order_by("last_synced_at", direction="DESCENDING")
+            .limit(limit)
+        )
+
+        entries = []
+        for doc in query.stream():
+            entries.append(SyncHistory.from_firestore(doc.id, doc.to_dict()))
+
+        return entries
 
     async def sync_meeting(
         self,

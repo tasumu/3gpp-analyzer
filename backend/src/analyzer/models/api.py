@@ -174,6 +174,25 @@ class FTPSyncProgress(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class SyncHistoryEntry(BaseModel):
+    """A previously synced directory entry."""
+
+    id: str
+    directory_path: str
+    last_synced_at: datetime
+    documents_found: int = 0
+    documents_new: int = 0
+    documents_updated: int = 0
+    synced_count: int = 0
+
+
+class SyncHistoryResponse(BaseModel):
+    """Response for sync history listing."""
+
+    entries: list[SyncHistoryEntry] = Field(default_factory=list)
+    total: int = 0
+
+
 # Chunk schemas
 
 
