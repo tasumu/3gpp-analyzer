@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
-import { MeetingSelector } from "@/components/MeetingSelector";
+import { MultipleMeetingSelector } from "@/components/MultipleMeetingSelector";
 import { askQuestion, createQAStream } from "@/lib/api";
 import type { AnalysisLanguage, QAEvidence, QAResult, QAScope } from "@/lib/types";
 import { languageLabels, qaScopeLabels, qaScopeLabelsJa } from "@/lib/types";
@@ -63,6 +63,7 @@ export default function QAPage() {
   const [question, setQuestion] = useState("");
   const [scope, setScope] = useState<QAScope>("global");
   const [scopeId, setScopeId] = useState<string | null>(null);
+  const [scopeIds, setScopeIds] = useState<string[]>([]);
   const [language, setLanguage] = useState<AnalysisLanguage>("ja");
   const [isLoading, setIsLoading] = useState(false);
   const [useStreaming, setUseStreaming] = useState(true);
@@ -91,12 +92,13 @@ export default function QAPage() {
     setScope(newScope);
     if (newScope === "global") {
       setScopeId(null);
+      setScopeIds([]);
     }
   };
 
-  const handleMeetingSelect = (meetingId: string | null) => {
-    setScopeId(meetingId);
-    if (meetingId) {
+  const handleMeetingSelect = (meetingIds: string[]) => {
+    setScopeIds(meetingIds);
+    if (meetingIds.length > 0) {
       setScope("meeting");
     } else {
       setScope("global");
@@ -136,6 +138,7 @@ export default function QAPage() {
           userMessage.content,
           scope,
           scopeId || undefined,
+          scopeIds.length > 0 ? scopeIds : undefined,
           language,
           sessionId
         );
@@ -234,6 +237,7 @@ export default function QAPage() {
           question: userMessage.content,
           scope,
           scope_id: scopeId,
+          scope_ids: scopeIds.length > 0 ? scopeIds : undefined,
           language,
           session_id: sessionId,
         });
@@ -331,9 +335,10 @@ export default function QAPage() {
 
           {/* Meeting Selector (shown when scope is meeting) */}
           {scope === "meeting" && (
-            <MeetingSelector
-              selectedMeetingId={scopeId}
+            <MultipleMeetingSelector
+              selectedMeetingIds={scopeIds}
               onSelect={handleMeetingSelect}
+              maxSelections={2}
             />
           )}
 
