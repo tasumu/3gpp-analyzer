@@ -20,6 +20,8 @@ from analyzer.models.meeting_analysis import (
     MeetingReportRequest,
     MeetingSummarizeRequest,
     MeetingSummary,
+    MultiMeetingSummarizeRequest,
+    MultiMeetingSummary,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,19 @@ class MeetingReportResponse(BaseModel):
     meeting_id: str
     download_url: str
     summary_id: str
+
+
+class MultiMeetingSummaryResponse(BaseModel):
+    """Response model for multi-meeting summary."""
+
+    id: str
+    meeting_ids: list[str]
+    custom_prompt: str | None
+    integrated_report: str
+    all_key_topics: list[str]
+    language: str
+    created_at: str
+    individual_meeting_summaries: list[MeetingSummaryResponse]
 
 
 class BatchProcessRequest(BaseModel):
@@ -79,6 +94,22 @@ def meeting_summary_to_response(summary: MeetingSummary) -> MeetingSummaryRespon
                 "from_cache": s.from_cache,
             }
             for s in summary.individual_summaries
+        ],
+    )
+
+
+def multi_meeting_summary_to_response(summary: MultiMeetingSummary) -> MultiMeetingSummaryResponse:
+    """Convert MultiMeetingSummary to API response."""
+    return MultiMeetingSummaryResponse(
+        id=summary.id,
+        meeting_ids=summary.meeting_ids,
+        custom_prompt=summary.custom_prompt,
+        integrated_report=summary.integrated_report,
+        all_key_topics=summary.all_key_topics,
+        language=summary.language,
+        created_at=summary.created_at.isoformat(),
+        individual_meeting_summaries=[
+            meeting_summary_to_response(s) for s in summary.individual_meeting_summaries
         ],
     )
 
@@ -469,3 +500,160 @@ async def list_meeting_reports(
         }
         for r in reports
     ]
+
+
+# ============================================================================
+# Multi-Meeting Summary Endpoints (Phase B)
+# ============================================================================
+
+
+@router.post("/multi/summarize", response_model=MultiMeetingSummaryResponse)
+async def summarize_multiple_meetings(
+    request: MultiMeetingSummarizeRequest,
+    current_user: CurrentUserDep,
+    meeting_service: MeetingServiceDep,
+):
+    """
+    Summarize multiple meetings together with integrated analysis.
+
+    This endpoint:
+    1. Summarizes each meeting individually (reusing cached results)
+    2. Generates an integrated report across all meetings
+    3. Identifies common themes and trends across meetings
+    4. Returns combined summary with cross-meeting insights
+
+    Results are cached and reused unless force=true.
+    """
+    try:
+        result = await meeting_service.summarize_meetings(
+            meeting_ids=request.meeting_ids,
+            analysis_prompt=request.analysis_prompt,
+            report_prompt=request.report_prompt,
+            language=request.language,
+            user_id=current_user.uid,
+            force=request.force,
+        )
+        return multi_meeting_summary_to_response(result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error summarizing multiple meetings {request.meeting_ids}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to summarize meetings")
+
+
+@router.get("/multi/summarize/stream")
+async def summarize_multiple_meetings_stream(
+    current_user: CurrentUserQueryDep,
+    meeting_service: MeetingServiceDep,
+    meeting_ids: str = Query(..., description="Comma-separated list of meeting IDs"),
+    analysis_prompt: str | None = Query(None, max_length=2000),
+    report_prompt: str | None = Query(None, max_length=2000),
+    language: str = Query("ja", pattern="^(ja|en)$"),
+    force: bool = Query(False),
+):
+    """
+    Summarize multiple meetings with streaming progress updates (SSE).
+
+    Events:
+    - meeting_start: Started processing a specific meeting
+    - meeting_progress: Progress update for current meeting
+    - meeting_complete: Meeting summary completed
+    - integrated_report: Integrated report generated
+    - done: Final result with complete multi-meeting summary
+    - error: Error message
+    """
+    # Parse comma-separated meeting IDs
+    meeting_id_list = [mid.strip() for mid in meeting_ids.split(",") if mid.strip()]
+
+    if len(meeting_id_list) < 2:
+
+        async def error_generator():
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": "At least 2 meeting IDs required"}),
+            }
+
+        return EventSourceResponse(error_generator())
+
+    async def event_generator():
+        try:
+            async for event in meeting_service.summarize_meetings_stream(
+                meeting_ids=meeting_id_list,
+                analysis_prompt=analysis_prompt,
+                report_prompt=report_prompt,
+                language=language,
+                user_id=current_user.uid,
+                force=force,
+            ):
+                if event.type == "meeting_start":
+                    yield {
+                        "event": "meeting_start",
+                        "data": json.dumps(
+                            {
+                                "meeting_id": event.meeting_id,
+                                "current": event.progress.get("current_meeting", 0),
+                                "total": event.progress.get("total_meetings", 0),
+                            }
+                        ),
+                    }
+                elif event.type == "meeting_progress":
+                    yield {
+                        "event": "meeting_progress",
+                        "data": json.dumps(
+                            {
+                                "meeting_id": event.meeting_id,
+                                "current_meeting": event.progress.get("current_meeting", 0),
+                                "total_meetings": event.progress.get("total_meetings", 0),
+                                "stage": event.progress.get("stage", ""),
+                                "documents_processed": event.progress.get("processed", 0),
+                                "total_documents": event.progress.get("total_documents", 0),
+                            }
+                        ),
+                    }
+                elif event.type == "meeting_complete":
+                    summary_response = meeting_summary_to_response(event.meeting_summary)
+                    yield {
+                        "event": "meeting_complete",
+                        "data": json.dumps(
+                            {
+                                "meeting_id": event.meeting_id,
+                                "summary": summary_response.model_dump(),
+                            }
+                        ),
+                    }
+                elif event.type == "integrated_report":
+                    yield {
+                        "event": "integrated_report",
+                        "data": json.dumps(
+                            {
+                                "report": event.integrated_report[:500] + "..."
+                                if len(event.integrated_report) > 500
+                                else event.integrated_report,
+                                "all_key_topics": event.all_key_topics,
+                            }
+                        ),
+                    }
+                elif event.type == "done":
+                    multi_summary_response = multi_meeting_summary_to_response(event.result)
+                    yield {
+                        "event": "complete",
+                        "data": json.dumps(
+                            {
+                                "event": "complete",
+                                "summary": multi_summary_response.model_dump(),
+                            }
+                        ),
+                    }
+                elif event.type == "error":
+                    yield {
+                        "event": "error",
+                        "data": json.dumps({"error": event.error, "meeting_id": event.meeting_id}),
+                    }
+        except Exception as e:
+            logger.error(f"Error in multi-meeting summary stream: {e}")
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(e)}),
+            }
+
+    return EventSourceResponse(event_generator())

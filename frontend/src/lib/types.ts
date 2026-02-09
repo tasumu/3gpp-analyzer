@@ -525,6 +525,33 @@ export interface BatchProcessProgress {
   failed: number;
 }
 
+// Multi-Meeting Types (Phase B)
+export interface MultiMeetingSummarizeRequest {
+  meeting_ids: string[];
+  analysis_prompt?: string | null;
+  report_prompt?: string | null;
+  language: AnalysisLanguage;
+  force?: boolean;
+}
+
+export interface MultiMeetingSummary {
+  id: string;
+  meeting_ids: string[];
+  custom_prompt: string | null;
+  integrated_report: string;
+  all_key_topics: string[];
+  language: string;
+  created_at: string;
+  individual_meeting_summaries: MeetingSummary[];
+}
+
+export interface MultiMeetingInfo {
+  meeting_infos: MeetingInfo[];
+  total_documents: number;
+  total_indexed_documents: number;
+  ready_for_analysis: boolean;
+}
+
 // Q&A Scope labels
 export const qaScopeLabels: Record<QAScope, string> = {
   document: "Single Document",

@@ -16,6 +16,8 @@ from analyzer.models.meeting_analysis import (
     DocumentSummary,
     MeetingSummary,
     MeetingSummaryStreamEvent,
+    MultiMeetingSummary,
+    MultiMeetingSummaryStreamEvent,
 )
 from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.services.analysis_service import AnalysisService
@@ -35,6 +37,7 @@ class MeetingService:
     """
 
     MEETING_SUMMARIES_COLLECTION = "meeting_summaries"
+    MULTI_MEETING_SUMMARIES_COLLECTION = "multi_meeting_summaries"
     MAX_CONCURRENT_SUMMARIES = 10  # Limit parallel requests
 
     def __init__(
@@ -497,3 +500,368 @@ At the end, provide a JSON block with key topics: {{"key_topics": ["topic1", "to
         except Exception as e:
             logger.error(f"Error listing meeting summaries: {e}")
             return []
+
+    async def summarize_meetings(
+        self,
+        meeting_ids: list[str],
+        analysis_prompt: str | None = None,
+        report_prompt: str | None = None,
+        language: str = "ja",
+        user_id: str | None = None,
+        force: bool = False,
+    ) -> MultiMeetingSummary:
+        """
+        Summarize multiple meetings together with integrated analysis.
+
+        Args:
+            meeting_ids: List of meeting IDs (e.g., ['SA2#162', 'SA2#163']).
+            analysis_prompt: Custom prompt for individual document analysis.
+            report_prompt: Custom prompt for integrated report generation.
+            language: Output language (ja or en).
+            user_id: User ID who initiated.
+            force: Force re-analysis even if cached.
+
+        Returns:
+            MultiMeetingSummary with individual meeting summaries and integrated report.
+
+        Raises:
+            ValueError: If less than 2 meeting IDs provided.
+        """
+        if len(meeting_ids) < 2:
+            raise ValueError("At least 2 meeting IDs required for multi-meeting summary")
+
+        logger.info(f"Starting multi-meeting summarization: {meeting_ids}")
+
+        # Check cache first (unless force=True)
+        if not force:
+            cached = await self._get_cached_multi_summary(meeting_ids, analysis_prompt, language)
+            if cached:
+                logger.info("Returning cached multi-meeting summary")
+                return cached
+
+        # Summarize each meeting individually (in parallel, with cache reuse)
+        individual_summaries = await asyncio.gather(
+            *[
+                self.summarize_meeting(
+                    meeting_id=mid,
+                    analysis_prompt=analysis_prompt,
+                    report_prompt=report_prompt,
+                    language=language,
+                    user_id=user_id,
+                    force=force,
+                )
+                for mid in meeting_ids
+            ],
+            return_exceptions=True,
+        )
+
+        valid_summaries: list[MeetingSummary] = []
+        for i, result in enumerate(individual_summaries):
+            if isinstance(result, Exception):
+                logger.error(f"Failed to summarize meeting {meeting_ids[i]}: {result}")
+            else:
+                valid_summaries.append(result)
+
+        if not valid_summaries:
+            raise ValueError("Failed to summarize any meeting")
+
+        logger.info(f"Successfully summarized {len(valid_summaries)} meetings")
+
+        # Generate integrated report
+        integrated_report, all_key_topics = await self._generate_integrated_report(
+            meeting_ids=[s.meeting_id for s in valid_summaries],
+            meeting_summaries=valid_summaries,
+            report_prompt=report_prompt,
+            language=language,
+        )
+
+        # Create result
+        result = MultiMeetingSummary(
+            id=str(uuid.uuid4()),
+            meeting_ids=[s.meeting_id for s in valid_summaries],
+            custom_prompt=analysis_prompt,
+            individual_meeting_summaries=valid_summaries,
+            integrated_report=integrated_report,
+            all_key_topics=all_key_topics,
+            language=language,
+            created_at=datetime.utcnow(),
+            created_by=user_id,
+        )
+
+        # Save to Firestore
+        await self._save_multi_summary(result)
+
+        return result
+
+    async def summarize_meetings_stream(
+        self,
+        meeting_ids: list[str],
+        analysis_prompt: str | None = None,
+        report_prompt: str | None = None,
+        language: str = "ja",
+        user_id: str | None = None,
+        force: bool = False,
+    ) -> AsyncGenerator[MultiMeetingSummaryStreamEvent, None]:
+        """
+        Summarize multiple meetings with streaming progress updates.
+
+        Args:
+            meeting_ids: List of meeting IDs (e.g., ['SA2#162', 'SA2#163']).
+            analysis_prompt: Custom prompt for individual document analysis.
+            report_prompt: Custom prompt for integrated report generation.
+            language: Output language (ja or en).
+            user_id: User ID who initiated.
+            force: Force re-analysis even if cached.
+
+        Yields events as meetings are processed.
+        """
+        if len(meeting_ids) < 2:
+            yield MultiMeetingSummaryStreamEvent(
+                type="error",
+                error="At least 2 meeting IDs required for multi-meeting summary",
+            )
+            return
+
+        logger.info(f"Starting streaming multi-meeting summarization: {meeting_ids}")
+
+        # Check cache first (unless force=True)
+        if not force:
+            cached = await self._get_cached_multi_summary(meeting_ids, analysis_prompt, language)
+            if cached:
+                logger.info("Returning cached multi-meeting summary")
+                yield MultiMeetingSummaryStreamEvent(
+                    type="done",
+                    result=cached,
+                )
+                return
+
+        valid_summaries: list[MeetingSummary] = []
+
+        # Process each meeting sequentially (to provide streaming feedback)
+        for i, meeting_id in enumerate(meeting_ids):
+            yield MultiMeetingSummaryStreamEvent(
+                type="meeting_start",
+                meeting_id=meeting_id,
+                progress={
+                    "current_meeting": i + 1,
+                    "total_meetings": len(meeting_ids),
+                },
+            )
+
+            try:
+                # Use streaming version for real-time progress
+                async for event in self.summarize_meeting_stream(
+                    meeting_id=meeting_id,
+                    analysis_prompt=analysis_prompt,
+                    report_prompt=report_prompt,
+                    language=language,
+                    user_id=user_id,
+                    force=force,
+                ):
+                    if event.type == "progress":
+                        yield MultiMeetingSummaryStreamEvent(
+                            type="meeting_progress",
+                            meeting_id=meeting_id,
+                            progress={
+                                "current_meeting": i + 1,
+                                "total_meetings": len(meeting_ids),
+                                **event.progress,
+                            },
+                        )
+                    elif event.type == "done":
+                        valid_summaries.append(event.result)
+                        yield MultiMeetingSummaryStreamEvent(
+                            type="meeting_complete",
+                            meeting_id=meeting_id,
+                            meeting_summary=event.result,
+                        )
+            except Exception as e:
+                logger.error(f"Failed to summarize meeting {meeting_id}: {e}")
+                yield MultiMeetingSummaryStreamEvent(
+                    type="error",
+                    meeting_id=meeting_id,
+                    error=f"Failed to summarize {meeting_id}: {str(e)}",
+                )
+
+        if not valid_summaries:
+            yield MultiMeetingSummaryStreamEvent(
+                type="error",
+                error="Failed to summarize any meeting",
+            )
+            return
+
+        # Generate integrated report
+        yield MultiMeetingSummaryStreamEvent(
+            type="meeting_progress",
+            progress={
+                "stage": "generating_integrated_report",
+                "current_meeting": len(meeting_ids),
+                "total_meetings": len(meeting_ids),
+            },
+        )
+
+        integrated_report, all_key_topics = await self._generate_integrated_report(
+            meeting_ids=[s.meeting_id for s in valid_summaries],
+            meeting_summaries=valid_summaries,
+            report_prompt=report_prompt,
+            language=language,
+        )
+
+        yield MultiMeetingSummaryStreamEvent(
+            type="integrated_report",
+            integrated_report=integrated_report,
+            all_key_topics=all_key_topics,
+        )
+
+        # Create and save result
+        result = MultiMeetingSummary(
+            id=str(uuid.uuid4()),
+            meeting_ids=[s.meeting_id for s in valid_summaries],
+            custom_prompt=analysis_prompt,
+            individual_meeting_summaries=valid_summaries,
+            integrated_report=integrated_report,
+            all_key_topics=all_key_topics,
+            language=language,
+            created_at=datetime.utcnow(),
+            created_by=user_id,
+        )
+
+        await self._save_multi_summary(result)
+
+        yield MultiMeetingSummaryStreamEvent(
+            type="done",
+            result=result,
+        )
+
+    async def _generate_integrated_report(
+        self,
+        meeting_ids: list[str],
+        meeting_summaries: list[MeetingSummary],
+        report_prompt: str | None,
+        language: str,
+    ) -> tuple[str, list[str]]:
+        """
+        Generate integrated report from multiple meeting summaries.
+
+        Uses Gemini Pro to synthesize insights across meetings.
+        """
+        if not meeting_summaries:
+            return "No meetings available for analysis.", []
+
+        # Prepare input from individual meeting reports
+        meetings_text = "\n\n".join(
+            [
+                f"## {s.meeting_id}\n"
+                f"Total Documents: {s.document_count}\n"
+                f"Key Topics: {', '.join(s.key_topics) if s.key_topics else 'N/A'}\n\n"
+                f"Meeting Summary:\n{s.overall_report}"
+                for s in meeting_summaries
+            ]
+        )
+
+        lang_instruction = (
+            "Write the report in Japanese. Keep technical terms in English."
+            if language == "ja"
+            else "Write the report in English."
+        )
+
+        custom_instruction = ""
+        if report_prompt:
+            custom_instruction = f"\n\nSpecial focus requested: {report_prompt}"
+
+        prompt = f"""You are an expert 3GPP standardization analyst. \
+Create an integrated analysis report across multiple meetings.
+
+Meetings Analyzed: {", ".join(meeting_ids)}
+Total Meetings: {len(meeting_summaries)}
+
+Individual Meeting Reports:
+{meetings_text}
+
+Instructions:
+1. Provide an executive summary of key developments across all meetings
+2. Identify common themes and trends across meetings
+3. Highlight significant changes or evolution of topics between meetings
+4. Note any differences in focus or approach between meetings
+5. Identify notable contributions that span multiple meetings
+6. {lang_instruction}
+{custom_instruction}
+
+Structure your report with clear sections. Focus on synthesis and cross-meeting insights, \
+not just summarizing each meeting.
+At the end, provide a JSON block with all key topics from all meetings: \
+{{"key_topics": ["topic1", "topic2", ...]}}"""
+
+        response = self._pro_client.models.generate_content(
+            model=self.pro_model,
+            contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
+        )
+
+        report_text = response.text or "Integrated report generation failed."
+
+        # Try to extract key topics from the response
+        all_key_topics: list[str] = []
+        try:
+            # Look for JSON block at the end
+            json_match = re.search(r'\{[^{}]*"key_topics"\s*:\s*\[[^\]]*\][^{}]*\}', report_text)
+            if json_match:
+                topics_data = json.loads(json_match.group())
+                all_key_topics = topics_data.get("key_topics", [])
+                # Remove JSON from report
+                report_text = report_text[: json_match.start()].strip()
+        except Exception as e:
+            logger.warning(f"Failed to extract key topics: {e}")
+
+        # If extraction failed, collect from individual meetings
+        if not all_key_topics:
+            seen = set()
+            for summary in meeting_summaries:
+                for topic in summary.key_topics:
+                    if topic not in seen:
+                        all_key_topics.append(topic)
+                        seen.add(topic)
+
+        return report_text, all_key_topics
+
+    async def _get_cached_multi_summary(
+        self,
+        meeting_ids: list[str],
+        custom_prompt: str | None,
+        language: str,
+    ) -> MultiMeetingSummary | None:
+        """Get cached multi-meeting summary if available."""
+        try:
+            # Sort meeting IDs for consistent cache key
+            sorted_ids = sorted(meeting_ids)
+
+            query = (
+                self.firestore.client.collection(self.MULTI_MEETING_SUMMARIES_COLLECTION)
+                .where("meeting_ids", "==", sorted_ids)
+                .where("language", "==", language)
+            )
+
+            # Custom prompt matching
+            if custom_prompt:
+                query = query.where("custom_prompt", "==", custom_prompt)
+            else:
+                query = query.where("custom_prompt", "==", None)
+
+            query = query.order_by("created_at", direction="DESCENDING").limit(1)
+
+            docs = list(query.stream())
+            if docs:
+                return MultiMeetingSummary.from_firestore(docs[0].id, docs[0].to_dict())
+        except Exception as e:
+            logger.warning(f"Error fetching cached multi-meeting summary: {e}")
+        return None
+
+    async def _save_multi_summary(self, summary: MultiMeetingSummary) -> None:
+        """Save multi-meeting summary to Firestore."""
+        try:
+            doc_ref = self.firestore.client.collection(
+                self.MULTI_MEETING_SUMMARIES_COLLECTION
+            ).document(summary.id)
+            doc_ref.set(summary.to_firestore())
+            logger.info(f"Saved multi-meeting summary: {summary.id}")
+        except Exception as e:
+            logger.error(f"Error saving multi-meeting summary: {e}")
