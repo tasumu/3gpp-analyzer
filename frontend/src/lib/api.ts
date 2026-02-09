@@ -121,6 +121,7 @@ export async function listDocuments(params?: {
   status?: DocumentStatus;
   document_type?: DocumentType;
   path_prefix?: string;
+  search_text?: string;
   page?: number;
   page_size?: number;
 }): Promise<DocumentListResponse> {
@@ -129,6 +130,7 @@ export async function listDocuments(params?: {
   if (params?.status) searchParams.set("status", params.status);
   if (params?.document_type) searchParams.set("document_type", params.document_type);
   if (params?.path_prefix) searchParams.set("path_prefix", params.path_prefix);
+  if (params?.search_text) searchParams.set("search_text", params.search_text);
   if (params?.page) searchParams.set("page", params.page.toString());
   if (params?.page_size) searchParams.set("page_size", params.page_size.toString());
 

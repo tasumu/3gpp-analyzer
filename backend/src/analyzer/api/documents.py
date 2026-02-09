@@ -48,6 +48,9 @@ async def list_documents(
     status: DocumentStatus | None = Query(None, description="Filter by status"),
     document_type: DocumentType | None = Query(None, description="Filter by document type"),
     path_prefix: str | None = Query(None, description="Filter by FTP path prefix"),
+    search_text: str | None = Query(
+        None, description="Search documents by filename (case-insensitive partial match)"
+    ),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
 ):
@@ -61,6 +64,7 @@ async def list_documents(
         status=status,
         document_type=document_type,
         path_prefix=path_prefix,
+        search_text=search_text,
         page=page,
         page_size=page_size,
     )

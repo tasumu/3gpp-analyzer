@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DocumentList } from "@/components/DocumentList";
@@ -29,7 +29,19 @@ export default function DocumentsPage() {
   const [status, setStatus] = useState<DocumentStatus | "">("");
   const [documentType, setDocumentType] = useState<DocumentType | "">("");
   const [pathPrefix, setPathPrefix] = useState<string>("");
+  const [searchText, setSearchText] = useState<string>("");
+  const [debouncedSearchText, setDebouncedSearchText] = useState<string>("");
   const [page, setPage] = useState(1);
+
+  // Debounce search text
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchText(searchText);
+      setPage(1); // Reset to first page when search changes
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchText]);
 
   // Batch operation states
   const [batchLoading, setBatchLoading] = useState(false);
@@ -44,6 +56,7 @@ export default function DocumentsPage() {
     status: status || undefined,
     document_type: documentType || undefined,
     path_prefix: pathPrefix || undefined,
+    search_text: debouncedSearchText || undefined,
     page,
     page_size: 50,
   });
@@ -191,6 +204,33 @@ export default function DocumentsPage() {
               placeholder="/Specs/latest/..."
               className="block w-48 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
             />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <label htmlFor="search-text" className="text-sm font-medium text-gray-700">
+              Search:
+            </label>
+            <div className="relative">
+              <input
+                id="search-text"
+                type="text"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Search by filename..."
+                className="block w-64 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm pr-8"
+              />
+              {searchText && (
+                <button
+                  onClick={() => setSearchText("")}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                  aria-label="Clear search"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="ml-auto text-sm text-gray-500">
