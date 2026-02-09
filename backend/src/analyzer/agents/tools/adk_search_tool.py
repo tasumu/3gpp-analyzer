@@ -72,7 +72,8 @@ async def search_evidence(
         filters["meeting_id"] = ctx.meeting_id
 
     # Override with explicit filters if provided
-    if meeting_id:
+    # Don't override meeting_id if meeting_id__in is already set (for multi-meeting Q&A)
+    if meeting_id and "meeting_id__in" not in filters:
         filters["meeting_id"] = meeting_id
     if contribution_number:
         filters["contribution_number"] = contribution_number

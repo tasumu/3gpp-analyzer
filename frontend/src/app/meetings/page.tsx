@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
 import { MultipleMeetingSelector } from "@/components/MultipleMeetingSelector";
@@ -8,6 +9,7 @@ import { listMeetings } from "@/lib/api";
 import type { Meeting } from "@/lib/types";
 
 export default function MeetingsPage() {
+  const router = useRouter();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [selectedMeetingIds, setSelectedMeetingIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,12 +48,22 @@ export default function MeetingsPage() {
 
         {/* Filter */}
         {!isLoading && meetings.length > 0 && (
-          <div className="bg-white shadow-sm rounded-lg p-4">
+          <div className="bg-white shadow-sm rounded-lg p-4 space-y-4">
             <MultipleMeetingSelector
               selectedMeetingIds={selectedMeetingIds}
               onSelect={setSelectedMeetingIds}
               maxSelections={10}
             />
+            {selectedMeetingIds.length >= 2 && (
+              <div className="pt-2 border-t">
+                <button
+                  onClick={() => router.push(`/meetings/multi?ids=${selectedMeetingIds.join(",")}`)}
+                  className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+                >
+                  Analyze Selected ({selectedMeetingIds.length} meetings)
+                </button>
+              </div>
+            )}
           </div>
         )}
 
