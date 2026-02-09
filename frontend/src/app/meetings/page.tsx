@@ -57,7 +57,10 @@ export default function MeetingsPage() {
             {selectedMeetingIds.length >= 2 && (
               <div className="pt-2 border-t">
                 <button
-                  onClick={() => router.push(`/meetings/multi?ids=${selectedMeetingIds.join(",")}`)}
+                  onClick={() => {
+                    const encodedIds = selectedMeetingIds.map(id => encodeURIComponent(id)).join(",");
+                    router.push(`/meetings/multi?ids=${encodedIds}`);
+                  }}
                   className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
                 >
                   Analyze Selected ({selectedMeetingIds.length} meetings)
