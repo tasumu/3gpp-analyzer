@@ -254,9 +254,16 @@ class FirestoreClient:
                 metadata = data.get("metadata", {})
                 skip = False
                 for key, value in filters.items():
-                    if metadata.get(key) != value:
-                        skip = True
-                        break
+                    # Support __in suffix for "in" queries
+                    if key.endswith("__in"):
+                        actual_field = key.replace("__in", "")
+                        if metadata.get(actual_field) not in value:
+                            skip = True
+                            break
+                    else:
+                        if metadata.get(key) != value:
+                            skip = True
+                            break
                 if skip:
                     continue
 

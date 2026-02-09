@@ -91,11 +91,11 @@ class QAService:
         effective_scope_id = scope_id
         if scope_ids and len(scope_ids) > 0:
             # For now, use the first ID as the primary scope_id
-            # and add meeting.id__in filter for RAG search
+            # and add meeting_id__in filter for RAG search
             effective_scope_id = scope_ids[0]
             if filters is None:
                 filters = {}
-            filters["meeting.id__in"] = scope_ids
+            filters["meeting_id__in"] = scope_ids
 
         # Validate scope_id
         if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not effective_scope_id:
@@ -188,7 +188,7 @@ class QAService:
             effective_scope_id = scope_ids[0]
             if filters is None:
                 filters = {}
-            filters["meeting.id__in"] = scope_ids
+            filters["meeting_id__in"] = scope_ids
 
         # Validate scope_id
         if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not effective_scope_id:
