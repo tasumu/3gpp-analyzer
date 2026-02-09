@@ -89,28 +89,35 @@ class QAService:
         """
         # Support multiple scope IDs (takes precedence)
         effective_scope_id = scope_id
-        if scope_ids and len(scope_ids) > 0:
-            # For now, use the first ID as the primary scope_id
-            # and add meeting_id__in filter for RAG search
-            effective_scope_id = scope_ids[0]
+        multi_meeting_mode = False
+        if scope_ids and len(scope_ids) > 1:
+            # Multiple meetings selected - use global scope for agent creation
+            # to avoid hardcoding a specific meeting_id in system instruction
+            effective_scope_id = None
+            multi_meeting_mode = True
             if filters is None:
                 filters = {}
             filters["meeting_id__in"] = scope_ids
+        elif scope_ids and len(scope_ids) == 1:
+            # Single meeting in scope_ids - treat as normal meeting scope
+            effective_scope_id = scope_ids[0]
 
         # Validate scope_id
-        if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not effective_scope_id:
+        if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not effective_scope_id and not multi_meeting_mode:
             raise ValueError(f"scope_id or scope_ids is required for scope={scope.value}")
 
         logger.info(
             f"Processing Q&A: question='{question[:50]}...', "
             f"scope={scope.value}, scope_id={effective_scope_id}, "
-            f"scope_ids={scope_ids}"
+            f"scope_ids={scope_ids}, multi_meeting_mode={multi_meeting_mode}"
         )
 
         # Create ADK agent
+        # For multi-meeting Q&A, use global scope to avoid hardcoding meeting_id
+        agent_scope = "global" if multi_meeting_mode else scope.value
         agent = create_qa_agent(
             model=self.model,
-            scope=scope.value,
+            scope=agent_scope,
             scope_id=effective_scope_id,
             language=language,
         )
@@ -184,14 +191,21 @@ class QAService:
         """
         # Support multiple scope IDs (takes precedence)
         effective_scope_id = scope_id
-        if scope_ids and len(scope_ids) > 0:
-            effective_scope_id = scope_ids[0]
+        multi_meeting_mode = False
+        if scope_ids and len(scope_ids) > 1:
+            # Multiple meetings selected - use global scope for agent creation
+            # to avoid hardcoding a specific meeting_id in system instruction
+            effective_scope_id = None
+            multi_meeting_mode = True
             if filters is None:
                 filters = {}
             filters["meeting_id__in"] = scope_ids
+        elif scope_ids and len(scope_ids) == 1:
+            # Single meeting in scope_ids - treat as normal meeting scope
+            effective_scope_id = scope_ids[0]
 
         # Validate scope_id
-        if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not effective_scope_id:
+        if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not effective_scope_id and not multi_meeting_mode:
             yield QAStreamEvent(
                 type="error",
                 error=f"scope_id or scope_ids is required for scope={scope.value}",
@@ -201,13 +215,15 @@ class QAService:
         logger.info(
             f"Processing streaming Q&A: question='{question[:50]}...', "
             f"scope={scope.value}, scope_id={effective_scope_id}, "
-            f"scope_ids={scope_ids}"
+            f"scope_ids={scope_ids}, multi_meeting_mode={multi_meeting_mode}"
         )
 
         # Create ADK agent
+        # For multi-meeting Q&A, use global scope to avoid hardcoding meeting_id
+        agent_scope = "global" if multi_meeting_mode else scope.value
         agent = create_qa_agent(
             model=self.model,
-            scope=scope.value,
+            scope=agent_scope,
             scope_id=effective_scope_id,
             language=language,
         )
