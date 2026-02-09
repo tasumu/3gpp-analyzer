@@ -48,6 +48,7 @@ class DocumentService:
     async def list_documents(
         self,
         meeting_id: str | None = None,
+        meeting_ids: list[str] | None = None,
         status: DocumentStatus | None = None,
         contribution_number: str | None = None,
         document_type: DocumentType | None = None,
@@ -60,7 +61,8 @@ class DocumentService:
         List documents with optional filters.
 
         Args:
-            meeting_id: Filter by meeting ID.
+            meeting_id: Filter by single meeting ID (backwards compatibility).
+            meeting_ids: Filter by multiple meeting IDs (takes precedence over meeting_id).
             status: Filter by processing status.
             contribution_number: Filter by contribution number.
             document_type: Filter by document type (contribution, other).
@@ -73,7 +75,10 @@ class DocumentService:
             Tuple of (documents, total_count).
         """
         filters = {}
-        if meeting_id:
+        # Support multiple meeting IDs (takes precedence)
+        if meeting_ids and len(meeting_ids) > 0:
+            filters["meeting.id__in"] = meeting_ids
+        elif meeting_id:
             filters["meeting.id"] = meeting_id
         if status:
             filters["status"] = status.value

@@ -409,6 +409,7 @@ export interface QARequest {
   question: string;
   scope: QAScope;
   scope_id?: string | null;
+  scope_ids?: string[];
   filters?: Record<string, unknown> | null;
   language: AnalysisLanguage;
   session_id?: string | null;

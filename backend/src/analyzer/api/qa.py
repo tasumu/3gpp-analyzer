@@ -66,7 +66,7 @@ async def ask_question(
 
     Supports three scopes:
     - document: Questions about a specific document (requires scope_id)
-    - meeting: Questions about all documents in a meeting (requires scope_id)
+    - meeting: Questions about all documents in a meeting (requires scope_id or scope_ids)
     - global: Questions across all indexed documents
 
     Returns the answer with supporting evidence citations.
@@ -76,6 +76,7 @@ async def ask_question(
             question=request.question,
             scope=QAScope(request.scope),
             scope_id=request.scope_id,
+            scope_ids=request.scope_ids,
             filters=request.filters,
             language=request.language,
             user_id=current_user.uid,
@@ -96,6 +97,7 @@ async def ask_question_stream(
     question: str = Query(..., min_length=1, max_length=2000, description="The question to answer"),
     scope: str = Query("global", description="Search scope: document, meeting, or global"),
     scope_id: str | None = Query(None, description="Scope identifier"),
+    scope_ids: str | None = Query(None, description="Multiple scope identifiers (comma-separated)"),
     language: str = Query("ja", pattern="^(ja|en)$", description="Response language"),
     session_id: str | None = Query(None, description="Session ID for conversation continuity"),
 ):
@@ -122,10 +124,16 @@ async def ask_question_stream(
 
     async def event_generator():
         try:
+            # Parse scope_ids from comma-separated string
+            parsed_scope_ids = None
+            if scope_ids:
+                parsed_scope_ids = [id.strip() for id in scope_ids.split(",") if id.strip()]
+
             async for event in qa_service.answer_stream(
                 question=question,
                 scope=qa_scope,
                 scope_id=scope_id,
+                scope_ids=parsed_scope_ids,
                 language=language,
                 user_id=current_user.uid,
                 session_id=session_id,

@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
+import { MultipleMeetingSelector } from "@/components/MultipleMeetingSelector";
 import { listMeetings } from "@/lib/api";
 import type { Meeting } from "@/lib/types";
 
 export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [selectedMeetingIds, setSelectedMeetingIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +28,11 @@ export default function MeetingsPage() {
     loadMeetings();
   }, []);
 
+  // Filter meetings based on selection
+  const filteredMeetings = selectedMeetingIds.length > 0
+    ? meetings.filter(m => selectedMeetingIds.includes(m.id))
+    : meetings;
+
   return (
     <AuthGuard>
       <div className="space-y-6">
@@ -36,6 +43,17 @@ export default function MeetingsPage() {
             Browse 3GPP working group meetings and generate reports.
           </p>
         </div>
+
+        {/* Filter */}
+        {!isLoading && meetings.length > 0 && (
+          <div className="bg-white shadow-sm rounded-lg p-4">
+            <MultipleMeetingSelector
+              selectedMeetingIds={selectedMeetingIds}
+              onSelect={setSelectedMeetingIds}
+              maxSelections={10}
+            />
+          </div>
+        )}
 
         {/* Loading */}
         {isLoading && (
@@ -52,7 +70,7 @@ export default function MeetingsPage() {
         )}
 
         {/* Empty state */}
-        {!isLoading && !error && meetings.length === 0 && (
+        {!isLoading && !error && filteredMeetings.length === 0 && meetings.length === 0 && (
           <div className="text-center py-12 border border-dashed rounded-lg">
             <p className="text-gray-500">No meetings found.</p>
             <Link
@@ -64,10 +82,17 @@ export default function MeetingsPage() {
           </div>
         )}
 
+        {/* Filtered empty state */}
+        {!isLoading && !error && filteredMeetings.length === 0 && meetings.length > 0 && (
+          <div className="text-center py-12 border border-dashed rounded-lg">
+            <p className="text-gray-500">No meetings match the selected filters.</p>
+          </div>
+        )}
+
         {/* Meeting list */}
-        {!isLoading && meetings.length > 0 && (
+        {!isLoading && filteredMeetings.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {meetings.map((meeting) => (
+            {filteredMeetings.map((meeting) => (
               <Link
                 key={meeting.id}
                 href={`/meetings/${encodeURIComponent(meeting.id)}`}

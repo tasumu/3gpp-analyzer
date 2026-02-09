@@ -62,6 +62,7 @@ class QAService:
         question: str,
         scope: QAScope = QAScope.GLOBAL,
         scope_id: str | None = None,
+        scope_ids: list[str] | None = None,
         filters: dict[str, Any] | None = None,
         language: str = "ja",
         user_id: str | None = None,
@@ -74,6 +75,7 @@ class QAService:
             question: The user's question.
             scope: Search scope (document, meeting, or global).
             scope_id: Scope identifier (document_id or meeting_id).
+            scope_ids: Multiple scope identifiers (takes precedence over scope_id).
             filters: Additional metadata filters.
             language: Response language (ja or en).
             user_id: User ID who initiated the Q&A.
@@ -85,20 +87,31 @@ class QAService:
         Raises:
             ValueError: If scope requires scope_id but none provided.
         """
+        # Support multiple scope IDs (takes precedence)
+        effective_scope_id = scope_id
+        if scope_ids and len(scope_ids) > 0:
+            # For now, use the first ID as the primary scope_id
+            # and add meeting.id__in filter for RAG search
+            effective_scope_id = scope_ids[0]
+            if filters is None:
+                filters = {}
+            filters["meeting.id__in"] = scope_ids
+
         # Validate scope_id
-        if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not scope_id:
-            raise ValueError(f"scope_id is required for scope={scope.value}")
+        if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not effective_scope_id:
+            raise ValueError(f"scope_id or scope_ids is required for scope={scope.value}")
 
         logger.info(
             f"Processing Q&A: question='{question[:50]}...', "
-            f"scope={scope.value}, scope_id={scope_id}"
+            f"scope={scope.value}, scope_id={effective_scope_id}, "
+            f"scope_ids={scope_ids}"
         )
 
         # Create ADK agent
         agent = create_qa_agent(
             model=self.model,
             scope=scope.value,
-            scope_id=scope_id,
+            scope_id=effective_scope_id,
             language=language,
         )
 
@@ -106,8 +119,9 @@ class QAService:
         agent_context = AgentToolContext(
             evidence_provider=self.evidence_provider,
             scope=scope.value,
-            scope_id=scope_id,
+            scope_id=effective_scope_id,
             language=language,
+            filters=filters,
         )
 
         # Create runner and execute
@@ -129,7 +143,7 @@ class QAService:
             question=question,
             answer=answer_text,
             scope=scope,
-            scope_id=scope_id,
+            scope_id=effective_scope_id,
             evidences=unique_evidences,
             created_at=datetime.utcnow(),
             created_by=user_id,
@@ -146,6 +160,7 @@ class QAService:
         question: str,
         scope: QAScope = QAScope.GLOBAL,
         scope_id: str | None = None,
+        scope_ids: list[str] | None = None,
         filters: dict[str, Any] | None = None,
         language: str = "ja",
         user_id: str | None = None,
@@ -158,6 +173,7 @@ class QAService:
             question: The user's question.
             scope: Search scope (document, meeting, or global).
             scope_id: Scope identifier (document_id or meeting_id).
+            scope_ids: Multiple scope identifiers (takes precedence over scope_id).
             filters: Additional metadata filters.
             language: Response language (ja or en).
             user_id: User ID who initiated the Q&A.
@@ -166,24 +182,33 @@ class QAService:
         Yields:
             QAStreamEvent objects with answer chunks and evidence.
         """
+        # Support multiple scope IDs (takes precedence)
+        effective_scope_id = scope_id
+        if scope_ids and len(scope_ids) > 0:
+            effective_scope_id = scope_ids[0]
+            if filters is None:
+                filters = {}
+            filters["meeting.id__in"] = scope_ids
+
         # Validate scope_id
-        if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not scope_id:
+        if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not effective_scope_id:
             yield QAStreamEvent(
                 type="error",
-                error=f"scope_id is required for scope={scope.value}",
+                error=f"scope_id or scope_ids is required for scope={scope.value}",
             )
             return
 
         logger.info(
             f"Processing streaming Q&A: question='{question[:50]}...', "
-            f"scope={scope.value}, scope_id={scope_id}"
+            f"scope={scope.value}, scope_id={effective_scope_id}, "
+            f"scope_ids={scope_ids}"
         )
 
         # Create ADK agent
         agent = create_qa_agent(
             model=self.model,
             scope=scope.value,
-            scope_id=scope_id,
+            scope_id=effective_scope_id,
             language=language,
         )
 
@@ -191,8 +216,9 @@ class QAService:
         agent_context = AgentToolContext(
             evidence_provider=self.evidence_provider,
             scope=scope.value,
-            scope_id=scope_id,
+            scope_id=effective_scope_id,
             language=language,
+            filters=filters,
         )
 
         # Create runner
