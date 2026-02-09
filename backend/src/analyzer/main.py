@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -9,6 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from analyzer.api.router import api_router, internal_router
 from analyzer.config import get_settings
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 
 def _configure_adk_environment(settings) -> None:
