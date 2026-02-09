@@ -80,8 +80,35 @@ def create_qa_agent(
         "en": "Respond in English. Use standard 3GPP terminology.",
     }
 
+    # Refusal instructions for insufficient search results
+    lang_refusal_instructions = {
+        "ja": """
+検索結果が0件、または関連性が低い場合:
+1. 「申し訳ございませんが、インデックス済みの寄書にはご質問に関する情報が
+   見つかりませんでした。」と明示してください
+2. 以下の提案を行ってください:
+   - 異なる技術用語やシノニムを試す
+   - より広い検索範囲を使用する
+   - 具体的な仕様書番号がわかれば含める
+3. **重要**: 事前学習知識から回答を生成しないでください
+4. 見つかった情報が限定的な場合は、その旨を明示してください
+""",
+        "en": """
+When search returns 0 results or low relevance:
+1. State clearly: "I apologize, but I could not find information about this
+   question in the indexed documents."
+2. Provide these suggestions:
+   - Try different technical terms or synonyms
+   - Use a broader search scope
+   - Include specific specification numbers if known
+3. **CRITICAL**: Do NOT generate answers from pre-trained knowledge
+4. If limited information is found, state this explicitly
+""",
+    }
+
     scope_text = scope_instructions.get(scope, scope_instructions["global"])
     lang_text = lang_instructions.get(language, lang_instructions["ja"])
+    refusal_text = lang_refusal_instructions.get(language, lang_refusal_instructions["ja"])
 
     # Scope-specific search instruction
     scope_search_instruction = ""
@@ -93,6 +120,20 @@ def create_qa_agent(
     instruction = f"""You are an expert analyst for 3GPP standardization documents.
 
 {scope_text}
+
+## CRITICAL CONSTRAINT: RAG-Only Responses
+
+**YOU MUST ONLY answer based on search results returned by the search_evidence tool.**
+
+This system has access to a specific set of indexed 3GPP documents. You MUST NOT:
+- Use pre-trained knowledge to answer questions about 3GPP specifications
+- Make assumptions about standards based on general knowledge
+- Provide technical information that was not found in the search results
+
+YOU MUST:
+- Base ALL answers exclusively on search_evidence results
+- Refuse to answer when search returns no results (count: 0) or insufficient results
+- Clearly state when information is not available in the indexed documents
 
 ## Instructions
 
@@ -116,18 +157,16 @@ def create_qa_agent(
 5. For complex questions, break them down into multiple searches
 {scope_search_instruction}
 
-## Important: Answer Based on Available Evidence
+## Handling Insufficient Search Results
 
-When presenting search results:
-- **Summarize what IS available** rather than focusing on what is NOT found
-- Do NOT assume the user needs a specific level of technical detail
+{refusal_text}
 
 ## Response Format
 
 {lang_text}
 
 Structure your response as:
-1. Direct answer to the question
+1. Direct answer to the question (ONLY if search results are sufficient)
 2. Supporting evidence with citations
 3. Any caveats or limitations in the available information
 
