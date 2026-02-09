@@ -53,15 +53,21 @@ async def search_evidence(
     # Build filters
     filters: dict[str, Any] = {}
 
+    # Merge ctx.filters first (contains additional filters like meeting.id__in for multi-meeting Q&A)
+    if ctx.filters:
+        filters.update(ctx.filters)
+
     # Apply scope filters (auto-inject based on agent configuration)
+    # Don't override meeting.id__in if it's already set from ctx.filters
     if ctx.scope_id:
-        if ctx.scope == "meeting":
+        if ctx.scope == "meeting" and "meeting.id__in" not in filters:
             filters["meeting_id"] = ctx.scope_id
         elif ctx.scope == "document":
             filters["document_id"] = ctx.scope_id
 
     # Apply meeting_id from context if set (for meeting-scoped agents)
-    if ctx.meeting_id:
+    # Don't override meeting.id__in if it's already set
+    if ctx.meeting_id and "meeting.id__in" not in filters:
         filters["meeting_id"] = ctx.meeting_id
 
     # Override with explicit filters if provided
