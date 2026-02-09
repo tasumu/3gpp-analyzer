@@ -44,7 +44,10 @@ def document_to_response(doc: Document) -> DocumentResponse:
 async def list_documents(
     current_user: CurrentUserDep,
     document_service: DocumentServiceDep,
-    meeting_id: str | None = Query(None, description="Filter by meeting ID"),
+    meeting_id: str | None = Query(None, description="Filter by single meeting ID"),
+    meeting_ids: str | None = Query(
+        None, description="Filter by multiple meeting IDs (comma-separated, takes precedence)"
+    ),
     status: DocumentStatus | None = Query(None, description="Filter by status"),
     document_type: DocumentType | None = Query(None, description="Filter by document type"),
     path_prefix: str | None = Query(None, description="Filter by FTP path prefix"),
@@ -58,9 +61,16 @@ async def list_documents(
     List documents with optional filters.
 
     Returns paginated list of documents with metadata.
+    Supports filtering by multiple meetings via comma-separated meeting_ids parameter.
     """
+    # Parse meeting_ids from comma-separated string
+    parsed_meeting_ids = None
+    if meeting_ids:
+        parsed_meeting_ids = [id.strip() for id in meeting_ids.split(",") if id.strip()]
+
     documents, total = await document_service.list_documents(
         meeting_id=meeting_id,
+        meeting_ids=parsed_meeting_ids,
         status=status,
         document_type=document_type,
         path_prefix=path_prefix,

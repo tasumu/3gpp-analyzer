@@ -45,6 +45,9 @@ class AgentToolContext:
     scope: str = "global"  # "document", "meeting", or "global"
     scope_id: str | None = None
 
+    # Additional metadata filters for RAG search
+    filters: dict | None = None
+
     # Track evidences used during execution
     used_evidences: list[Evidence] = field(default_factory=list)
 

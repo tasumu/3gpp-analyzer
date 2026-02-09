@@ -34,6 +34,10 @@ class QARequest(BaseModel):
         default=None,
         description="Scope identifier: document_id (scope=document) or meeting_id (scope=meeting)",
     )
+    scope_ids: list[str] | None = Field(
+        default=None,
+        description="Multiple scope identifiers (takes precedence over scope_id)",
+    )
     filters: dict[str, Any] | None = Field(
         default=None,
         description="Additional metadata filters for search",

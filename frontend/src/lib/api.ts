@@ -118,6 +118,7 @@ async function fetchApi<T>(
 
 export async function listDocuments(params?: {
   meeting_id?: string;
+  meeting_ids?: string[];
   status?: DocumentStatus;
   document_type?: DocumentType;
   path_prefix?: string;
@@ -126,7 +127,14 @@ export async function listDocuments(params?: {
   page_size?: number;
 }): Promise<DocumentListResponse> {
   const searchParams = new URLSearchParams();
-  if (params?.meeting_id) searchParams.set("meeting_id", params.meeting_id);
+
+  // Support multiple meeting IDs (takes precedence over single meeting_id)
+  if (params?.meeting_ids && params.meeting_ids.length > 0) {
+    searchParams.set("meeting_ids", params.meeting_ids.join(","));
+  } else if (params?.meeting_id) {
+    searchParams.set("meeting_id", params.meeting_id);
+  }
+
   if (params?.status) searchParams.set("status", params.status);
   if (params?.document_type) searchParams.set("document_type", params.document_type);
   if (params?.path_prefix) searchParams.set("path_prefix", params.path_prefix);
@@ -543,6 +551,7 @@ export async function createQAStream(
   question: string,
   scope: QAScope = "global",
   scopeId?: string,
+  scopeIds?: string[],
   language: AnalysisLanguage = "ja",
   sessionId?: string,
 ): Promise<EventSource> {
@@ -557,9 +566,14 @@ export async function createQAStream(
     language,
     token,
   });
-  if (scopeId) {
+
+  // Support multiple scope IDs (takes precedence over single scope_id)
+  if (scopeIds && scopeIds.length > 0) {
+    params.set("scope_ids", scopeIds.join(","));
+  } else if (scopeId) {
     params.set("scope_id", scopeId);
   }
+
   if (sessionId) {
     params.set("session_id", sessionId);
   }

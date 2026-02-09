@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DocumentList } from "@/components/DocumentList";
-import { MeetingSelector } from "@/components/MeetingSelector";
+import { MultipleMeetingSelector } from "@/components/MultipleMeetingSelector";
 import { useDocuments } from "@/lib/hooks/useDocuments";
 import { batchProcessDocuments, batchDeleteDocuments } from "@/lib/api";
 import type { DocumentStatus, DocumentType, BatchOperationResponse } from "@/lib/types";
@@ -25,7 +25,7 @@ const documentTypeOptions: { value: DocumentType | ""; label: string }[] = [
 ];
 
 export default function DocumentsPage() {
-  const [meetingId, setMeetingId] = useState<string | null>(null);
+  const [meetingIds, setMeetingIds] = useState<string[]>([]);
   const [status, setStatus] = useState<DocumentStatus | "">("");
   const [documentType, setDocumentType] = useState<DocumentType | "">("");
   const [pathPrefix, setPathPrefix] = useState<string>("");
@@ -52,7 +52,7 @@ export default function DocumentsPage() {
   } | null>(null);
 
   const { documents, total, isLoading, error, refresh } = useDocuments({
-    meeting_id: meetingId || undefined,
+    meeting_ids: meetingIds.length > 0 ? meetingIds : undefined,
     status: status || undefined,
     document_type: documentType || undefined,
     path_prefix: pathPrefix || undefined,
@@ -151,9 +151,10 @@ export default function DocumentsPage() {
       {/* Filters */}
       <div className="bg-white shadow-sm rounded-lg p-4">
         <div className="flex flex-wrap gap-4 items-center">
-          <MeetingSelector
-            selectedMeetingId={meetingId}
-            onSelect={setMeetingId}
+          <MultipleMeetingSelector
+            selectedMeetingIds={meetingIds}
+            onSelect={setMeetingIds}
+            maxSelections={2}
           />
 
           <div className="flex items-center space-x-2">

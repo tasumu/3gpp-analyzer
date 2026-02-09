@@ -96,7 +96,12 @@ class FirestoreClient:
 
         if filters:
             for field, value in filters.items():
-                query = query.where(field, "==", value)
+                # Support __in suffix for "in" queries (e.g., "meeting.id__in")
+                if field.endswith("__in"):
+                    actual_field = field.replace("__in", "")
+                    query = query.where(actual_field, "in", value)
+                else:
+                    query = query.where(field, "==", value)
 
         if range_filters:
             field = range_filters["field"]
@@ -120,7 +125,7 @@ class FirestoreClient:
         Count documents matching filters.
 
         Args:
-            filters: Equality filters as {field: value}.
+            filters: Equality filters as {field: value} or {field__in: [values]} for "in" queries.
             range_filters: Range filter as {field, start, end} for prefix matching.
 
         Returns:
@@ -130,7 +135,12 @@ class FirestoreClient:
 
         if filters:
             for field, value in filters.items():
-                query = query.where(field, "==", value)
+                # Support __in suffix for "in" queries (e.g., "meeting.id__in")
+                if field.endswith("__in"):
+                    actual_field = field.replace("__in", "")
+                    query = query.where(actual_field, "in", value)
+                else:
+                    query = query.where(field, "==", value)
 
         if range_filters:
             field = range_filters["field"]
