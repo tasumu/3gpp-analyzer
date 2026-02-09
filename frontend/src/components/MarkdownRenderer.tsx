@@ -75,11 +75,10 @@ export default function MarkdownRenderer({
         </button>
       )}
       <div
-        className="prose prose-sm max-w-none text-gray-700
+        className="prose prose-sm max-w-none
                    prose-headings:text-gray-900 prose-headings:font-semibold
-                   prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
-                   prose-p:leading-relaxed prose-p:my-2
-                   prose-ul:my-2 prose-ol:my-2
+                   prose-p:my-3 prose-p:leading-relaxed
+                   prose-ul:my-3 prose-ol:my-3
                    prose-li:my-1
                    prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline
                    prose-code:text-pink-600 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded
