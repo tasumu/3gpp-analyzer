@@ -74,7 +74,7 @@ from google import genai
 client = genai.Client(
     vertexai=True,
     project="your-project-id",
-    location="asia-northeast1",
+    location="global",
 )
 
 # Embedding生成

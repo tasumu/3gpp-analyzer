@@ -201,7 +201,7 @@ def get_meeting_service(
         project_id=settings.gcp_project_id,
         location=settings.vertex_ai_location,
         pro_model=settings.meeting_pro_model,
-        pro_model_location=settings.meeting_pro_model_location,
+        pro_model_location=settings.vertex_ai_location,
         strategy_version=settings.meeting_summary_strategy_version,
     )
 
@@ -222,7 +222,7 @@ def get_meeting_report_generator(
         firestore=firestore,
         storage=storage,
         project_id=settings.gcp_project_id,
-        location=settings.meeting_pro_model_location,
+        location=settings.vertex_ai_location,
         model=settings.meeting_pro_model,
         expiration_minutes=settings.review_sheet_expiration_minutes,
     )

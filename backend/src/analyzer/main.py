@@ -23,6 +23,9 @@ def _configure_adk_environment(settings) -> None:
 
     ADK expects specific environment variable names for Vertex AI configuration.
     This maps our settings to ADK's expected format.
+
+    Note: All Vertex AI services now use unified 'global' region (vertex_ai_location)
+    for better availability and consistency across all Gemini models.
     """
     if settings.gcp_project_id:
         os.environ.setdefault("GOOGLE_CLOUD_PROJECT", settings.gcp_project_id)
