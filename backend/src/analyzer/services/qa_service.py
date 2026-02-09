@@ -103,7 +103,11 @@ class QAService:
             effective_scope_id = scope_ids[0]
 
         # Validate scope_id
-        if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not effective_scope_id and not multi_meeting_mode:
+        if (
+            scope in (QAScope.DOCUMENT, QAScope.MEETING)
+            and not effective_scope_id
+            and not multi_meeting_mode
+        ):
             raise ValueError(f"scope_id or scope_ids is required for scope={scope.value}")
 
         logger.info(
@@ -205,7 +209,11 @@ class QAService:
             effective_scope_id = scope_ids[0]
 
         # Validate scope_id
-        if scope in (QAScope.DOCUMENT, QAScope.MEETING) and not effective_scope_id and not multi_meeting_mode:
+        if (
+            scope in (QAScope.DOCUMENT, QAScope.MEETING)
+            and not effective_scope_id
+            and not multi_meeting_mode
+        ):
             yield QAStreamEvent(
                 type="error",
                 error=f"scope_id or scope_ids is required for scope={scope.value}",

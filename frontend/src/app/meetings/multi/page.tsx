@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
 import { DocumentSummaryCard } from "@/components/DocumentSummaryCard";
@@ -28,7 +28,7 @@ interface MultiMeetingSummaryProgress {
   totalDocuments?: number;
 }
 
-export default function MultiMeetingPage() {
+function MultiMeetingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const meetingIds = useMemo(
@@ -227,12 +227,18 @@ export default function MultiMeetingPage() {
 
           <div className="space-y-4">
             {/* Custom Analysis Prompt */}
-            <SavedPromptSelector
-              value={analysisPrompt}
-              onChange={setAnalysisPrompt}
-              label="Custom Analysis Prompt"
-              description="Focus the analysis on specific aspects (e.g., 'Focus on security implications')"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Custom Analysis Prompt
+              </label>
+              <p className="text-sm text-gray-500 mb-2">
+                Focus the analysis on specific aspects (e.g., &apos;Focus on security implications&apos;)
+              </p>
+              <SavedPromptSelector
+                value={analysisPrompt}
+                onChange={setAnalysisPrompt}
+              />
+            </div>
 
             {/* Language */}
             <div>
@@ -402,5 +408,17 @@ export default function MultiMeetingPage() {
         )}
       </div>
     </AuthGuard>
+  );
+}
+
+export default function MultiMeetingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    }>
+      <MultiMeetingPageContent />
+    </Suspense>
   );
 }
