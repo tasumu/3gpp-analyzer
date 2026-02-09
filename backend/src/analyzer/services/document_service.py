@@ -52,6 +52,7 @@ class DocumentService:
         contribution_number: str | None = None,
         document_type: DocumentType | None = None,
         path_prefix: str | None = None,
+        search_text: str | None = None,
         page: int = 1,
         page_size: int = 50,
     ) -> tuple[list[Document], int]:
@@ -64,6 +65,7 @@ class DocumentService:
             contribution_number: Filter by contribution number.
             document_type: Filter by document type (contribution, other).
             path_prefix: Filter by FTP path prefix (e.g., "/Specs/latest/Rel-20").
+            search_text: Search documents by filename (case-insensitive partial match).
             page: Page number (1-indexed).
             page_size: Items per page.
 
@@ -89,18 +91,36 @@ class DocumentService:
                 "end": path_prefix + "\uffff",
             }
 
-        # Get total count
-        total = await self.firestore.count_documents(filters, range_filters=range_filters)
+        # Determine fetch limit based on search_text
+        # When searching, fetch more documents to filter in Python
+        fetch_limit = 2000 if search_text else page_size
+        fetch_offset = 0 if search_text else (page - 1) * page_size
 
-        # Get paginated results
-        offset = (page - 1) * page_size
+        # Get documents from Firestore
         docs_data = await self.firestore.list_documents(
             filters=filters,
             range_filters=range_filters,
             order_by="updated_at",
-            limit=page_size,
-            offset=offset,
+            limit=fetch_limit,
+            offset=fetch_offset,
         )
+
+        # Filter by filename if search_text is provided
+        if search_text:
+            search_lower = search_text.lower()
+            filtered_docs = [
+                doc
+                for doc in docs_data
+                if search_lower in doc.get("source_file", {}).get("filename", "").lower()
+            ]
+
+            # Calculate total and paginate manually
+            total = len(filtered_docs)
+            offset = (page - 1) * page_size
+            docs_data = filtered_docs[offset : offset + page_size]
+        else:
+            # Use Firestore count for non-search queries
+            total = await self.firestore.count_documents(filters, range_filters=range_filters)
 
         documents = [Document.from_firestore(d["id"], d) for d in docs_data]
 

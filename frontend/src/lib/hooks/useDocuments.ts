@@ -9,6 +9,7 @@ interface UseDocumentsOptions {
   status?: DocumentStatus;
   document_type?: DocumentType;
   path_prefix?: string;
+  search_text?: string;
   page?: number;
   page_size?: number;
 }
@@ -24,10 +25,10 @@ interface UseDocumentsResult {
 }
 
 export function useDocuments(options: UseDocumentsOptions = {}): UseDocumentsResult {
-  const { meeting_id, status, document_type, path_prefix, page = 1, page_size = 50 } = options;
+  const { meeting_id, status, document_type, path_prefix, search_text, page = 1, page_size = 50 } = options;
 
   // Create a stable cache key based on parameters
-  const cacheKey = ["documents", meeting_id, status, document_type, path_prefix, page, page_size].filter(Boolean).join("-");
+  const cacheKey = ["documents", meeting_id, status, document_type, path_prefix, search_text, page, page_size].filter(Boolean).join("-");
 
   const { data, error, isLoading, mutate } = useSWR(
     cacheKey,
@@ -37,6 +38,7 @@ export function useDocuments(options: UseDocumentsOptions = {}): UseDocumentsRes
         status,
         document_type,
         path_prefix,
+        search_text,
         page,
         page_size,
       }),
