@@ -29,6 +29,9 @@ import type {
   MeetingsResponse,
   MeetingSummarizeRequest,
   MeetingSummary,
+  MultiMeetingInfo,
+  MultiMeetingSummarizeRequest,
+  MultiMeetingSummary,
   ProcessRequest,
   QARequest,
   QAResult,
@@ -716,6 +719,64 @@ export async function listMeetingReports(
   return fetchApi<MeetingReportResponse[]>(
     `/meetings/${encodeURIComponent(meetingId)}/reports?limit=${limit}`,
   );
+}
+
+// Multi-Meeting API Functions (Phase B)
+export async function summarizeMultipleMeetings(
+  request: MultiMeetingSummarizeRequest,
+): Promise<MultiMeetingSummary> {
+  return fetchApi<MultiMeetingSummary>("/meetings/multi/summarize", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export async function createMultiMeetingSummarizeStream(
+  meetingIds: string[],
+  options?: {
+    analysisPrompt?: string;
+    reportPrompt?: string;
+    language?: AnalysisLanguage;
+    force?: boolean;
+  },
+): Promise<EventSource> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error("Authentication required for SSE connection");
+  }
+
+  const { analysisPrompt, reportPrompt, language = "ja", force = false } = options || {};
+
+  const params = new URLSearchParams({
+    meeting_ids: meetingIds.join(","),
+    language,
+    force: force.toString(),
+    token,
+  });
+  if (analysisPrompt) {
+    params.set("analysis_prompt", analysisPrompt);
+  }
+  if (reportPrompt) {
+    params.set("report_prompt", reportPrompt);
+  }
+
+  const url = `${API_BASE}/meetings/multi/summarize/stream?${params.toString()}`;
+  return new FetchEventSource(url) as unknown as EventSource;
+}
+
+export async function getMultipleMeetingInfo(
+  meetingIds: string[],
+): Promise<MultiMeetingInfo> {
+  const infos = await Promise.all(
+    meetingIds.map((id) => getMeetingInfo(id)),
+  );
+
+  return {
+    meeting_infos: infos,
+    total_documents: infos.reduce((sum, info) => sum + info.total_documents, 0),
+    total_indexed_documents: infos.reduce((sum, info) => sum + info.indexed_documents, 0),
+    ready_for_analysis: infos.every((info) => info.ready_for_analysis),
+  };
 }
 
 export { ApiError };
