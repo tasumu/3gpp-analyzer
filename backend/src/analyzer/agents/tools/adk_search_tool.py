@@ -53,7 +53,8 @@ async def search_evidence(
     # Build filters
     filters: dict[str, Any] = {}
 
-    # Merge ctx.filters first (contains additional filters like meeting.id__in for multi-meeting Q&A)
+    # Merge ctx.filters first (contains additional filters like meeting.id__in
+    # for multi-meeting Q&A)
     if ctx.filters:
         filters.update(ctx.filters)
 
