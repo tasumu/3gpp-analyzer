@@ -2,10 +2,16 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    // Helper function to check if user is approved
+    function isApprovedUser() {
+      return request.auth != null &&
+             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+
     // Original documents (from FTP)
     match /original/{allPaths=**} {
-      // Allow read for authenticated users
-      allow read: if request.auth != null;
+      // Allow read only for approved users
+      allow read: if isApprovedUser();
 
       // Allow write only from backend (admin SDK)
       allow write: if false;
@@ -13,8 +19,8 @@ service firebase.storage {
 
     // Normalized documents (docx)
     match /normalized/{allPaths=**} {
-      // Allow read for authenticated users
-      allow read: if request.auth != null;
+      // Allow read only for approved users
+      allow read: if isApprovedUser();
 
       // Allow write only from backend (admin SDK)
       allow write: if false;
@@ -22,8 +28,8 @@ service firebase.storage {
 
     // Output files (review sheets, etc.)
     match /outputs/{allPaths=**} {
-      // Allow read for authenticated users
-      allow read: if request.auth != null;
+      // Allow read only for approved users
+      allow read: if isApprovedUser();
 
       // Allow write only from backend (admin SDK)
       allow write: if false;

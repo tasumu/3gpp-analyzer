@@ -319,3 +319,250 @@ url = blob.generate_signed_url(
     access_token=credentials.token,
 )
 ```
+
+---
+
+## セキュリティ設定（本番デプロイ前に必須）
+
+本番環境への公開前に、以下のセキュリティ設定を必ず実施してください。
+
+### 1. 環境変数の本番設定
+
+```bash
+# DEBUGを必ずfalseに設定（本番環境）
+gcloud run services update 3gpp-analyzer-api \
+  --region asia-northeast1 \
+  --set-env-vars "DEBUG=false"
+
+# CORS originsを本番URLのみに制限（localhostを除外）
+gcloud run services update 3gpp-analyzer-api \
+  --region asia-northeast1 \
+  --update-env-vars='^|^CORS_ORIGINS_STR=https://your-production-frontend.hosted.app'
+```
+
+> **重要**: 本番環境では `CORS_ORIGINS_STR` に `localhost` を含めないでください。ローカル開発環境と本番環境で異なる設定を使用します。
+
+### 2. Firestore/Storage ルールのデプロイ
+
+承認ステータスチェックを含む最新のルールをデプロイ：
+
+```bash
+# ルールを本番環境にデプロイ
+firebase deploy --only firestore:rules,storage
+
+# デプロイ結果を確認
+firebase firestore:rules:get
+```
+
+### 3. 依存パッケージのインストールとセキュリティスキャン
+
+```bash
+# バックエンドの依存パッケージをインストール
+cd backend
+uv sync
+
+# セキュリティ脆弱性スキャン（オプション）
+# pip install safety
+# uv pip freeze | safety check --stdin
+```
+
+### 4. デプロイ前チェックリスト
+
+以下の項目をすべて確認してからデプロイしてください：
+
+- [ ] **DEBUG=false** が設定されている
+- [ ] **CORS origins** が本番URLのみに制限されている（localhostを含まない）
+- [ ] **Firestore/Storage ルール**が承認チェックを含む最新版
+- [ ] **セキュリティヘッダー**が frontend/next.config.ts に設定されている
+- [ ] **Rate limiting**が有効化されている（backend/src/analyzer/middleware/rate_limit.py）
+- [ ] **機密情報のログマスク**が有効化されている（backend/src/analyzer/logging_config.py）
+- [ ] **AdminUserDep**が internal API エンドポイントで使用されている
+- [ ] **INITIAL_ADMIN_EMAILS**が Secret Manager に設定されている（推奨）
+
+### 5. デプロイ後の検証
+
+#### 5.1 セキュリティヘッダーの確認
+
+```bash
+# フロントエンドのセキュリティヘッダーを確認
+curl -I https://your-frontend.hosted.app
+
+# 必須ヘッダー:
+# - Strict-Transport-Security
+# - X-Content-Type-Options: nosniff
+# - X-Frame-Options: DENY
+# - Content-Security-Policy
+# - Permissions-Policy
+```
+
+#### 5.2 CORS設定の確認
+
+```bash
+# CORSプリフライトリクエストをテスト
+curl -X OPTIONS https://your-api.run.app/api/documents \
+  -H "Origin: https://your-frontend.hosted.app" \
+  -H "Access-Control-Request-Method: GET" \
+  -H "Access-Control-Request-Headers: Authorization" \
+  -v
+
+# 期待される結果:
+# - Access-Control-Allow-Origin: https://your-frontend.hosted.app
+# - Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+# - Access-Control-Allow-Headers に Authorization が含まれる
+```
+
+#### 5.3 認証・認可のテスト
+
+```bash
+# 1. 無効なトークンでアクセス → 401 Unauthorized
+curl https://your-api.run.app/api/documents \
+  -H "Authorization: Bearer invalid_token"
+
+# 2. 認証なしでアクセス → 401 Unauthorized
+curl https://your-api.run.app/api/documents
+
+# 3. pending ユーザーでアクセス → 403 Forbidden
+# (実際のユーザーでテスト)
+
+# 4. approved ユーザーでアクセス → 200 OK
+# (実際のユーザーでテスト)
+```
+
+#### 5.4 Storage Rulesのテスト
+
+```bash
+# Firebase Console → Firestore → Rules タブ
+# Rules Playground でテスト:
+
+# Test 1: pending ユーザーが /original/* を読む → Denied
+# Test 2: approved ユーザーが /original/* を読む → Allowed
+# Test 3: 認証なしで読む → Denied
+```
+
+#### 5.5 Rate Limitingのテスト
+
+```bash
+# 短時間に大量のリクエストを送信してテスト
+for i in {1..20}; do
+  curl https://your-api.run.app/api/documents \
+    -H "Authorization: Bearer $TOKEN"
+done
+
+# 期待される結果:
+# - 初期のリクエストは成功（200 OK）
+# - 制限を超えると 429 Too Many Requests が返される
+```
+
+### 6. 監視とアラート
+
+本番環境では以下の監視を設定することを推奨します：
+
+#### Cloud Logging でのログ監視
+
+```bash
+# エラーログの確認
+gcloud logging read "resource.type=cloud_run_revision \
+  AND resource.labels.service_name=3gpp-analyzer-api \
+  AND severity>=ERROR" \
+  --limit=50 \
+  --format=json
+
+# 認証失敗のログ確認
+gcloud logging read "resource.type=cloud_run_revision \
+  AND resource.labels.service_name=3gpp-analyzer-api \
+  AND textPayload=~'Unauthorized'" \
+  --limit=50
+
+# 機密情報がマスクされていることを確認
+gcloud logging read "resource.type=cloud_run_revision \
+  AND resource.labels.service_name=3gpp-analyzer-api" \
+  --limit=100 | grep -i "password\|token\|api_key"
+# 期待される結果: ***REDACTED*** のみ表示される
+```
+
+#### Cloud Monitoring アラート（オプション）
+
+以下のアラートを設定することを推奨：
+
+1. **高エラーレート**: エラーレート > 5%
+2. **高レイテンシ**: P99 レイテンシ > 10秒
+3. **認証失敗の急増**: 認証失敗が急激に増加
+4. **Rate limit 超過**: 429エラーの急増
+
+### 7. セキュリティベストプラクティス
+
+#### 定期的なセキュリティレビュー
+
+- **月次**: 依存パッケージの脆弱性スキャン
+- **四半期**: アクセスログの監査
+- **重要な変更前**: セキュリティレビューの実施
+
+#### 依存パッケージの更新
+
+```bash
+# バックエンド
+cd backend
+uv lock --upgrade
+
+# フロントエンド
+cd frontend
+npm update
+npm audit fix
+```
+
+#### Secret Rotation
+
+初期Admin メールアドレス等の機密情報は定期的にローテーションすることを推奨：
+
+```bash
+# Secret Manager の値を更新
+echo -n "new-admin@example.com" | \
+  gcloud secrets versions add initial-admin-emails --data-file=-
+
+# Cloud Run を再起動して新しいシークレットを読み込み
+gcloud run services update 3gpp-analyzer-api \
+  --region asia-northeast1
+```
+
+---
+
+## トラブルシューティング（セキュリティ関連）
+
+### Rate Limiting で正常なユーザーがブロックされる
+
+**症状**: 正常な使用でも 429 Too Many Requests が返される
+
+**解決方法**:
+```python
+# backend/src/analyzer/middleware/rate_limit.py のレート制限を調整
+limiter = Limiter(
+    key_func=get_rate_limit_key,
+    default_limits=["600/minute"],  # 10 req/sec に緩和
+    storage_uri="memory://",
+)
+```
+
+### CSP エラーでフロントエンドが動作しない
+
+**症状**: ブラウザコンソールに Content Security Policy エラー
+
+**解決方法**:
+```typescript
+// frontend/next.config.ts の CSP を調整
+// connect-src にAPIのドメインを追加
+"connect-src 'self' https://*.run.app https://your-specific-api.run.app",
+```
+
+### Storage Rules でファイルアクセスができない
+
+**症状**: approved ユーザーでもファイルダウンロードが失敗
+
+**解決方法**:
+```bash
+# Firestore の users コレクションを確認
+firebase firestore:get users/{uid}
+
+# status が "approved" であることを確認
+# 必要に応じて手動で更新
+firebase firestore:update users/{uid} --data '{"status":"approved"}'
+```
