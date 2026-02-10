@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 
 from analyzer.auth import (
     AuthenticatedUser,
@@ -11,6 +11,7 @@ from analyzer.auth import (
     get_current_user_no_approval_check,
 )
 from analyzer.config import Settings, get_settings
+from analyzer.models.user import User, UserRole
 from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.providers.firestore_provider import FirestoreEvidenceProvider
@@ -258,3 +259,25 @@ UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 # Authentication dependencies
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
 CurrentUserNoApprovalDep = Annotated[AuthenticatedUser, Depends(get_current_user_no_approval_check)]
+
+
+async def require_admin(
+    current_user: CurrentUserDep,
+    user_service: UserServiceDep,
+) -> User:
+    """
+    Require admin privileges.
+
+    Raises:
+        HTTPException: 403 if user is not an admin
+    """
+    user = await user_service.get_user(current_user.uid)
+    if not user or user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin privileges required",
+        )
+    return user
+
+
+AdminUserDep = Annotated[User, Depends(require_admin)]
