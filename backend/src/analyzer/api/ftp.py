@@ -7,7 +7,6 @@ from typing import AsyncIterator
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from analyzer.auth import verify_firebase_token
 from analyzer.dependencies import CurrentUserDep, FTPSyncServiceDep
 from analyzer.models.api import (
     FTPBrowseResponse,
@@ -96,16 +95,15 @@ async def start_sync(
 async def stream_sync_progress(
     sync_id: str,
     ftp_service: FTPSyncServiceDep,
-    token: str = Query(..., description="Firebase ID token for SSE authentication"),
+    current_user: CurrentUserDep,
 ):
     """
     Stream sync progress via Server-Sent Events.
 
     Starts the actual sync operation and streams progress updates.
-    Requires token as query parameter since EventSource cannot set headers.
+    Requires Authorization header with Bearer token.
     """
-    # Verify authentication via query parameter (SSE cannot use headers)
-    await verify_firebase_token(token)
+    # Authentication handled by CurrentUserDep
 
     if sync_id not in _active_syncs:
         raise HTTPException(status_code=404, detail="Sync operation not found")

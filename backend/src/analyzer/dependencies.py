@@ -8,7 +8,6 @@ from fastapi import Depends
 from analyzer.auth import (
     AuthenticatedUser,
     get_current_user,
-    get_current_user_from_query,
     get_current_user_no_approval_check,
 )
 from analyzer.config import Settings, get_settings
@@ -258,5 +257,4 @@ UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 
 # Authentication dependencies
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
-CurrentUserQueryDep = Annotated[AuthenticatedUser, Depends(get_current_user_from_query)]
 CurrentUserNoApprovalDep = Annotated[AuthenticatedUser, Depends(get_current_user_no_approval_check)]

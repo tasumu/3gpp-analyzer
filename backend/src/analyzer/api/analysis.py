@@ -11,7 +11,6 @@ from sse_starlette.sse import EventSourceResponse
 from analyzer.dependencies import (
     AnalysisServiceDep,
     CurrentUserDep,
-    CurrentUserQueryDep,
     DocumentServiceDep,
     ReviewSheetGeneratorDep,
 )
@@ -137,13 +136,14 @@ async def get_analysis(
 @router.get("/analysis/{analysis_id}/stream")
 async def stream_analysis(
     analysis_id: str,
-    current_user: CurrentUserQueryDep,
+    current_user: CurrentUserDep,
     analysis_service: AnalysisServiceDep,
 ):
     """
     Stream analysis progress via SSE.
 
     Use this endpoint after POST /analysis to monitor progress.
+    Requires Authorization header with Bearer token.
     Events: progress, partial, complete, error
     """
 
