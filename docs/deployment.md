@@ -59,7 +59,7 @@ Cloud Run から GCS の署名URL を生成するために、サービスアカ�
 
 ```bash
 # Cloud Run のサービスアカウントを取得
-SERVICE_ACCOUNT=$(gcloud run services describe 3gpp-analyzer-api \
+SERVICE_ACCOUNT=$(gcloud run services describe your-backend-service \
   --region asia-northeast1 \
   --format='value(spec.template.spec.serviceAccountName)')
 
@@ -90,12 +90,12 @@ Cloud Run の継続的デプロイ機能を使用します。`cloudbuild.yaml` �
 3. 「Cloud Build の設定」をクリック
 4. GitHub リポジトリを接続（初回のみ認証が必要）
 5. 設定:
-   - リポジトリ: `3gpp-analyzer`
+   - リポジトリ: `your-repository-name`
    - ブランチ: `^main$`
    - ソースの場所: `/backend/Dockerfile`
    - ビルドタイプ: Dockerfile
 6. サービス設定:
-   - サービス名: `3gpp-analyzer-api`
+   - サービス名: `your-backend-service`
    - リージョン: `asia-northeast1`
    - 認証: 「未認証の呼び出しを許可」
 7. 「作成」をクリック
@@ -108,7 +108,7 @@ Cloud Run の継続的デプロイ機能を使用します。`cloudbuild.yaml` �
 # フロントエンドURLを取得（App Hosting デプロイ後）
 # Firebase Console → App Hosting → URL を確認
 
-gcloud run services update 3gpp-analyzer-api \
+gcloud run services update your-backend-service \
   --region asia-northeast1 \
   --memory 1Gi \
   --cpu 1 \
@@ -151,7 +151,7 @@ gcloud secrets add-iam-policy-binding initial-admin-emails \
   --role="roles/secretmanager.secretAccessor"
 
 # Cloud Runサービスにシークレットをマウント
-gcloud run services update 3gpp-analyzer-api \
+gcloud run services update your-backend-service \
   --region asia-northeast1 \
   --update-secrets="INITIAL_ADMIN_EMAILS=initial-admin-emails:latest"
 ```
@@ -167,7 +167,7 @@ gcloud run services update 3gpp-analyzer-api \
 
 ```bash
 # 環境変数を直接更新
-gcloud run services update 3gpp-analyzer-api \
+gcloud run services update your-backend-service \
   --region asia-northeast1 \
   --update-env-vars='^|^INITIAL_ADMIN_EMAILS=admin@example.com,admin2@example.com'
 
@@ -194,7 +194,7 @@ echo -n "admin@example.com,admin2@example.com" | \
 
 ```bash
 # Cloud Run URL 取得
-BACKEND_URL=$(gcloud run services describe 3gpp-analyzer-api \
+BACKEND_URL=$(gcloud run services describe your-backend-service \
   --region asia-northeast1 \
   --format='value(status.url)')
 
@@ -206,7 +206,7 @@ Cloud Secret Manager に API URL を設定:
 ```bash
 # Firebase CLI でシークレット作成
 # 改行文字が入らないよう printf を使用
-printf 'https://3gpp-analyzer-api-xxxxx-an.a.run.app/api' | firebase apphosting:secrets:set api-url --force
+printf 'https://your-backend-service-xxxxx-region.a.run.app/api' | firebase apphosting:secrets:set api-url --force
 
 # バックエンドにシークレットへのアクセス権限を付与
 firebase apphosting:secrets:grantaccess api-url --backend <バックエンド名>
@@ -239,7 +239,7 @@ GitHub (main branch)
 
 ```bash
 cd backend
-gcloud run deploy 3gpp-analyzer-api \
+gcloud run deploy your-backend-service \
   --source . \
   --region asia-northeast1 \
   --allow-unauthenticated
@@ -262,7 +262,7 @@ gcloud builds list --limit=5
 gcloud builds log BUILD_ID
 
 # サービスログ確認
-gcloud run services logs read 3gpp-analyzer-api --region asia-northeast1 --limit=50
+gcloud run services logs read your-backend-service --region asia-northeast1 --limit=50
 ```
 
 ### FTP 接続エラー
@@ -332,23 +332,23 @@ url = blob.generate_signed_url(
 
 ```bash
 # 方法1: update-env-varsで個別に更新（推奨）
-gcloud run services update gpp-analyzer-backend \
+gcloud run services update your-backend-service \
   --region asia-northeast1 \
   --update-env-vars "DEBUG=false"
 
-gcloud run services update gpp-analyzer-backend \
+gcloud run services update your-backend-service \
   --region asia-northeast1 \
   --update-env-vars='^|^CORS_ORIGINS_STR=https://your-production-frontend.hosted.app'
 
 # 方法2: set-env-varsですべての環境変数を一度に設定
 # ⚠️ この方法では全ての必要な環境変数を指定する必要があります
-gcloud run services update gpp-analyzer-backend \
+gcloud run services update your-backend-service \
   --region asia-northeast1 \
   --set-env-vars "\
 DEBUG=false,\
 CORS_ORIGINS_STR=https://your-production-frontend.hosted.app,\
-GCP_PROJECT_ID=gpp-analyzer,\
-GCS_BUCKET_NAME=gpp-analyzer-3gpp-documents,\
+GCP_PROJECT_ID=your-project-id,\
+GCS_BUCKET_NAME=your-project-id-3gpp-documents,\
 USE_FIREBASE_EMULATOR=false,\
 FTP_MOCK_MODE=false,\
 VERTEX_AI_LOCATION=global,\
@@ -358,7 +358,7 @@ REVIEW_SHEET_EXPIRATION_MINUTES=60,\
 INITIAL_ADMIN_EMAILS=admin@example.com"
 
 # 設定を確認
-gcloud run services describe gpp-analyzer-backend \
+gcloud run services describe your-backend-service \
   --region asia-northeast1 \
   --format="yaml" | grep -A 20 "env:"
 ```
@@ -495,20 +495,20 @@ done
 ```bash
 # エラーログの確認
 gcloud logging read "resource.type=cloud_run_revision \
-  AND resource.labels.service_name=3gpp-analyzer-api \
+  AND resource.labels.service_name=your-backend-service \
   AND severity>=ERROR" \
   --limit=50 \
   --format=json
 
 # 認証失敗のログ確認
 gcloud logging read "resource.type=cloud_run_revision \
-  AND resource.labels.service_name=3gpp-analyzer-api \
+  AND resource.labels.service_name=your-backend-service \
   AND textPayload=~'Unauthorized'" \
   --limit=50
 
 # 機密情報がマスクされていることを確認
 gcloud logging read "resource.type=cloud_run_revision \
-  AND resource.labels.service_name=3gpp-analyzer-api" \
+  AND resource.labels.service_name=your-backend-service" \
   --limit=100 | grep -i "password\|token\|api_key"
 # 期待される結果: ***REDACTED*** のみ表示される
 ```
@@ -553,7 +553,7 @@ echo -n "new-admin@example.com" | \
   gcloud secrets versions add initial-admin-emails --data-file=-
 
 # Cloud Run を再起動して新しいシークレットを読み込み
-gcloud run services update 3gpp-analyzer-api \
+gcloud run services update your-backend-service \
   --region asia-northeast1
 ```
 
