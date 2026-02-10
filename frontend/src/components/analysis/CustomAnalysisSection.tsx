@@ -14,6 +14,7 @@ import type {
   CustomPrompt,
 } from "@/lib/types";
 import { isCustomAnalysis } from "@/lib/types";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 interface CustomAnalysisSectionProps {
   documentId: string;
@@ -242,10 +243,8 @@ export function CustomAnalysisSection({
       {/* Result Display */}
       {customResult && (
         <div className="p-4 bg-white border border-gray-200 rounded-lg">
-          <h4 className="font-medium text-gray-900 mb-2">Result</h4>
-          <div className="text-sm text-gray-700 whitespace-pre-wrap">
-            {customResult.answer}
-          </div>
+          <h4 className="font-medium text-gray-900 mb-3">Result</h4>
+          <MarkdownRenderer content={customResult.answer} />
         </div>
       )}
     </div>
