@@ -264,27 +264,47 @@ class DocumentService:
         """
         Get list of unique meetings with document counts.
 
-        Returns:
-            List of meeting info dicts.
-        """
-        # Get all documents and aggregate by meeting
-        docs = await self.firestore.list_documents(limit=10000)
+        Fetches ALL documents in batches to ensure accurate counts.
 
+        Returns:
+            List of meeting info dicts with accurate document_count and indexed_count.
+        """
         meetings = {}
-        for doc in docs:
-            meeting = doc.get("meeting")
-            if meeting:
-                meeting_id = meeting.get("id")
-                if meeting_id not in meetings:
-                    meetings[meeting_id] = {
-                        "id": meeting_id,
-                        "name": meeting.get("name"),
-                        "working_group": meeting.get("working_group"),
-                        "document_count": 0,
-                        "indexed_count": 0,
-                    }
-                meetings[meeting_id]["document_count"] += 1
-                if doc.get("status") == DocumentStatus.INDEXED.value:
-                    meetings[meeting_id]["indexed_count"] += 1
+        batch_size = 5000
+        offset = 0
+
+        while True:
+            # Fetch documents in batches
+            batch = await self.firestore.list_documents(
+                limit=batch_size,
+                offset=offset,
+            )
+
+            if not batch:
+                break
+
+            # Aggregate counts from this batch
+            for doc in batch:
+                meeting = doc.get("meeting")
+                if meeting:
+                    meeting_id = meeting.get("id")
+                    if meeting_id not in meetings:
+                        meetings[meeting_id] = {
+                            "id": meeting_id,
+                            "name": meeting.get("name"),
+                            "working_group": meeting.get("working_group"),
+                            "document_count": 0,
+                            "indexed_count": 0,
+                        }
+                    meetings[meeting_id]["document_count"] += 1
+                    if doc.get("status") == DocumentStatus.INDEXED.value:
+                        meetings[meeting_id]["indexed_count"] += 1
+
+            # Move to next batch
+            offset += batch_size
+
+            # Stop if we got fewer results than requested (last batch)
+            if len(batch) < batch_size:
+                break
 
         return list(meetings.values())
