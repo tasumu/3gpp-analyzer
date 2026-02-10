@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from fastapi import HTTPException, Query, Security, status
+from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth
 
@@ -144,5 +144,3 @@ async def get_current_user(
 
     # Approved users only pass through
     return auth_user
-
-
