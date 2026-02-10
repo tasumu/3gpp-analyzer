@@ -55,8 +55,62 @@ npm run lint     # Lint
 ## Infrastructure
 
 - Database: Firestore (NoSQL + Vector Search)
-- Storage: Google Cloud Storage
+- Storage: **Cloud Storage (GCS)** - Direct access via google-cloud-storage SDK
 - Auth: Firebase Auth
 - LLM: Google Vertex AI (Gemini)
 - Deployment: Cloud Run (backend), Firebase App Hosting (frontend)
 - Local dev: Firebase Emulator Suite (port 4000 for UI)
+
+## Critical Notes
+
+### Storage Architecture (IMPORTANT)
+
+**This project uses Cloud Storage (GCS) directly, NOT Firebase Storage:**
+
+- **Access method**: Backend uses `google-cloud-storage` SDK for direct GCS access
+- **Access control**: Implemented in backend API with user approval checks (see `analyzer.auth.get_current_user`)
+- **File sharing**: Backend generates signed URLs with expiration for frontend access
+- **Storage Rules**: `storage.rules` file exists but is NOT used (Firebase Storage is not enabled in `firebase.json`)
+
+**DO NOT:**
+- ❌ Deploy storage.rules with `firebase deploy --only storage` (Firebase Storage is not configured)
+- ❌ Implement access control in storage.rules (won't be applied)
+- ❌ Assume Firebase Storage SDK is used in frontend
+
+**DO:**
+- ✅ Implement access control in backend API endpoints
+- ✅ Use `CurrentUserDep` for approval checks in all protected endpoints
+- ✅ Generate signed URLs for temporary file access
+
+### gcloud Environment Variables (IMPORTANT)
+
+**When updating Cloud Run environment variables:**
+
+```bash
+# ❌ WRONG - Overwrites all existing variables
+gcloud run services update SERVICE_NAME --set-env-vars "NEW_VAR=value"
+
+# ✅ CORRECT - Updates only specified variables
+gcloud run services update SERVICE_NAME --update-env-vars "NEW_VAR=value"
+
+# ✅ CORRECT - Sets all variables at once (if you have the complete list)
+gcloud run services update SERVICE_NAME --set-env-vars "VAR1=val1,VAR2=val2,VAR3=val3"
+```
+
+**Always verify after update:**
+```bash
+gcloud run services describe SERVICE_NAME --region REGION --format="yaml" | grep -A 20 "env:"
+```
+
+**Current required environment variables for gpp-analyzer-backend:**
+- DEBUG (false for production)
+- CORS_ORIGINS_STR
+- GCP_PROJECT_ID
+- GCS_BUCKET_NAME
+- USE_FIREBASE_EMULATOR
+- FTP_MOCK_MODE
+- VERTEX_AI_LOCATION
+- ANALYSIS_MODEL
+- ANALYSIS_STRATEGY_VERSION
+- REVIEW_SHEET_EXPIRATION_MINUTES
+- INITIAL_ADMIN_EMAILS
