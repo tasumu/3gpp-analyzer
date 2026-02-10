@@ -65,11 +65,38 @@ async def verify_firebase_token(token: str) -> AuthenticatedUser:
         )
 
 
+async def get_current_user_no_approval_check(
+    credentials: HTTPAuthorizationCredentials | None = Security(_security),
+) -> AuthenticatedUser:
+    """
+    FastAPI dependency for extracting authenticated user without approval check.
+
+    Used for endpoints that need Firebase authentication but not approval status check
+    (e.g., /auth/register).
+
+    Usage:
+        @router.post("/auth/register")
+        async def register(current_user: CurrentUserNoApprovalDep):
+            return {"user_id": current_user.uid}
+    """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return await verify_firebase_token(credentials.credentials)
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Security(_security),
 ) -> AuthenticatedUser:
     """
     FastAPI dependency for extracting authenticated user from Authorization header.
+
+    This includes approval status check. Only approved users can access endpoints
+    that use this dependency.
 
     Usage:
         @router.get("/protected")
@@ -83,7 +110,40 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return await verify_firebase_token(credentials.credentials)
+    auth_user = await verify_firebase_token(credentials.credentials)
+
+    # Import here to avoid circular imports
+    from analyzer.dependencies import get_firestore_client
+    from analyzer.services.user_service import UserService
+
+    firestore = get_firestore_client()
+    user_service = UserService(firestore)
+
+    user = await user_service.get_user(auth_user.uid)
+
+    # User not registered
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not registered. Please complete registration first.",
+        )
+
+    # Pending approval
+    if user.status.value == "pending":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is pending approval. Please wait for administrator approval.",
+        )
+
+    # Rejected
+    if user.status.value == "rejected":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been rejected. Please contact the administrator.",
+        )
+
+    # Approved users only pass through
+    return auth_user
 
 
 async def get_current_user_from_query(

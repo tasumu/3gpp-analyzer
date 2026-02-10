@@ -15,9 +15,12 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { getFirebaseAuth } from "../firebase";
+import { registerUser, getCurrentUserInfo } from "../api";
+import type { UserInfo } from "../types";
 
 interface AuthContextType {
   user: User | null;
+  userInfo: UserInfo | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -30,12 +33,36 @@ const googleProvider = new GoogleAuthProvider();
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
+
+      if (user) {
+        try {
+          // Register user in backend or update last login time
+          const info = await registerUser(
+            user.email!,
+            user.displayName || undefined,
+          );
+          setUserInfo(info);
+        } catch (error) {
+          console.error("Failed to register user:", error);
+          // Try to get current user info as fallback
+          try {
+            const info = await getCurrentUserInfo();
+            setUserInfo(info);
+          } catch {
+            setUserInfo(null);
+          }
+        }
+      } else {
+        setUserInfo(null);
+      }
+
       setLoading(false);
     });
     return unsubscribe;
@@ -58,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, signInWithGoogle, signOut, getIdToken }}
+      value={{ user, userInfo, loading, signInWithGoogle, signOut, getIdToken }}
     >
       {children}
     </AuthContext.Provider>

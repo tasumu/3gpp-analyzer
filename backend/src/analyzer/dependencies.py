@@ -9,6 +9,7 @@ from analyzer.auth import (
     AuthenticatedUser,
     get_current_user,
     get_current_user_from_query,
+    get_current_user_no_approval_check,
 )
 from analyzer.config import Settings, get_settings
 from analyzer.providers.base import EvidenceProvider
@@ -26,6 +27,7 @@ from analyzer.services.processor import ProcessorService
 from analyzer.services.qa_service import QAService
 from analyzer.services.report_prompt_service import ReportPromptService
 from analyzer.services.review_sheet_generator import ReviewSheetGenerator
+from analyzer.services.user_service import UserService
 from analyzer.services.vectorizer import VectorizerService
 
 
@@ -228,6 +230,13 @@ def get_meeting_report_generator(
     )
 
 
+def get_user_service(
+    firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
+) -> UserService:
+    """Get UserService instance."""
+    return UserService(firestore=firestore)
+
+
 # Type aliases for dependency injection
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 FirestoreClientDep = Annotated[FirestoreClient, Depends(get_firestore_client)]
@@ -245,7 +254,9 @@ ReportPromptServiceDep = Annotated[ReportPromptService, Depends(get_report_promp
 QAServiceDep = Annotated[QAService, Depends(get_qa_service)]
 MeetingServiceDep = Annotated[MeetingService, Depends(get_meeting_service)]
 MeetingReportGeneratorDep = Annotated[MeetingReportGenerator, Depends(get_meeting_report_generator)]
+UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 
 # Authentication dependencies
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
 CurrentUserQueryDep = Annotated[AuthenticatedUser, Depends(get_current_user_from_query)]
+CurrentUserNoApprovalDep = Annotated[AuthenticatedUser, Depends(get_current_user_no_approval_check)]
