@@ -80,7 +80,9 @@ class Settings(BaseSettings):
         """Parse initial admin emails from comma-separated string."""
         if not self.initial_admin_emails_str:
             return []
-        return [email.strip() for email in self.initial_admin_emails_str.split(",") if email.strip()]
+        return [
+            email.strip() for email in self.initial_admin_emails_str.split(",") if email.strip()
+        ]
 
 
 @lru_cache
