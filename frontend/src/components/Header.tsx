@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { usePathname } from "next/navigation";
 
 export function Header() {
-  const { user, loading, signOut } = useAuth();
+  const { user, userInfo, loading, signOut } = useAuth();
   const pathname = usePathname();
 
   // Don't show header on login page
@@ -53,6 +53,14 @@ export function Header() {
             >
               Sync
             </Link>
+            {!loading && user && userInfo?.role === "admin" && (
+              <Link
+                href="/admin/users"
+                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                User Management
+              </Link>
+            )}
             {!loading && user && (
               <div className="flex items-center space-x-3 ml-4 pl-4 border-l border-gray-200">
                 <span className="text-sm text-gray-600">{user.email}</span>
