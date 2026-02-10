@@ -9,7 +9,6 @@ from sse_starlette.sse import EventSourceResponse
 
 from analyzer.dependencies import (
     CurrentUserDep,
-    CurrentUserQueryDep,
     QAServiceDep,
 )
 from analyzer.models.qa import QARequest, QAResult, QAScope
@@ -92,7 +91,7 @@ async def ask_question(
 
 @router.get("/qa/stream")
 async def ask_question_stream(
-    current_user: CurrentUserQueryDep,
+    current_user: CurrentUserDep,
     qa_service: QAServiceDep,
     question: str = Query(..., min_length=1, max_length=2000, description="The question to answer"),
     scope: str = Query("global", description="Search scope: document, meeting, or global"),
@@ -103,6 +102,8 @@ async def ask_question_stream(
 ):
     """
     Answer a question with streaming response (SSE).
+
+    Requires Authorization header with Bearer token.
 
     Events:
     - chunk: Text chunk of the answer
