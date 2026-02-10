@@ -328,31 +328,62 @@ url = blob.generate_signed_url(
 
 ### 1. 環境変数の本番設定
 
-```bash
-# DEBUGを必ずfalseに設定（本番環境）
-gcloud run services update 3gpp-analyzer-api \
-  --region asia-northeast1 \
-  --set-env-vars "DEBUG=false"
+**⚠️ 重要**: `--set-env-vars` は既存の環境変数をすべて上書きします。`--update-env-vars` を使用するか、すべての環境変数を一度に設定してください。
 
-# CORS originsを本番URLのみに制限（localhostを除外）
-gcloud run services update 3gpp-analyzer-api \
+```bash
+# 方法1: update-env-varsで個別に更新（推奨）
+gcloud run services update gpp-analyzer-backend \
+  --region asia-northeast1 \
+  --update-env-vars "DEBUG=false"
+
+gcloud run services update gpp-analyzer-backend \
   --region asia-northeast1 \
   --update-env-vars='^|^CORS_ORIGINS_STR=https://your-production-frontend.hosted.app'
+
+# 方法2: set-env-varsですべての環境変数を一度に設定
+# ⚠️ この方法では全ての必要な環境変数を指定する必要があります
+gcloud run services update gpp-analyzer-backend \
+  --region asia-northeast1 \
+  --set-env-vars "\
+DEBUG=false,\
+CORS_ORIGINS_STR=https://your-production-frontend.hosted.app,\
+GCP_PROJECT_ID=gpp-analyzer,\
+GCS_BUCKET_NAME=gpp-analyzer-3gpp-documents,\
+USE_FIREBASE_EMULATOR=false,\
+FTP_MOCK_MODE=false,\
+VERTEX_AI_LOCATION=global,\
+ANALYSIS_MODEL=gemini-2.5-flash,\
+ANALYSIS_STRATEGY_VERSION=v1,\
+REVIEW_SHEET_EXPIRATION_MINUTES=60,\
+INITIAL_ADMIN_EMAILS=admin@example.com"
+
+# 設定を確認
+gcloud run services describe gpp-analyzer-backend \
+  --region asia-northeast1 \
+  --format="yaml" | grep -A 20 "env:"
 ```
 
-> **重要**: 本番環境では `CORS_ORIGINS_STR` に `localhost` を含めないでください。ローカル開発環境と本番環境で異なる設定を使用します。
+> **重要**:
+> - 本番環境では `CORS_ORIGINS_STR` に `localhost` を含めないでください
+> - `DEBUG=false` を必ず設定してください（本番環境で詳細なエラーメッセージを非表示にするため）
 
-### 2. Firestore/Storage ルールのデプロイ
+### 2. Firestore ルールのデプロイ
 
-承認ステータスチェックを含む最新のルールをデプロイ：
+**注**: このプロジェクトは **Cloud Storage (GCS) を直接使用** しており、Firebase Storage は使用していません。アクセス制御はバックエンドAPIで実施されます。
 
 ```bash
-# ルールを本番環境にデプロイ
-firebase deploy --only firestore:rules,storage
+# Firestoreルールのみをデプロイ
+firebase deploy --only firestore:rules
 
 # デプロイ結果を確認
 firebase firestore:rules:get
 ```
+
+> **Cloud Storage (GCS) のアクセス制御について**:
+> - このプロジェクトは `google-cloud-storage` SDK を使用してGCSに直接アクセスします
+> - Firebase Storage Rules は使用しません（`firebase.json` に storage 設定がありません）
+> - アクセス制御は `analyzer.auth.get_current_user` で実装されています
+> - ファイルアクセスは署名URL（期限付き）で提供されます
 
 ### 3. 依存パッケージのインストールとセキュリティスキャン
 
@@ -370,13 +401,15 @@ uv sync
 
 以下の項目をすべて確認してからデプロイしてください：
 
-- [ ] **DEBUG=false** が設定されている
+- [ ] **DEBUG=false** が設定されている（Cloud Run環境変数）
 - [ ] **CORS origins** が本番URLのみに制限されている（localhostを含まない）
-- [ ] **Firestore/Storage ルール**が承認チェックを含む最新版
+- [ ] **Firestore ルール**がデプロイ済み（`firebase deploy --only firestore:rules`）
+- [ ] **全ての環境変数**が正しく設定されている（上書きされていないか確認）
 - [ ] **セキュリティヘッダー**が frontend/next.config.ts に設定されている
 - [ ] **Rate limiting**が有効化されている（backend/src/analyzer/middleware/rate_limit.py）
 - [ ] **機密情報のログマスク**が有効化されている（backend/src/analyzer/logging_config.py）
 - [ ] **AdminUserDep**が internal API エンドポイントで使用されている
+- [ ] **CurrentUserDep**による承認チェックがすべての保護されたエンドポイントで実施されている
 - [ ] **INITIAL_ADMIN_EMAILS**が Secret Manager に設定されている（推奨）
 
 ### 5. デプロイ後の検証
