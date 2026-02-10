@@ -119,13 +119,62 @@ gcloud run services update 3gpp-analyzer-api \
   --set-env-vars "FTP_MOCK_MODE=false" \
   --set-env-vars "VERTEX_AI_LOCATION=global" \
   --set-env-vars "ANALYSIS_MODEL=gemini-2.5-flash" \
-  --update-env-vars='^|^CORS_ORIGINS_STR=http://localhost:3000,https://your-frontend-url.hosted.app'
+  --update-env-vars='^|^CORS_ORIGINS_STR=http://localhost:3000,https://your-frontend-url.hosted.app' \
+  --update-env-vars='^|^INITIAL_ADMIN_EMAILS=admin@example.com'
 ```
 
 > **Note**:
 > - `CORS_ORIGINS_STR` はカンマ区切りで複数のオリジンを指定可能。ローカル開発用と本番用を両方含めることを推奨。gcloudでカンマを含む値を設定する場合は `--update-env-vars='^|^KEY=value'` 形式を使用。
 > - `VERTEX_AI_LOCATION` は Vertex AI API のリージョン。デフォルトは `global`（全Geminiモデルが利用可能で、可用性が向上）。
 > - `ANALYSIS_MODEL` は分析に使用する Gemini モデル。デフォルトは `gemini-2.5-flash`。
+> - `INITIAL_ADMIN_EMAILS` は初期管理者のメールアドレス（カンマ区切りで複数指定可能）。このメールアドレスでログインすると自動的に管理者権限が付与されます。
+
+#### ユーザー承認フロー（Admin Approval）
+
+アプリケーションは初回ログイン時にユーザー承認フローを実装しています。
+
+**初期管理者の設定（推奨：Secret Manager）**
+
+機密性を考慮し、Secret Manager を使用することを推奨します：
+
+```bash
+# Secretを作成（複数の管理者を指定する場合はカンマ区切り）
+echo -n "admin@example.com,admin2@example.com" | \
+  gcloud secrets create initial-admin-emails --data-file=-
+
+# Cloud Runサービスアカウントに権限を付与
+PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format='value(projectNumber)')
+SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+gcloud secrets add-iam-policy-binding initial-admin-emails \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
+  --role="roles/secretmanager.secretAccessor"
+
+# Cloud Runサービスにシークレットをマウント
+gcloud run services update 3gpp-analyzer-api \
+  --region asia-northeast1 \
+  --update-secrets="INITIAL_ADMIN_EMAILS=initial-admin-emails:latest"
+```
+
+**承認フローの動作**
+
+1. **初期管理者**: `INITIAL_ADMIN_EMAILS` に含まれるメールアドレスでログインすると、自動的に `approved` 状態かつ `admin` ロールで登録されます
+2. **一般ユーザー**: それ以外のメールアドレスでログインすると、`pending` 状態で登録され、「Approval Pending」画面が表示されます
+3. **管理者による承認**: 管理者が `/admin/users` ページでユーザーを承認または拒否できます
+4. **承認後**: 承認されたユーザーは通常通りアプリケーションにアクセスできます
+
+**追加の管理者を設定する場合**
+
+```bash
+# 環境変数を直接更新
+gcloud run services update 3gpp-analyzer-api \
+  --region asia-northeast1 \
+  --update-env-vars='^|^INITIAL_ADMIN_EMAILS=admin@example.com,admin2@example.com'
+
+# またはSecret Managerを更新
+echo -n "admin@example.com,admin2@example.com" | \
+  gcloud secrets versions add initial-admin-emails --data-file=-
+```
 
 ## フロントエンドデプロイ
 
