@@ -47,9 +47,8 @@ class UserService:
         if existing:
             # Update last login time for existing user
             existing.last_login_at = datetime.now(timezone.utc)
-            await self.firestore.update_document(
-                self.collection, uid, {"last_login_at": existing.last_login_at}
-            )
+            doc_ref = self.firestore.client.collection(self.collection).document(uid)
+            doc_ref.update({"last_login_at": existing.last_login_at})
             return existing
 
         # Create new user
@@ -71,7 +70,8 @@ class UserService:
             approved_at=datetime.now(timezone.utc) if is_initial_admin else None,
         )
 
-        await self.firestore.set_document(self.collection, uid, user.to_firestore())
+        doc_ref = self.firestore.client.collection(self.collection).document(uid)
+        doc_ref.set(user.to_firestore())
         return user
 
     async def get_user(self, uid: str) -> User | None:
@@ -84,10 +84,11 @@ class UserService:
         Returns:
             User instance or None if not found
         """
-        data = await self.firestore.get_document(self.collection, uid)
-        if not data:
+        doc_ref = self.firestore.client.collection(self.collection).document(uid)
+        doc = doc_ref.get()
+        if not doc.exists:
             return None
-        return User.from_firestore(uid, data)
+        return User.from_firestore(uid, doc.to_dict())
 
     async def list_users(
         self, status_filter: UserStatus | None = None, limit: int = 100
@@ -102,15 +103,15 @@ class UserService:
         Returns:
             List of User instances
         """
-        filters = {}
+        query = self.firestore.client.collection(self.collection)
+
         if status_filter:
-            filters["status"] = status_filter.value
+            query = query.where("status", "==", status_filter.value)
 
-        docs = await self.firestore.query_documents(
-            self.collection, filters=filters, limit=limit, order_by=[("created_at", "desc")]
-        )
+        query = query.order_by("created_at", direction="DESCENDING").limit(limit)
 
-        return [User.from_firestore(doc_id, data) for doc_id, data in docs]
+        docs = query.stream()
+        return [User.from_firestore(doc.id, doc.to_dict()) for doc in docs]
 
     async def approve_user(self, uid: str, admin_uid: str) -> User:
         """
@@ -135,7 +136,8 @@ class UserService:
         user.approved_at = datetime.now(timezone.utc)
         user.updated_at = datetime.now(timezone.utc)
 
-        await self.firestore.update_document(self.collection, uid, user.to_firestore())
+        doc_ref = self.firestore.client.collection(self.collection).document(uid)
+        doc_ref.update(user.to_firestore())
 
         return user
 
@@ -162,6 +164,7 @@ class UserService:
         user.approved_at = datetime.now(timezone.utc)
         user.updated_at = datetime.now(timezone.utc)
 
-        await self.firestore.update_document(self.collection, uid, user.to_firestore())
+        doc_ref = self.firestore.client.collection(self.collection).document(uid)
+        doc_ref.update(user.to_firestore())
 
         return user

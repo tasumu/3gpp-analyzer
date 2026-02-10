@@ -788,15 +788,12 @@ export async function getMultipleMeetingInfo(
 
 /**
  * Register user on first login or update last login time.
+ * Email is automatically extracted from the Firebase ID token.
  */
-export async function registerUser(
-  email: string,
-  displayName?: string,
-): Promise<UserInfo> {
+export async function registerUser(displayName?: string): Promise<UserInfo> {
   return fetchApi<UserInfo>("/auth/register", {
     method: "POST",
     body: JSON.stringify({
-      email,
       display_name: displayName,
     }),
   });

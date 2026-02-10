@@ -44,10 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         try {
           // Register user in backend or update last login time
-          const info = await registerUser(
-            user.email!,
-            user.displayName || undefined,
-          );
+          // Email is automatically extracted from the Firebase ID token
+          const info = await registerUser(user.displayName || undefined);
           setUserInfo(info);
         } catch (error) {
           console.error("Failed to register user:", error);

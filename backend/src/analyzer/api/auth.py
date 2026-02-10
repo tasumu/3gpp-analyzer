@@ -1,7 +1,7 @@
 """Authentication and user management API endpoints."""
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 from analyzer.dependencies import (
     CurrentUserNoApprovalDep,
@@ -16,7 +16,6 @@ router = APIRouter()
 class RegisterRequest(BaseModel):
     """User registration request."""
 
-    email: EmailStr
     display_name: str | None = None
 
 
@@ -48,7 +47,7 @@ async def register_user(
 
     user = await user_service.register_or_update_user(
         uid=current_user.uid,
-        email=request.email,
+        email=current_user.email,
         display_name=request.display_name,
         initial_admins=initial_admins,
     )
