@@ -9,7 +9,6 @@ from sse_starlette.sse import EventSourceResponse
 
 from analyzer.dependencies import (
     CurrentUserDep,
-    CurrentUserQueryDep,
     DocumentServiceDep,
     MeetingReportGeneratorDep,
     MeetingServiceDep,
@@ -154,7 +153,7 @@ async def summarize_meeting(
 @router.get("/{meeting_id}/summarize/stream")
 async def summarize_meeting_stream(
     meeting_id: str,
-    current_user: CurrentUserQueryDep,
+    current_user: CurrentUserDep,
     meeting_service: MeetingServiceDep,
     analysis_prompt: str | None = Query(None, max_length=2000),
     report_prompt: str | None = Query(None, max_length=2000),
@@ -338,7 +337,7 @@ async def get_meeting_info(
 @router.get("/{meeting_id}/process/stream")
 async def batch_process_meeting_stream(
     meeting_id: str,
-    current_user: CurrentUserQueryDep,
+    current_user: CurrentUserDep,
     document_service: DocumentServiceDep,
     processor: ProcessorServiceDep,
     force: bool = Query(False, description="Force reprocess already indexed docs"),
@@ -543,7 +542,7 @@ async def summarize_multiple_meetings(
 
 @router.get("/multi/summarize/stream")
 async def summarize_multiple_meetings_stream(
-    current_user: CurrentUserQueryDep,
+    current_user: CurrentUserDep,
     meeting_service: MeetingServiceDep,
     meeting_ids: str = Query(..., description="Comma-separated list of meeting IDs"),
     analysis_prompt: str | None = Query(None, max_length=2000),

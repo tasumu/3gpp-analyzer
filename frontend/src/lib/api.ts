@@ -222,7 +222,10 @@ class FetchEventSource {
   public onopen: (() => void) | null = null;
   public onerror: ((error: Event) => void) | null = null;
 
-  constructor(private url: string) {
+  constructor(
+    private url: string,
+    private headers?: Record<string, string>,
+  ) {
     this.connect();
   }
 
@@ -234,6 +237,7 @@ class FetchEventSource {
         signal: this.abortController.signal,
         headers: {
           Accept: "text/event-stream",
+          ...this.headers,
         },
       });
 
@@ -321,10 +325,13 @@ export async function createStatusStream(
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
-  const url = `${API_BASE}/documents/${documentId}/status/stream?force=${force}&token=${encodeURIComponent(token)}`;
+  const url = `${API_BASE}/documents/${documentId}/status/stream?force=${force}`;
 
   // Use FetchEventSource instead of native EventSource to work around HTTP/2 issues
-  return new FetchEventSource(url) as unknown as EventSource;
+  // Pass token via Authorization header instead of query parameter
+  return new FetchEventSource(url, {
+    Authorization: `Bearer ${token}`,
+  }) as unknown as EventSource;
 }
 
 export async function createStatusWatcher(documentId: string): Promise<EventSource> {
@@ -332,8 +339,10 @@ export async function createStatusWatcher(documentId: string): Promise<EventSour
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
-  const url = `${API_BASE}/documents/${documentId}/status/watch?token=${encodeURIComponent(token)}`;
-  return new FetchEventSource(url) as unknown as EventSource;
+  const url = `${API_BASE}/documents/${documentId}/status/watch`;
+  return new FetchEventSource(url, {
+    Authorization: `Bearer ${token}`,
+  }) as unknown as EventSource;
 }
 
 // FTP Browser APIs
@@ -368,8 +377,10 @@ export async function createFTPSyncStream(syncId: string): Promise<EventSource> 
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
-  const url = `${API_BASE}/ftp/sync/${syncId}/stream?token=${encodeURIComponent(token)}`;
-  return new FetchEventSource(url) as unknown as EventSource;
+  const url = `${API_BASE}/ftp/sync/${syncId}/stream`;
+  return new FetchEventSource(url, {
+    Authorization: `Bearer ${token}`,
+  }) as unknown as EventSource;
 }
 
 // Chunk APIs
@@ -446,8 +457,10 @@ export async function createAnalysisStream(analysisId: string): Promise<EventSou
   if (!token) {
     throw new Error("Authentication required for SSE connection");
   }
-  const url = `${API_BASE}/analysis/${analysisId}/stream?token=${encodeURIComponent(token)}`;
-  return new FetchEventSource(url) as unknown as EventSource;
+  const url = `${API_BASE}/analysis/${analysisId}/stream`;
+  return new FetchEventSource(url, {
+    Authorization: `Bearer ${token}`,
+  }) as unknown as EventSource;
 }
 
 export function getReviewSheetUrl(analysisId: string): string {
@@ -570,7 +583,6 @@ export async function createQAStream(
     question,
     scope,
     language,
-    token,
   });
 
   // Support multiple scope IDs (takes precedence over single scope_id)
@@ -585,7 +597,9 @@ export async function createQAStream(
   }
 
   const url = `${API_BASE}/qa/stream?${params.toString()}`;
-  return new FetchEventSource(url) as unknown as EventSource;
+  return new FetchEventSource(url, {
+    Authorization: `Bearer ${token}`,
+  }) as unknown as EventSource;
 }
 
 export async function getQAResult(resultId: string): Promise<QAResult> {
@@ -621,13 +635,14 @@ export async function createBatchProcessStream(
   }
 
   const params = new URLSearchParams({
-    token,
     force: (options?.force ?? false).toString(),
     concurrency: (options?.concurrency ?? 3).toString(),
   });
 
   const url = `${API_BASE}/meetings/${encodeURIComponent(meetingId)}/process/stream?${params.toString()}`;
-  return new FetchEventSource(url) as unknown as EventSource;
+  return new FetchEventSource(url, {
+    Authorization: `Bearer ${token}`,
+  }) as unknown as EventSource;
 }
 
 export async function summarizeMeeting(
@@ -662,7 +677,6 @@ export async function createMeetingSummarizeStream(
   const params = new URLSearchParams({
     language,
     force: force.toString(),
-    token,
   });
   if (analysisPrompt) {
     params.set("analysis_prompt", analysisPrompt);
@@ -672,7 +686,9 @@ export async function createMeetingSummarizeStream(
   }
 
   const url = `${API_BASE}/meetings/${encodeURIComponent(meetingId)}/summarize/stream?${params.toString()}`;
-  return new FetchEventSource(url) as unknown as EventSource;
+  return new FetchEventSource(url, {
+    Authorization: `Bearer ${token}`,
+  }) as unknown as EventSource;
 }
 
 export async function getMeetingSummary(
@@ -754,7 +770,6 @@ export async function createMultiMeetingSummarizeStream(
     meeting_ids: meetingIds.join(","),
     language,
     force: force.toString(),
-    token,
   });
   if (analysisPrompt) {
     params.set("analysis_prompt", analysisPrompt);
@@ -764,7 +779,9 @@ export async function createMultiMeetingSummarizeStream(
   }
 
   const url = `${API_BASE}/meetings/multi/summarize/stream?${params.toString()}`;
-  return new FetchEventSource(url) as unknown as EventSource;
+  return new FetchEventSource(url, {
+    Authorization: `Bearer ${token}`,
+  }) as unknown as EventSource;
 }
 
 export async function getMultipleMeetingInfo(
