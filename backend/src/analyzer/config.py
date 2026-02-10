@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -67,10 +68,24 @@ class Settings(BaseSettings):
     # e.g., "http://localhost:3000,https://example.com"
     cors_origins_str: str = "http://localhost:3000"
 
+    # Admin Approval
+    initial_admin_emails_str: str = Field(
+        default="", validation_alias="INITIAL_ADMIN_EMAILS"
+    )  # Comma-separated admin emails
+
     @property
     def cors_origins(self) -> list[str]:
         """Parse CORS origins from comma-separated string."""
         return [origin.strip() for origin in self.cors_origins_str.split(",") if origin.strip()]
+
+    @property
+    def initial_admin_emails(self) -> list[str]:
+        """Parse initial admin emails from comma-separated string."""
+        if not self.initial_admin_emails_str:
+            return []
+        return [
+            email.strip() for email in self.initial_admin_emails_str.split(",") if email.strip()
+        ]
 
 
 @lru_cache

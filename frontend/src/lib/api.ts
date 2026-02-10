@@ -36,6 +36,9 @@ import type {
   QARequest,
   QAResult,
   QAScope,
+  UserInfo,
+  UserListResponse,
+  UserStatus,
 } from "./types";
 import { getFirebaseAuth } from "./firebase";
 
@@ -777,6 +780,62 @@ export async function getMultipleMeetingInfo(
     total_indexed_documents: infos.reduce((sum, info) => sum + info.indexed_documents, 0),
     ready_for_analysis: infos.every((info) => info.ready_for_analysis),
   };
+}
+
+// ============================================================================
+// User Management API Functions (Admin Approval Flow)
+// ============================================================================
+
+/**
+ * Register user on first login or update last login time.
+ * Email is automatically extracted from the Firebase ID token.
+ */
+export async function registerUser(displayName?: string): Promise<UserInfo> {
+  return fetchApi<UserInfo>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      display_name: displayName,
+    }),
+  });
+}
+
+/**
+ * Get current user information including approval status.
+ */
+export async function getCurrentUserInfo(): Promise<UserInfo> {
+  return fetchApi<UserInfo>("/auth/me");
+}
+
+/**
+ * Get list of users (admin only).
+ */
+export async function listUsers(
+  statusFilter?: UserStatus,
+): Promise<UserListResponse> {
+  const params = new URLSearchParams();
+  if (statusFilter) {
+    params.append("status_filter", statusFilter);
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return fetchApi<UserListResponse>(`/admin/users${query}`);
+}
+
+/**
+ * Approve a user (admin only).
+ */
+export async function approveUser(uid: string): Promise<{ message: string }> {
+  return fetchApi<{ message: string }>(`/admin/users/${uid}/approve`, {
+    method: "POST",
+  });
+}
+
+/**
+ * Reject a user (admin only).
+ */
+export async function rejectUser(uid: string): Promise<{ message: string }> {
+  return fetchApi<{ message: string }>(`/admin/users/${uid}/reject`, {
+    method: "POST",
+  });
 }
 
 export { ApiError };

@@ -2,10 +2,37 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isApprovedUser() {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Users can read their own document (to check approval status)
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Admins can read all users
+      allow read: if isAdmin();
+
+      // Write only from backend (admin SDK)
+      allow write: if false;
+    }
+
     // Documents collection
     match /documents/{documentId} {
-      // Allow read for authenticated users
-      allow read: if request.auth != null;
+      // Only approved users can read
+      allow read: if isApprovedUser();
 
       // Allow write only from backend (admin SDK)
       allow write: if false;
@@ -13,8 +40,8 @@ service cloud.firestore {
 
     // Chunks collection
     match /chunks/{chunkId} {
-      // Allow read for authenticated users
-      allow read: if request.auth != null;
+      // Only approved users can read
+      allow read: if isApprovedUser();
 
       // Allow write only from backend (admin SDK)
       allow write: if false;

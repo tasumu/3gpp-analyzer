@@ -572,3 +572,54 @@ export interface BatchOperationResponse {
   failed_count: number;
   errors: Record<string, string>;
 }
+
+// ============================================================================
+// User Management Types (Admin Approval Flow)
+// ============================================================================
+
+export type UserStatus = "pending" | "approved" | "rejected";
+export type UserRole = "user" | "admin";
+
+export interface UserInfo {
+  uid: string;
+  email: string;
+  display_name?: string;
+  status: UserStatus;
+  role: UserRole;
+}
+
+export interface AdminUser {
+  uid: string;
+  email: string;
+  display_name?: string;
+  status: UserStatus;
+  role: UserRole;
+  created_at: string;
+  updated_at: string;
+  approved_by?: string;
+  approved_at?: string;
+  last_login_at?: string;
+}
+
+export interface UserListResponse {
+  users: AdminUser[];
+  total: number;
+}
+
+// User status display helpers
+export const userStatusLabels: Record<UserStatus, string> = {
+  pending: "Pending",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+
+export const userStatusColors: Record<UserStatus, string> = {
+  pending: "bg-yellow-100 text-yellow-800",
+  approved: "bg-green-100 text-green-800",
+  rejected: "bg-red-100 text-red-800",
+};
+
+export const userRoleLabels: Record<UserRole, string> = {
+  user: "User",
+  admin: "Admin",
+};
