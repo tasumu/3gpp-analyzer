@@ -2,7 +2,6 @@
 
 from fastapi import Request
 from slowapi import Limiter
-from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from analyzer.config import get_settings
@@ -42,5 +41,5 @@ limiter = Limiter(
 )
 
 
-# Export exception for handler registration
-__all__ = ["limiter", "RateLimitExceeded"]
+# Export limiter
+__all__ = ["limiter"]

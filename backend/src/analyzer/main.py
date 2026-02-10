@@ -10,10 +10,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 from analyzer.api.router import api_router, internal_router
 from analyzer.config import get_settings
 from analyzer.logging_config import setup_logging
-from analyzer.middleware.rate_limit import RateLimitExceeded, limiter
+from analyzer.middleware.rate_limit import limiter
 
 # Configure logging
 logging.basicConfig(
@@ -76,7 +79,7 @@ def create_app() -> FastAPI:
 
     # Add rate limiter
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, limiter._rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     # CORS middleware
     app.add_middleware(

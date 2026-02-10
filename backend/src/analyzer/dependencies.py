@@ -256,6 +256,11 @@ MeetingServiceDep = Annotated[MeetingService, Depends(get_meeting_service)]
 MeetingReportGeneratorDep = Annotated[MeetingReportGenerator, Depends(get_meeting_report_generator)]
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 
+# Authentication dependencies
+CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
+CurrentUserNoApprovalDep = Annotated[AuthenticatedUser, Depends(get_current_user_no_approval_check)]
+
+
 async def require_admin(
     current_user: CurrentUserDep,
     user_service: UserServiceDep,
@@ -275,7 +280,4 @@ async def require_admin(
     return user
 
 
-# Authentication dependencies
-CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
-CurrentUserNoApprovalDep = Annotated[AuthenticatedUser, Depends(get_current_user_no_approval_check)]
 AdminUserDep = Annotated[User, Depends(require_admin)]

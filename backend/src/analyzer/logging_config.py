@@ -10,13 +10,13 @@ class SensitiveDataFilter(logging.Filter):
     # Patterns to match and replace sensitive data
     SENSITIVE_PATTERNS = [
         # Password fields
-        (r'password["\']?\s*[:=]\s*["\']?([^"\'\s,}]+)', r'password=***REDACTED***'),
+        (r'password["\']?\s*[:=]\s*["\']?([^"\'\s,}]+)', r"password=***REDACTED***"),
         # API keys
-        (r'api[_-]?key["\']?\s*[:=]\s*["\']?([^"\'\s,}]+)', r'api_key=***REDACTED***'),
+        (r'api[_-]?key["\']?\s*[:=]\s*["\']?([^"\'\s,}]+)', r"api_key=***REDACTED***"),
         # Bearer tokens in Authorization headers
-        (r'Bearer\s+([A-Za-z0-9\-._~+/]+=*)', r'Bearer ***REDACTED***'),
+        (r"Bearer\s+([A-Za-z0-9\-._~+/]+=*)", r"Bearer ***REDACTED***"),
         # JWT tokens (starting with eyJ)
-        (r'eyJ[A-Za-z0-9\-._~+/]+=*', r'***JWT_REDACTED***'),
+        (r"eyJ[A-Za-z0-9\-._~+/]+=*", r"***JWT_REDACTED***"),
     ]
 
     def filter(self, record: logging.LogRecord) -> bool:
