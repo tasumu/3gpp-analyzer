@@ -146,17 +146,3 @@ async def get_current_user(
     return auth_user
 
 
-async def get_current_user_from_query(
-    token: str = Query(..., description="Firebase ID token for SSE authentication"),
-) -> AuthenticatedUser:
-    """
-    FastAPI dependency for extracting authenticated user from query parameter.
-
-    Used for SSE endpoints where EventSource cannot set headers.
-
-    Usage:
-        @router.get("/stream")
-        async def stream_endpoint(current_user: CurrentUserQueryDep):
-            return {"user_id": current_user.uid}
-    """
-    return await verify_firebase_token(token)

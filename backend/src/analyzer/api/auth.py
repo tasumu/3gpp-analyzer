@@ -45,6 +45,15 @@ async def register_user(
     # Get initial admin emails from environment variable
     initial_admins = settings.initial_admin_emails
 
+    # Validate email is present (Firebase phone auth may not provide email)
+    # NOTE: Currently only Google auth is supported, so email is always present.
+    # This check is for type safety and future authentication methods.
+    if current_user.email is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is required for registration. Please use email-based authentication.",
+        )
+
     user = await user_service.register_or_update_user(
         uid=current_user.uid,
         email=current_user.email,
