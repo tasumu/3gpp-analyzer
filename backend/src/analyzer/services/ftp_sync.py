@@ -109,7 +109,7 @@ class FTPSyncService:
 
     def _connect(self, timeout: int = 60) -> FTP:
         """Establish FTP connection."""
-        ftp = FTP(self.host, timeout=timeout)
+        ftp = FTP(self.host, timeout=timeout, encoding="latin-1")
         ftp.login(self.user, self.password)
 
         # Patch makepasv to handle EPSV responses from servers like 3gpp.org
