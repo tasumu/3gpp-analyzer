@@ -389,7 +389,7 @@ export default function MeetingDetailPage() {
             {meetingInfo.ready_for_analysis ? (
               <span className="text-xs text-green-600 font-medium">Ready for analysis</span>
             ) : (
-              <span className="text-xs text-yellow-600 font-medium">Indexing in progress</span>
+              <span className="text-xs text-yellow-600 font-medium">Processing required</span>
             )}
           </div>
         </div>
