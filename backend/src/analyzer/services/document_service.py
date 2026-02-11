@@ -295,10 +295,16 @@ class DocumentService:
                             "working_group": meeting.get("working_group"),
                             "document_count": 0,
                             "indexed_count": 0,
+                            "analyzable_count": 0,
+                            "download_only_count": 0,
                         }
                     meetings[meeting_id]["document_count"] += 1
                     if doc.get("status") == DocumentStatus.INDEXED.value:
                         meetings[meeting_id]["indexed_count"] += 1
+                    if doc.get("analyzable", True):
+                        meetings[meeting_id]["analyzable_count"] += 1
+                    else:
+                        meetings[meeting_id]["download_only_count"] += 1
 
             # Move to next batch
             offset += batch_size

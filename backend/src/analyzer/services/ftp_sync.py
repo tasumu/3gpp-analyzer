@@ -9,7 +9,15 @@ from datetime import datetime
 from ftplib import FTP
 from typing import Callable
 
-from analyzer.models.document import Document, DocumentStatus, DocumentType, Meeting, SourceFile
+from analyzer.models.document import (
+    ALL_DOCUMENT_EXTENSIONS,
+    ANALYZABLE_EXTENSIONS,
+    Document,
+    DocumentStatus,
+    DocumentType,
+    Meeting,
+    SourceFile,
+)
 from analyzer.models.sync_history import SyncHistory
 from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.providers.storage_client import StorageClient
@@ -74,6 +82,8 @@ class FTPSyncService:
             ("S2-2401002.zip", "file", 204800),
             ("S2-2401003.doc", "file", 51200),
             ("S2-2401004.docx", "file", 76800),
+            ("S2-2401005.pptx", "file", 153600),
+            ("S2-2401006.xlsx", "file", 89600),
         ],
     }
 
@@ -408,7 +418,7 @@ class FTPSyncService:
             mock_entries = self.MOCK_DIRECTORIES.get(meeting_path, [])
             files = []
             for name, entry_type, size in mock_entries:
-                if entry_type == "file" and name.lower().endswith((".doc", ".docx", ".zip")):
+                if entry_type == "file" and name.lower().endswith(ALL_DOCUMENT_EXTENSIONS):
                     files.append(
                         {
                             "filename": name,
@@ -466,7 +476,7 @@ class FTPSyncService:
                 except Exception:
                     pass
             elif entry_type == "file":
-                if name.lower().endswith((".doc", ".docx", ".zip")):
+                if name.lower().endswith(ALL_DOCUMENT_EXTENSIONS):
                     modify_str = facts.get("modify", "")
                     if modify_str:
                         modified_at = datetime.strptime(modify_str, "%Y%m%d%H%M%S")
@@ -596,6 +606,10 @@ class FTPSyncService:
                         size_bytes=file_info["size_bytes"],
                         modified_at=file_info["modified_at"],
                     )
+                    # Determine if file format is analyzable
+                    is_analyzable = file_info["filename"].lower().endswith(
+                        ANALYZABLE_EXTENSIONS
+                    )
                     # Create new document with metadata only
                     doc = Document(
                         id=doc_id,
@@ -604,6 +618,7 @@ class FTPSyncService:
                         meeting=meeting,
                         source_file=source_file,
                         status=DocumentStatus.METADATA_ONLY,
+                        analyzable=is_analyzable,
                     )
                     await self.firestore.create_document(doc_id, doc.to_firestore())
                     result["documents_new"] += 1
