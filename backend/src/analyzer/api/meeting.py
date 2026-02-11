@@ -299,22 +299,27 @@ async def get_meeting_info(
 
     Returns document statistics for the meeting.
     """
-    # Get all documents to count analyzable vs non-analyzable
-    all_docs, total = await document_service.list_documents(
-        meeting_id=meeting_id,
-        page_size=5000,
-    )
+    # Fetch all documents in batches to get accurate counts
+    all_docs = []
+    page = 1
+    batch_size = 5000
+    while True:
+        batch, total = await document_service.list_documents(
+            meeting_id=meeting_id,
+            page=page,
+            page_size=batch_size,
+        )
+        all_docs.extend(batch)
+        if len(all_docs) >= total or not batch:
+            break
+        page += 1
 
-    # Get indexed documents count
-    _, indexed = await document_service.list_documents(
-        meeting_id=meeting_id,
-        status=DocumentStatus.INDEXED,
-        page_size=1,
-    )
+    total = len(all_docs)
 
-    # Count analyzable vs download-only
+    # Count by category
     analyzable_count = sum(1 for d in all_docs if d.analyzable)
     download_only_count = total - analyzable_count
+    indexed = sum(1 for d in all_docs if d.status == DocumentStatus.INDEXED)
 
     # Parse meeting_id to get working group
     parts = meeting_id.split("#")
