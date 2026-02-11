@@ -25,6 +25,11 @@ function getFirebaseApp(): FirebaseApp {
 function getFirebaseAuth(): Auth {
   if (!auth) {
     auth = getAuth(getFirebaseApp());
+    // Use app's own domain as authDomain so the auth flow is first-party.
+    // This works with the /__/auth/* rewrite in next.config.ts.
+    if (typeof window !== "undefined") {
+      auth.config.authDomain = window.location.host;
+    }
   }
   return auth;
 }

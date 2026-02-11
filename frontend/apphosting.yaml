@@ -13,3 +13,7 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  - variable: FIREBASE_AUTH_PROXY_DOMAIN
+    secret: firebase-auth-proxy-domain  # e.g. <project-id>.firebaseapp.com
+    availability:
+      - BUILD
