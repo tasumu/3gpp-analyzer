@@ -252,7 +252,7 @@ class FirestoreClient:
 
         Args:
             query_embedding: The query vector embedding.
-            filters: Optional metadata filters.
+            filters: Optional metadata filters (applied server-side via .where()).
             top_k: Number of results to return.
 
         Returns:
@@ -260,8 +260,20 @@ class FirestoreClient:
         """
         collection = self._client.collection(self.CHUNKS_COLLECTION)
 
-        # Build the vector query
-        vector_query = collection.find_nearest(
+        # Apply filters as Firestore .where() BEFORE vector search
+        # This ensures the vector search only considers matching documents,
+        # rather than filtering after retrieving top_k results globally.
+        query = collection
+        if filters:
+            for key, value in filters.items():
+                if key.endswith("__in"):
+                    actual_field = key.replace("__in", "")
+                    query = query.where(f"metadata.{actual_field}", "in", value)
+                else:
+                    query = query.where(f"metadata.{key}", "==", value)
+
+        # Build the vector query on pre-filtered results
+        vector_query = query.find_nearest(
             vector_field="embedding",
             query_vector=Vector(query_embedding),
             distance_measure=DistanceMeasure.COSINE,
@@ -272,24 +284,6 @@ class FirestoreClient:
         results = []
         for doc in vector_query.stream():
             data = doc.to_dict()
-            # Apply filters if provided
-            if filters:
-                metadata = data.get("metadata", {})
-                skip = False
-                for key, value in filters.items():
-                    # Support __in suffix for "in" queries
-                    if key.endswith("__in"):
-                        actual_field = key.replace("__in", "")
-                        if metadata.get(actual_field) not in value:
-                            skip = True
-                            break
-                    else:
-                        if metadata.get(key) != value:
-                            skip = True
-                            break
-                if skip:
-                    continue
-
             results.append({"id": doc.id, **data})
 
         return results
