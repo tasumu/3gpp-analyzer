@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getRedirectResult } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth/AuthContext";
 
 export default function LoginPage() {
@@ -9,6 +11,15 @@ export default function LoginPage() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const { user, loading, signInWithGoogle } = useAuth();
   const router = useRouter();
+
+  // Check for redirect result errors after returning from Google sign-in
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    getRedirectResult(auth).catch((err) => {
+      console.error("Redirect sign in error:", err);
+      setError("Failed to sign in with Google. Please try again.");
+    });
+  }, []);
 
   useEffect(() => {
     if (!loading && user) {
@@ -21,11 +32,10 @@ export default function LoginPage() {
     setIsSigningIn(true);
     try {
       await signInWithGoogle();
-      router.push("/");
+      // Page will redirect to Google; execution won't continue past here
     } catch (err) {
       console.error("Sign in error:", err);
       setError("Failed to sign in with Google. Please try again.");
-    } finally {
       setIsSigningIn(false);
     }
   };
