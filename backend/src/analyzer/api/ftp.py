@@ -2,10 +2,9 @@
 
 import asyncio
 import uuid
-from typing import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 
 from analyzer.dependencies import CurrentUserDep, FTPSyncServiceDep
 from analyzer.models.api import (
@@ -143,19 +142,20 @@ async def stream_sync_progress(
             sync_state["status"] = "error"
             sync_state["errors"].append(str(e))
 
-    async def event_generator() -> AsyncIterator[str]:
+    async def event_generator():
         """Generate SSE events for sync progress."""
         try:
             sync_state["status"] = "running"
 
             # Send initial status
-            yield _format_sse(
-                FTPSyncProgress(
+            yield {
+                "event": "progress",
+                "data": FTPSyncProgress(
                     sync_id=sync_id,
                     status="running",
                     message="Starting sync...",
-                )
-            )
+                ).model_dump_json(),
+            }
 
             # Start sync as background task
             sync_task = asyncio.create_task(run_sync())
@@ -164,15 +164,16 @@ async def stream_sync_progress(
             last_current = -1
             while sync_state["status"] == "running":
                 if sync_state["current"] != last_current:
-                    yield _format_sse(
-                        FTPSyncProgress(
+                    yield {
+                        "event": "progress",
+                        "data": FTPSyncProgress(
                             sync_id=sync_id,
                             status="running",
                             message=sync_state["message"],
                             current=sync_state["current"],
                             total=sync_state["total"],
-                        )
-                    )
+                        ).model_dump_json(),
+                    }
                     last_current = sync_state["current"]
                 await asyncio.sleep(0.2)
 
@@ -181,8 +182,9 @@ async def stream_sync_progress(
 
             # Send final status
             if sync_state["status"] == "completed":
-                yield _format_sse(
-                    FTPSyncProgress(
+                yield {
+                    "event": "complete",
+                    "data": FTPSyncProgress(
                         sync_id=sync_id,
                         status="completed",
                         message="Sync completed",
@@ -192,47 +194,41 @@ async def stream_sync_progress(
                         documents_new=sync_state["documents_new"],
                         documents_updated=sync_state["documents_updated"],
                         errors=sync_state["errors"],
-                    )
-                )
+                    ).model_dump_json(),
+                }
             else:
-                yield _format_sse(
-                    FTPSyncProgress(
+                yield {
+                    "event": "error",
+                    "data": FTPSyncProgress(
                         sync_id=sync_id,
                         status="error",
                         message=sync_state["errors"][0]
                         if sync_state["errors"]
                         else "Unknown error",
                         errors=sync_state["errors"],
-                    )
-                )
+                    ).model_dump_json(),
+                }
 
         except Exception as e:
             sync_state["status"] = "error"
             sync_state["errors"].append(str(e))
 
-            yield _format_sse(
-                FTPSyncProgress(
+            yield {
+                "event": "error",
+                "data": FTPSyncProgress(
                     sync_id=sync_id,
                     status="error",
                     message=str(e),
                     errors=[str(e)],
-                )
-            )
+                ).model_dump_json(),
+            }
 
         finally:
             # Clean up after a delay
             await asyncio.sleep(60)
             _active_syncs.pop(sync_id, None)
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    return EventSourceResponse(event_generator())
 
 
 @router.get("/sync-history", response_model=SyncHistoryResponse)
@@ -265,8 +261,3 @@ async def get_sync_history(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get sync history: {e}")
-
-
-def _format_sse(data: FTPSyncProgress) -> str:
-    """Format data as Server-Sent Event."""
-    return f"data: {data.model_dump_json()}\n\n"

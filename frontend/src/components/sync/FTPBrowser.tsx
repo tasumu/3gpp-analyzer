@@ -60,18 +60,22 @@ export function FTPBrowser() {
       // Start SSE stream (now async due to token retrieval)
       const eventSource = await createFTPSyncStream(sync_id);
 
-      eventSource.onmessage = (event) => {
+      const handleSyncEvent = (event: MessageEvent) => {
         const data = JSON.parse(event.data) as FTPSyncProgress;
         setSyncProgress(data);
-
-        if (data.status === "completed" || data.status === "error") {
-          eventSource.close();
-          // Refresh directory to show updated sync status
-          loadDirectory(currentPath);
-          // Refresh sync history
-          setRefreshTrigger((prev) => prev + 1);
-        }
       };
+
+      const handleTerminalEvent = (event: MessageEvent) => {
+        const data = JSON.parse(event.data) as FTPSyncProgress;
+        setSyncProgress(data);
+        eventSource.close();
+        loadDirectory(currentPath);
+        setRefreshTrigger((prev) => prev + 1);
+      };
+
+      eventSource.addEventListener("progress", handleSyncEvent);
+      eventSource.addEventListener("complete", handleTerminalEvent);
+      eventSource.addEventListener("error", handleTerminalEvent);
 
       eventSource.onerror = () => {
         eventSource.close();

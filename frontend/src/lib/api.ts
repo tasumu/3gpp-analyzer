@@ -220,6 +220,7 @@ class FetchEventSource {
   private eventListeners: Map<string, ((event: MessageEvent) => void)[]> = new Map();
   public readyState: number = 0; // 0=CONNECTING, 1=OPEN, 2=CLOSED
   public onopen: (() => void) | null = null;
+  public onmessage: ((event: MessageEvent) => void) | null = null;
   public onerror: ((error: Event) => void) | null = null;
 
   constructor(
@@ -301,6 +302,10 @@ class FetchEventSource {
     const listeners = this.eventListeners.get(type) || [];
     for (const listener of listeners) {
       listener(event);
+    }
+    // Fallback to onmessage for unnamed "message" events (EventSource API compat)
+    if (type === "message" && listeners.length === 0) {
+      this.onmessage?.(event);
     }
   }
 
