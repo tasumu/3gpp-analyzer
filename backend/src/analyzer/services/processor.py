@@ -142,11 +142,14 @@ class ProcessorService:
             except ValueError as e:
                 if "No document found in ZIP" in str(e):
                     # ZIP contains no analyzable content - downgrade to download-only
-                    await self.document_service.update(document_id, {
-                        "analyzable": False,
-                        "status": DocumentStatus.DOWNLOADED.value,
-                        "error_message": None,
-                    })
+                    await self.document_service.update(
+                        document_id,
+                        {
+                            "analyzable": False,
+                            "status": DocumentStatus.DOWNLOADED.value,
+                            "error_message": None,
+                        },
+                    )
                     emit_status(
                         DocumentStatus.DOWNLOADED,
                         1.0,

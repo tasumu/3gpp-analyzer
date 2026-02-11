@@ -607,9 +607,7 @@ class FTPSyncService:
                         modified_at=file_info["modified_at"],
                     )
                     # Determine if file format is analyzable
-                    is_analyzable = file_info["filename"].lower().endswith(
-                        ANALYZABLE_EXTENSIONS
-                    )
+                    is_analyzable = file_info["filename"].lower().endswith(ANALYZABLE_EXTENSIONS)
                     # Create new document with metadata only
                     doc = Document(
                         id=doc_id,
