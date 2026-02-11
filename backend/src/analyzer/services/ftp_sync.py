@@ -601,6 +601,15 @@ class FTPSyncService:
                         if meeting:
                             update_data["meeting"] = meeting.model_dump(mode="json")
                         await self.firestore.update_document(doc_id, update_data)
+                        # Cascade meeting_id change to chunks for RAG search
+                        if meeting_changed and meeting:
+                            chunks_updated = await self.firestore.update_chunks_meeting_id(
+                                doc_id, meeting.id
+                            )
+                            if chunks_updated > 0:
+                                logger.info(
+                                    f"Updated {chunks_updated} chunks meeting_id for {doc_id}"
+                                )
                         result["documents_updated"] += 1
                 else:
                     # Create new document - no existing GCS paths to preserve

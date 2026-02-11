@@ -216,6 +216,29 @@ class FirestoreClient:
 
         return count
 
+    async def update_chunks_meeting_id(self, document_id: str, new_meeting_id: str) -> int:
+        """Update meeting_id in metadata for all chunks of a document."""
+        query = self._client.collection(self.CHUNKS_COLLECTION).where(
+            "metadata.document_id", "==", document_id
+        )
+        docs = query.stream()
+
+        batch = self._client.batch()
+        count = 0
+
+        for doc in docs:
+            batch.update(doc.reference, {"metadata.meeting_id": new_meeting_id})
+            count += 1
+
+            if count % 500 == 0:
+                batch.commit()
+                batch = self._client.batch()
+
+        if count > 0 and count % 500 != 0:
+            batch.commit()
+
+        return count
+
     # Vector search operations
 
     async def vector_search(
