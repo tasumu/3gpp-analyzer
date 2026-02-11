@@ -562,9 +562,14 @@ class FTPSyncService:
                 existing = await self.firestore.get_document(doc_id)
 
                 if existing:
-                    # Update if file has changed
+                    # Check what needs updating
                     existing_modified = existing.get("source_file", {}).get("modified_at")
-                    if existing_modified != file_info["modified_at"].isoformat():
+                    existing_meeting_id = existing.get("meeting", {}).get("id")
+
+                    file_changed = existing_modified != file_info["modified_at"].isoformat()
+                    meeting_changed = meeting and existing_meeting_id != meeting.id
+
+                    if file_changed or meeting_changed:
                         # Preserve existing GCS paths when updating metadata
                         existing_source = existing.get("source_file", {})
                         source_file = SourceFile(
@@ -575,13 +580,13 @@ class FTPSyncService:
                             gcs_original_path=existing_source.get("gcs_original_path"),
                             gcs_normalized_path=existing_source.get("gcs_normalized_path"),
                         )
-                        await self.firestore.update_document(
-                            doc_id,
-                            {
-                                "source_file": source_file.model_dump(mode="json"),
-                                "updated_at": datetime.utcnow().isoformat(),
-                            },
-                        )
+                        update_data = {
+                            "source_file": source_file.model_dump(mode="json"),
+                            "updated_at": datetime.utcnow().isoformat(),
+                        }
+                        if meeting:
+                            update_data["meeting"] = meeting.model_dump(mode="json")
+                        await self.firestore.update_document(doc_id, update_data)
                         result["documents_updated"] += 1
                 else:
                     # Create new document - no existing GCS paths to preserve
