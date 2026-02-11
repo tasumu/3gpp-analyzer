@@ -144,12 +144,14 @@ export default function MeetingDetailPage() {
           console.log("[SSE] Complete received");
           setCurrentSummary(data.summary);
           setLatestSummary(data.summary);
-          setSummaryProgress(null);
-          setIsSummarizing(false);
           toast.success("Meeting summary completed");
-          eventSource.close();
         } catch (e) {
           console.error("Failed to parse SSE complete data:", e, event.data);
+          toast.error("Failed to process summary completion");
+        } finally {
+          setSummaryProgress(null);
+          setIsSummarizing(false);
+          eventSource.close();
         }
       });
 

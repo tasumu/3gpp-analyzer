@@ -61,16 +61,25 @@ export function FTPBrowser() {
       const eventSource = await createFTPSyncStream(sync_id);
 
       const handleSyncEvent = (event: MessageEvent) => {
-        const data = JSON.parse(event.data) as FTPSyncProgress;
-        setSyncProgress(data);
+        try {
+          const data = JSON.parse(event.data) as FTPSyncProgress;
+          setSyncProgress(data);
+        } catch (e) {
+          console.error("Failed to parse FTP sync progress:", e, event.data);
+        }
       };
 
       const handleTerminalEvent = (event: MessageEvent) => {
-        const data = JSON.parse(event.data) as FTPSyncProgress;
-        setSyncProgress(data);
-        eventSource.close();
-        loadDirectory(currentPath);
-        setRefreshTrigger((prev) => prev + 1);
+        try {
+          const data = JSON.parse(event.data) as FTPSyncProgress;
+          setSyncProgress(data);
+        } catch (e) {
+          console.error("Failed to parse FTP sync terminal event:", e, event.data);
+        } finally {
+          eventSource.close();
+          loadDirectory(currentPath);
+          setRefreshTrigger((prev) => prev + 1);
+        }
       };
 
       eventSource.addEventListener("progress", handleSyncEvent);
