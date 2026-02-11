@@ -105,34 +105,55 @@ export default function MeetingDetailPage() {
         force,
       });
 
-      // Helper to handle SSE events (backend sends named events)
-      const handleSummarizeEvent = (event: MessageEvent) => {
+      // Named event handlers (using event.type from SSE event name)
+      eventSource.addEventListener("progress", (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
-          console.log("[SSE] Received event:", event.type, data);
-
-          if (data.event === "progress") {
-            console.log("[SSE] Progress update:", data.current, "/", data.total);
-            setSummaryProgress({
-              current: data.current,
-              total: data.total,
-              currentDocument: data.contribution_number || "",
-            });
-          } else if (data.event === "complete") {
-            console.log("[SSE] Complete received");
-            setCurrentSummary(data.summary);
-            setLatestSummary(data.summary);
-            setSummaryProgress(null);
-            setIsSummarizing(false);
-            toast.success("Meeting summary completed");
-            eventSource.close();
-          }
+          console.log("[SSE] Progress update:", data.current, "/", data.total);
+          setSummaryProgress({
+            current: data.current,
+            total: data.total,
+            currentDocument: data.contribution_number || "",
+          });
         } catch (e) {
-          console.error("Failed to parse SSE data:", e, event.data);
+          console.error("Failed to parse SSE progress data:", e, event.data);
         }
-      };
+      });
 
-      const handleErrorEvent = (event: MessageEvent) => {
+      eventSource.addEventListener("document_summary", (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("[SSE] Document summary:", data.contribution_number);
+        } catch (e) {
+          console.error("Failed to parse SSE document_summary data:", e, event.data);
+        }
+      });
+
+      eventSource.addEventListener("overall_report", (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("[SSE] Overall report received:", data.report?.length, "chars");
+        } catch (e) {
+          console.error("Failed to parse SSE overall_report data:", e, event.data);
+        }
+      });
+
+      eventSource.addEventListener("complete", (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("[SSE] Complete received");
+          setCurrentSummary(data.summary);
+          setLatestSummary(data.summary);
+          setSummaryProgress(null);
+          setIsSummarizing(false);
+          toast.success("Meeting summary completed");
+          eventSource.close();
+        } catch (e) {
+          console.error("Failed to parse SSE complete data:", e, event.data);
+        }
+      });
+
+      eventSource.addEventListener("error", (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
           toast.error(data.error || "Summarization failed");
@@ -142,14 +163,7 @@ export default function MeetingDetailPage() {
         setIsSummarizing(false);
         setSummaryProgress(null);
         eventSource.close();
-      };
-
-      // Listen to named events (backend sends event: progress, complete, etc.)
-      eventSource.addEventListener("progress", handleSummarizeEvent);
-      eventSource.addEventListener("document_summary", handleSummarizeEvent);
-      eventSource.addEventListener("complete", handleSummarizeEvent);
-      eventSource.addEventListener("overall_report", handleSummarizeEvent);
-      eventSource.addEventListener("error", handleErrorEvent);
+      });
 
       eventSource.onerror = () => {
         eventSource.close();

@@ -182,29 +182,30 @@ async def summarize_meeting_stream(
                 force=force,
             ):
                 if event.type == "progress":
-                    # Map backend progress format to frontend expected format
-                    progress_data = {
-                        "event": "progress",
-                        "current": event.progress.get("processed", 0),
-                        "total": event.progress.get("total_documents", 0),
-                        "contribution_number": event.progress.get("current_document", ""),
-                    }
                     yield {
                         "event": "progress",
-                        "data": json.dumps(progress_data),
+                        "data": json.dumps(
+                            {
+                                "current": event.progress.get("processed", 0),
+                                "total": event.progress.get("total_documents", 0),
+                                "contribution_number": event.progress.get("current_document", ""),
+                            }
+                        ),
                     }
                 elif event.type == "document_summary":
-                    # Send progress event for document_summary
+                    # Also send a progress event for document_summary
                     if event.progress:
-                        progress_data = {
-                            "event": "progress",
-                            "current": event.progress.get("processed", 0),
-                            "total": event.progress.get("total_documents", 0),
-                            "contribution_number": event.progress.get("current_document", ""),
-                        }
                         yield {
                             "event": "progress",
-                            "data": json.dumps(progress_data),
+                            "data": json.dumps(
+                                {
+                                    "current": event.progress.get("processed", 0),
+                                    "total": event.progress.get("total_documents", 0),
+                                    "contribution_number": event.progress.get(
+                                        "current_document", ""
+                                    ),
+                                }
+                            ),
                         }
                     yield {
                         "event": "document_summary",
@@ -232,13 +233,11 @@ async def summarize_meeting_stream(
                         ),
                     }
                 elif event.type == "done":
-                    # Send complete event with full summary for frontend compatibility
                     summary_response = meeting_summary_to_response(event.result)
                     yield {
                         "event": "complete",
                         "data": json.dumps(
                             {
-                                "event": "complete",
                                 "summary": summary_response.model_dump(),
                             }
                         ),
