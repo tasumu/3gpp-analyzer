@@ -102,6 +102,13 @@ class ProcessorService:
         if not doc:
             raise ValueError(f"Document not found: {document_id}")
 
+        # Guard: non-analyzable documents cannot be processed
+        if not doc.analyzable:
+            raise ValueError(
+                f"Document {document_id} ({doc.source_file.filename}) is not analyzable. "
+                f"Only .doc, .docx, and .zip files containing Word documents can be processed."
+            )
+
         # Check if already processed
         if doc.status == DocumentStatus.INDEXED and not force:
             return doc
@@ -127,10 +134,29 @@ class ProcessorService:
 
             # Step 2: Normalize to docx
             emit_status(DocumentStatus.NORMALIZING, 0.1, "Converting to docx")
-            normalized_path = await self.normalizer.normalize_document(
-                document_id,
-                self.document_service.firestore,
-            )
+            try:
+                normalized_path = await self.normalizer.normalize_document(
+                    document_id,
+                    self.document_service.firestore,
+                )
+            except ValueError as e:
+                if "No document found in ZIP" in str(e):
+                    # ZIP contains no analyzable content - downgrade to download-only
+                    await self.document_service.update(
+                        document_id,
+                        {
+                            "analyzable": False,
+                            "status": DocumentStatus.DOWNLOADED.value,
+                            "error_message": None,
+                        },
+                    )
+                    emit_status(
+                        DocumentStatus.DOWNLOADED,
+                        1.0,
+                        "ZIP contains no Word documents - marked as download-only",
+                    )
+                    return await self.document_service.get(document_id)
+                raise
 
             # Step 3: Download normalized file for chunking
             emit_status(DocumentStatus.CHUNKING, 0.3, "Extracting structure")

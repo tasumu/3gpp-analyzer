@@ -299,18 +299,27 @@ async def get_meeting_info(
 
     Returns document statistics for the meeting.
     """
-    # Get total documents
-    _, total = await document_service.list_documents(
-        meeting_id=meeting_id,
-        page_size=1,
-    )
+    # Fetch all documents in batches to get accurate counts
+    all_docs = []
+    page = 1
+    batch_size = 5000
+    while True:
+        batch, total = await document_service.list_documents(
+            meeting_id=meeting_id,
+            page=page,
+            page_size=batch_size,
+        )
+        all_docs.extend(batch)
+        if len(all_docs) >= total or not batch:
+            break
+        page += 1
 
-    # Get indexed documents
-    _, indexed = await document_service.list_documents(
-        meeting_id=meeting_id,
-        status=DocumentStatus.INDEXED,
-        page_size=1,
-    )
+    total = len(all_docs)
+
+    # Count by category
+    analyzable_count = sum(1 for d in all_docs if d.analyzable)
+    download_only_count = total - analyzable_count
+    indexed = sum(1 for d in all_docs if d.status == DocumentStatus.INDEXED)
 
     # Parse meeting_id to get working group
     parts = meeting_id.split("#")
@@ -323,7 +332,9 @@ async def get_meeting_info(
         "meeting_number": meeting_number,
         "total_documents": total,
         "indexed_documents": indexed,
-        "unindexed_count": total - indexed,
+        "analyzable_documents": analyzable_count,
+        "download_only_documents": download_only_count,
+        "unindexed_count": analyzable_count - indexed,
         "ready_for_analysis": indexed > 0,
     }
 
@@ -358,18 +369,23 @@ async def batch_process_meeting_stream(
         try:
             # Get documents to process
             if force:
-                # Get all documents
-                documents, _ = await document_service.list_documents(
-                    meeting_id=meeting_id,
-                    page_size=1000,
-                )
-            else:
-                # Get only unindexed documents (not INDEXED status)
+                # Get all analyzable documents
                 all_docs, _ = await document_service.list_documents(
                     meeting_id=meeting_id,
                     page_size=1000,
                 )
-                documents = [doc for doc in all_docs if doc.status != DocumentStatus.INDEXED]
+                documents = [doc for doc in all_docs if doc.analyzable]
+            else:
+                # Get only unindexed analyzable documents
+                all_docs, _ = await document_service.list_documents(
+                    meeting_id=meeting_id,
+                    page_size=1000,
+                )
+                documents = [
+                    doc
+                    for doc in all_docs
+                    if doc.analyzable and doc.status != DocumentStatus.INDEXED
+                ]
 
             if not documents:
                 yield {

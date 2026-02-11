@@ -25,6 +25,7 @@ export interface Document {
   meeting_id: string | null;
   meeting_name: string | null;
   status: DocumentStatus;
+  analyzable: boolean;
   error_message: string | null;
   chunk_count: number;
   filename: string;
@@ -47,6 +48,8 @@ export interface Meeting {
   working_group: string;
   document_count: number;
   indexed_count: number;
+  analyzable_count: number;
+  download_only_count: number;
 }
 
 export interface MeetingsResponse {
@@ -105,7 +108,8 @@ export function isProcessing(status: DocumentStatus): boolean {
   ].includes(status);
 }
 
-export function isProcessable(status: DocumentStatus): boolean {
+export function isProcessable(status: DocumentStatus, analyzable: boolean = true): boolean {
+  if (!analyzable) return false;
   return [
     "metadata_only",
     "downloaded",
@@ -486,6 +490,8 @@ export interface MeetingInfo {
   meeting_number: string;
   total_documents: number;
   indexed_documents: number;
+  analyzable_documents: number;
+  download_only_documents: number;
   unindexed_count: number;
   ready_for_analysis: boolean;
 }

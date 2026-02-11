@@ -18,6 +18,7 @@ class DocumentResponse(BaseModel):
     meeting_id: str | None
     meeting_name: str | None
     status: DocumentStatus
+    analyzable: bool
     error_message: str | None
     chunk_count: int
     filename: str

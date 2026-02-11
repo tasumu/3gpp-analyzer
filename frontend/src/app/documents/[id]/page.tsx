@@ -186,12 +186,24 @@ export default function DocumentDetailPage() {
       {/* Processing */}
       <div className="bg-white shadow-sm rounded-lg p-6">
         <h2 className="text-lg font-semibold mb-4">Processing</h2>
-        <ProcessingProgress
-          documentId={document.id}
-          currentStatus={document.status}
-          chunkCount={document.chunk_count}
-          onComplete={fetchDocument}
-        />
+        {document.analyzable ? (
+          <ProcessingProgress
+            documentId={document.id}
+            currentStatus={document.status}
+            chunkCount={document.chunk_count}
+            onComplete={fetchDocument}
+          />
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <svg className="w-5 h-5 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>
+              This document ({document.filename.split(".").pop()?.toUpperCase()}) is available for download only.
+              Analysis requires .doc, .docx, or .zip format containing Word documents.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -209,17 +221,19 @@ export default function DocumentDetailPage() {
             </svg>
             Download Original
           </button>
-          <button
-            onClick={() => handleDownload(true)}
-            disabled={!["normalized", "chunking", "chunked", "indexing", "indexed"].includes(document.status)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={!["normalized", "chunking", "chunked", "indexing", "indexed"].includes(document.status) ? "Document not yet normalized" : undefined}
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Download DOCX
-          </button>
+          {document.analyzable && (
+            <button
+              onClick={() => handleDownload(true)}
+              disabled={!["normalized", "chunking", "chunked", "indexing", "indexed"].includes(document.status)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={!["normalized", "chunking", "chunked", "indexing", "indexed"].includes(document.status) ? "Document not yet normalized" : undefined}
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download DOCX
+            </button>
+          )}
           <button
             onClick={handleDelete}
             disabled={isDeleting}
@@ -234,14 +248,16 @@ export default function DocumentDetailPage() {
       </div>
 
       {/* Document Preview */}
-      <DocxPreview
-        documentId={document.id}
-        getDownloadUrl={getDownloadUrl}
-        isAvailable={["normalized", "chunking", "chunked", "indexing", "indexed"].includes(document.status)}
-      />
+      {document.analyzable && (
+        <DocxPreview
+          documentId={document.id}
+          getDownloadUrl={getDownloadUrl}
+          isAvailable={["normalized", "chunking", "chunked", "indexing", "indexed"].includes(document.status)}
+        />
+      )}
 
-      {/* Document Analysis (only for indexed documents) */}
-      {document.status === "indexed" && (
+      {/* Document Analysis (only for indexed analyzable documents) */}
+      {document.analyzable && document.status === "indexed" && (
         <CollapsibleSection title="Document Analysis" defaultExpanded={true}>
           <AnalysisPanel
             document={document}
@@ -252,8 +268,8 @@ export default function DocumentDetailPage() {
         </CollapsibleSection>
       )}
 
-      {/* Custom Document Analysis (only for indexed documents) */}
-      {document.status === "indexed" && (
+      {/* Custom Document Analysis (only for indexed analyzable documents) */}
+      {document.analyzable && document.status === "indexed" && (
         <CollapsibleSection title="Custom Document Analysis" defaultExpanded={false}>
           <CustomAnalysisSection documentId={document.id} language={analysisLanguage} />
         </CollapsibleSection>

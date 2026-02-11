@@ -389,7 +389,7 @@ export default function MeetingDetailPage() {
             {meetingInfo.ready_for_analysis ? (
               <span className="text-xs text-green-600 font-medium">Ready for analysis</span>
             ) : (
-              <span className="text-xs text-yellow-600 font-medium">Indexing in progress</span>
+              <span className="text-xs text-yellow-600 font-medium">Processing required</span>
             )}
           </div>
         </div>
@@ -415,10 +415,15 @@ export default function MeetingDetailPage() {
                 サマライズおよび分析は<strong>インデックス化済み文書</strong>のみが対象です。
               </p>
               <p className="text-xs text-blue-600 mt-1">
-                {meetingInfo.indexed_documents} / {meetingInfo.total_documents} 件の文書が分析対象になります。
+                {meetingInfo.indexed_documents} / {meetingInfo.analyzable_documents ?? meetingInfo.total_documents} 件の文書が分析対象になります。
                 {meetingInfo.unindexed_count > 0 && (
                   <span className="ml-1">
                     （{meetingInfo.unindexed_count}件が未処理）
+                  </span>
+                )}
+                {(meetingInfo.download_only_documents ?? 0) > 0 && (
+                  <span className="ml-1 text-orange-600">
+                    （{meetingInfo.download_only_documents}件はDLのみ）
                   </span>
                 )}
               </p>

@@ -5,6 +5,21 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+# File extensions that can be normalized to docx and analyzed
+ANALYZABLE_EXTENSIONS = (".doc", ".docx", ".zip")
+
+# All file extensions to collect from FTP (includes download-only formats)
+ALL_DOCUMENT_EXTENSIONS = (
+    ".doc",
+    ".docx",
+    ".zip",
+    ".pptx",
+    ".ppt",
+    ".xlsx",
+    ".xls",
+    ".pdf",
+)
+
 
 class DocumentType(str, Enum):
     """Type of document based on filename pattern."""
@@ -63,6 +78,10 @@ class Document(BaseModel):
     meeting: Meeting | None = Field(None, description="Associated meeting")
     source_file: SourceFile = Field(..., description="Source file information")
     status: DocumentStatus = Field(default=DocumentStatus.METADATA_ONLY)
+    analyzable: bool = Field(
+        default=True,
+        description="Whether the document format supports analysis",
+    )
     error_message: str | None = Field(None, description="Error message if status is ERROR")
     chunk_count: int = Field(default=0, description="Number of chunks created")
     created_at: datetime = Field(default_factory=datetime.utcnow)

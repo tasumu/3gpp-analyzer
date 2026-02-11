@@ -100,15 +100,21 @@ export function DocumentList({
             {selectedIds.size} document{selectedIds.size !== 1 ? "s" : ""} selected
           </span>
           <div className="flex items-center gap-2">
-            {onBatchProcess && (
-              <button
-                onClick={() => onBatchProcess(Array.from(selectedIds))}
-                disabled={batchLoading}
-                className="px-3 py-1.5 text-sm font-medium bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Process Selected
-              </button>
-            )}
+            {onBatchProcess && (() => {
+              const processableIds = Array.from(selectedIds).filter((id) => {
+                const doc = documents.find((d) => d.id === id);
+                return doc?.analyzable !== false;
+              });
+              return (
+                <button
+                  onClick={() => processableIds.length > 0 && onBatchProcess(processableIds)}
+                  disabled={batchLoading || processableIds.length === 0}
+                  className="px-3 py-1.5 text-sm font-medium bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Process Selected ({processableIds.length})
+                </button>
+              );
+            })()}
             {onBatchDelete && (
               <button
                 onClick={() => onBatchDelete(Array.from(selectedIds))}
@@ -188,6 +194,11 @@ export function DocumentList({
                   {doc.document_type !== "contribution" && (
                     <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
                       {doc.document_type}
+                    </span>
+                  )}
+                  {!doc.analyzable && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                      DL Only
                     </span>
                   )}
                 </td>
