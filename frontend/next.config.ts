@@ -67,6 +67,16 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         destination: `${apiUrl}/:path*`,
       },
+      // Proxy Firebase Auth handler so the auth flow stays first-party.
+      // This avoids cross-origin / third-party cookie issues with signInWithRedirect.
+      ...(process.env.FIREBASE_AUTH_PROXY_DOMAIN
+        ? [
+            {
+              source: "/__/auth/:path*",
+              destination: `https://${process.env.FIREBASE_AUTH_PROXY_DOMAIN}/__/auth/:path*`,
+            },
+          ]
+        : []),
     ];
   },
 };

@@ -53,7 +53,26 @@ gcloud firestore databases create --location=asia-northeast1
 5. 「Settings」タブ → 「承認済みドメイン」に App Hosting の URL を追加
    - 例: `threegpp-bff--your-project.asia-east1.hosted.app`
 
-### 5. IAM署名権限設定（署名URL用）
+### 5. Firebase Auth Proxy 設定（signInWithRedirect 対応）
+
+Firebase App Hosting のドメインと Firebase Auth の `authDomain`（デフォルト `<project-id>.firebaseapp.com`）が異なるため、`signInWithRedirect` がクロスオリジン問題で失敗します。
+これを解決するため、Next.js の rewrite で `/__/auth/*` をプロキシし、認証フローをファーストパーティ化しています。
+
+```bash
+# Secret Manager にプロキシ先ドメインを設定
+printf '<project-id>.firebaseapp.com' | \
+  firebase apphosting:secrets:set firebase-auth-proxy-domain --force
+
+# App Hosting バックエンドにアクセス権限を付与
+firebase apphosting:secrets:grantaccess firebase-auth-proxy-domain --backend <バックエンド名>
+```
+
+> **関連ファイル:**
+> - `frontend/next.config.ts`: `/__/auth/:path*` → `FIREBASE_AUTH_PROXY_DOMAIN` へのリライト
+> - `frontend/src/lib/firebase.ts`: `authDomain` を `window.location.host` に上書き
+> - `frontend/apphosting.yaml`: `FIREBASE_AUTH_PROXY_DOMAIN` シークレットの定義
+
+### 6. IAM署名権限設定（署名URL用）
 
 Cloud Run から GCS の署名URL を生成するために、サービスアカウントに署名権限が必要です。
 
