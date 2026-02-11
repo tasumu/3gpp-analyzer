@@ -6,6 +6,8 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from google.adk.agents import LlmAgent
+from google.adk.agents.live_request_queue import LiveRequestQueue
+from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
 from google.genai.types import Content, Part
 
@@ -430,28 +432,34 @@ class ADKAgentRunner:
                     f"with {len(existing_session.events)} events"
                 )
 
-            # Build message
-            user_message = Content(parts=[Part(text=user_input)])
+            # Configure SSE streaming mode (HTTP streaming via standard Gemini API)
+            run_config = RunConfig(
+                streaming_mode=StreamingMode.SSE,
+                response_modalities=["TEXT"],
+            )
 
-            # Run agent with streaming
+            # Build message and send via LiveRequestQueue
+            live_request_queue = LiveRequestQueue()
+            content = Content(parts=[Part(text=user_input)])
+            live_request_queue.send_content(content)
+            live_request_queue.close()
+
+            # Run agent with token-level streaming
             full_text = ""
-            async for event in self.runner.run_async(
+            async for event in self.runner.run_live(
                 user_id=user_id,
                 session_id=session_id,
-                new_message=user_message,
+                live_request_queue=live_request_queue,
+                run_config=run_config,
             ):
-                # Yield partial text updates
-                if hasattr(event, "partial") and event.partial:
-                    if event.content and event.content.parts:
-                        for part in event.content.parts:
-                            if hasattr(part, "text") and part.text:
+                if event.content and event.content.parts:
+                    for part in event.content.parts:
+                        if hasattr(part, "text") and part.text:
+                            if hasattr(event, "partial") and event.partial:
+                                # Yield incremental text chunks
                                 yield {"type": "chunk", "content": part.text}
-
-                # Handle final response
-                if event.is_final_response():
-                    if event.content and event.content.parts:
-                        for part in event.content.parts:
-                            if hasattr(part, "text") and part.text:
+                            else:
+                                # Non-partial = complete merged text
                                 full_text = part.text
 
             # Yield final result with evidences
