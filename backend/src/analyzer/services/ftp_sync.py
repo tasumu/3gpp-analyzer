@@ -590,8 +590,12 @@ class FTPSyncService:
                             gcs_original_path=existing_source.get("gcs_original_path"),
                             gcs_normalized_path=existing_source.get("gcs_normalized_path"),
                         )
+                        is_analyzable = (
+                            file_info["filename"].lower().endswith(ANALYZABLE_EXTENSIONS)
+                        )
                         update_data = {
                             "source_file": source_file.model_dump(mode="json"),
+                            "analyzable": is_analyzable,
                             "updated_at": datetime.utcnow().isoformat(),
                         }
                         if meeting:
