@@ -261,12 +261,13 @@ async def read_attachment(
     logger.info(f"Reading attachment: {attachment_id}")
 
     try:
-        text = await ctx.attachment_service.get_extracted_text(attachment_id)
-        if text is None:
+        attachment, text = await ctx.attachment_service.get_extracted_text_with_metadata(
+            attachment_id
+        )
+        if attachment is None or text is None:
             return {"error": f"Attachment not found: {attachment_id}"}
 
-        attachment = await ctx.attachment_service.get(attachment_id)
-        filename = attachment.filename if attachment else "unknown"
+        filename = attachment.filename
 
         # Truncate very large content
         max_len = 50000

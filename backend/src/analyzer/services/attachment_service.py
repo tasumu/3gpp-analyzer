@@ -183,13 +183,20 @@ class AttachmentService:
             return Attachment.from_firestore(doc.id, doc.to_dict())
         return None
 
-    async def get_extracted_text(self, attachment_id: str) -> str | None:
-        """Get extracted text content of an attachment."""
+    async def get_extracted_text_with_metadata(
+        self, attachment_id: str
+    ) -> tuple[Attachment, str] | tuple[None, None]:
+        """Get attachment metadata and extracted text in a single Firestore read."""
         attachment = await self.get(attachment_id)
         if not attachment or not attachment.extracted_text_gcs_path:
-            return None
+            return None, None
         content = await self.storage.download_bytes(attachment.extracted_text_gcs_path)
-        return content.decode("utf-8")
+        return attachment, content.decode("utf-8")
+
+    async def get_extracted_text(self, attachment_id: str) -> str | None:
+        """Get extracted text content of an attachment."""
+        _, text = await self.get_extracted_text_with_metadata(attachment_id)
+        return text
 
     async def delete(self, attachment_id: str, user_id: str) -> bool:
         """

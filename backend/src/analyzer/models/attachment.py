@@ -1,6 +1,6 @@
 """Attachment model for user-uploaded supplementary files."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -19,11 +19,14 @@ class Attachment(BaseModel):
     )
     file_size_bytes: int = Field(..., description="File size in bytes")
     uploaded_by: str = Field(..., description="User ID who uploaded the file")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def to_firestore(self) -> dict[str, Any]:
         """Convert to Firestore-compatible dictionary."""
-        return self.model_dump(mode="json")
+        data = self.model_dump(mode="json")
+        # Preserve created_at as datetime for Firestore native Timestamp
+        data["created_at"] = self.created_at
+        return data
 
     @classmethod
     def from_firestore(cls, doc_id: str, data: dict[str, Any]) -> "Attachment":

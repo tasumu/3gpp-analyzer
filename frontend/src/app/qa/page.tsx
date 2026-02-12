@@ -111,7 +111,7 @@ function generateSessionId(): string {
 export default function QAPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
-  const [mode, setMode] = useState<QAMode>("rag");
+  const [mode, setMode] = useState<QAMode>("agentic");
   const [scope, setScope] = useState<QAScope>("global");
   const [scopeId, setScopeId] = useState<string | null>(null);
   const [scopeIds, setScopeIds] = useState<string[]>([]);

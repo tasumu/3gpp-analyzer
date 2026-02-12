@@ -99,11 +99,9 @@ async def get_attachment_content(
     attachment_service: AttachmentServiceDep,
 ):
     """Get extracted text content of an attachment."""
-    attachment = await attachment_service.get(attachment_id)
+    attachment, text = await attachment_service.get_extracted_text_with_metadata(attachment_id)
     if not attachment:
         raise HTTPException(status_code=404, detail="Attachment not found")
-
-    text = await attachment_service.get_extracted_text(attachment_id)
     if text is None:
         raise HTTPException(status_code=404, detail="Extracted text not available")
 
