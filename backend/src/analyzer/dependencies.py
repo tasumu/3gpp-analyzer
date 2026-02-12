@@ -27,7 +27,6 @@ from analyzer.services.normalizer import NormalizerService
 from analyzer.services.processor import ProcessorService
 from analyzer.services.qa_service import QAService
 from analyzer.services.report_prompt_service import ReportPromptService
-from analyzer.services.review_sheet_generator import ReviewSheetGenerator
 from analyzer.services.user_service import UserService
 from analyzer.services.vectorizer import VectorizerService
 
@@ -139,26 +138,17 @@ def get_processor_service(
 def get_analysis_service(
     evidence_provider: Annotated[EvidenceProvider, Depends(get_evidence_provider)],
     firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
-    storage: Annotated[StorageClient, Depends(get_storage_client)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AnalysisService:
     """Get AnalysisService instance."""
     return AnalysisService(
         evidence_provider=evidence_provider,
         firestore=firestore,
-        storage=storage,
         project_id=settings.gcp_project_id,
         location=settings.vertex_ai_location,
         model=settings.analysis_model,
         strategy_version=settings.analysis_strategy_version,
     )
-
-
-def get_review_sheet_generator(
-    storage: Annotated[StorageClient, Depends(get_storage_client)],
-) -> ReviewSheetGenerator:
-    """Get ReviewSheetGenerator instance."""
-    return ReviewSheetGenerator(storage=storage)
 
 
 def get_custom_prompt_service(
@@ -263,7 +253,6 @@ NormalizerServiceDep = Annotated[NormalizerService, Depends(get_normalizer_servi
 VectorizerServiceDep = Annotated[VectorizerService, Depends(get_vectorizer_service)]
 ProcessorServiceDep = Annotated[ProcessorService, Depends(get_processor_service)]
 AnalysisServiceDep = Annotated[AnalysisService, Depends(get_analysis_service)]
-ReviewSheetGeneratorDep = Annotated[ReviewSheetGenerator, Depends(get_review_sheet_generator)]
 CustomPromptServiceDep = Annotated[CustomPromptService, Depends(get_custom_prompt_service)]
 ReportPromptServiceDep = Annotated[ReportPromptService, Depends(get_report_prompt_service)]
 AttachmentServiceDep = Annotated[AttachmentService, Depends(get_attachment_service)]

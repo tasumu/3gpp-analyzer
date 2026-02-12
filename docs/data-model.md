@@ -272,55 +272,13 @@ interface Evidence {
 
 ---
 
-## 5. AnalysisResult（分析結果）
+## 5. CustomAnalysisResult（カスタム分析結果）
 
-分析結果を永続化し、再利用・履歴管理を可能にする。
+カスタム分析の結果型。結果は永続化されず、APIレスポンスとして返される。
 
 ### 5.1 スキーマ
 
 ```typescript
-interface AnalysisResult {
-  id: string;                      // 分析結果ID
-  document_id: string;             // 対象文書ID
-  type: AnalysisType;              // 分析タイプ
-  strategy_version: string;        // 分析戦略バージョン
-  created_at: timestamp;           // 作成日時
-  result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult;
-}
-
-type AnalysisType = "single" | "compare" | "custom";
-
-interface SingleAnalysis {
-  summary: string;                 // 要点サマリ
-  changes: Change[];               // 変更提案
-  issues: Issue[];                 // 論点・懸念
-  evidences: Evidence[];           // 根拠
-}
-
-interface CompareAnalysis {
-  common_points: string[];         // 共通点
-  differences: Difference[];       // 相違点
-  recommendation: string;          // 推奨アクション
-  evidences: Evidence[];           // 根拠
-}
-
-interface Change {
-  type: "addition" | "modification" | "deletion";
-  description: string;
-  clause: string | null;
-}
-
-interface Issue {
-  description: string;
-  severity: "high" | "medium" | "low";
-}
-
-interface Difference {
-  aspect: string;                  // 比較観点
-  doc1_position: string;           // 文書1の立場
-  doc2_position: string;           // 文書2の立場
-}
-
 interface CustomAnalysisResult {
   prompt_text: string;             // 使用したカスタムプロンプト
   prompt_id: string | null;        // 保存済みプロンプトID（使用した場合）
@@ -333,119 +291,12 @@ interface CustomAnalysisResult {
 
 ```python
 from pydantic import BaseModel
-from datetime import datetime
-from typing import Literal
-
-AnalysisType = Literal["single", "compare", "custom"]
-ChangeType = Literal["addition", "modification", "deletion"]
-Severity = Literal["high", "medium", "low"]
-
-class Change(BaseModel):
-    type: ChangeType
-    description: str
-    clause: str | None = None
-
-class Issue(BaseModel):
-    description: str
-    severity: Severity
-
-class Difference(BaseModel):
-    aspect: str
-    doc1_position: str
-    doc2_position: str
-
-class SingleAnalysis(BaseModel):
-    summary: str
-    changes: list[Change]
-    issues: list[Issue]
-    evidences: list[Evidence]
-
-class CompareAnalysis(BaseModel):
-    common_points: list[str]
-    differences: list[Difference]
-    recommendation: str
-    evidences: list[Evidence]
 
 class CustomAnalysisResult(BaseModel):
     prompt_text: str
     prompt_id: str | None = None
     answer: str
     evidences: list[Evidence]
-
-class AnalysisResult(BaseModel):
-    id: str
-    document_id: str
-    type: AnalysisType
-    strategy_version: str
-    created_at: datetime
-    result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult
-```
-
-### 5.3 永続化の方針
-
-| 項目 | 方針 |
-|------|------|
-| 保存先 | Firestore |
-| キー | `document_id` + `type` + `strategy_version` |
-| 再分析条件 | 戦略バージョン変更、明示的な再分析リクエスト |
-| 保持期間 | 無期限（必要に応じてアーカイブ） |
-
-### 5.4 カスタム分析結果の使用例
-
-**カスタム分析リクエスト**
-
-```json
-{
-  "prompt_text": "セキュリティの観点でサマライズしてください",
-  "prompt_id": "prompt-12345"
-}
-```
-
-**カスタム分析レスポンス**
-
-```json
-{
-  "id": "ana-custom-12345",
-  "document_id": "doc-67890",
-  "type": "custom",
-  "strategy_version": "v1",
-  "created_at": "2025-01-29T12:00:00Z",
-  "result": {
-    "prompt_text": "セキュリティの観点でサマライズしてください",
-    "prompt_id": "prompt-12345",
-    "answer": "本寄書はセキュリティ観点から以下の点が重要です...",
-    "evidences": [...]
-  }
-}
-```
-
-### 5.5 使用例
-
-```json
-{
-  "id": "ana-12345",
-  "document_id": "doc-67890",
-  "type": "single",
-  "strategy_version": "v1",
-  "created_at": "2025-01-29T10:00:00Z",
-  "result": {
-    "summary": "本寄書はTS 22.261への新要件追加を提案...",
-    "changes": [
-      {
-        "type": "addition",
-        "description": "低遅延要件の追加",
-        "clause": "5.2.1"
-      }
-    ],
-    "issues": [
-      {
-        "description": "RAN2との整合性確認が必要",
-        "severity": "medium"
-      }
-    ],
-    "evidences": [...]
-  }
-}
 ```
 
 ---

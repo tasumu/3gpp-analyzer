@@ -142,147 +142,9 @@ data: {"status": "indexed", "document_id": "doc-12345"}
 
 ---
 
-### POST /api/analysis
-
-分析を実行する。
-
-**リクエスト**
-
-```json
-{
-  "type": "single",
-  "contribution_numbers": ["S1-234567"],
-  "options": {
-    "include_summary": true,
-    "include_changes": true,
-    "include_issues": true,
-    "language": "ja"
-  }
-}
-```
-
-| フィールド | 型 | 必須 | 説明 |
-|-----------|---|------|------|
-| type | string | Yes | "single" または "compare" |
-| contribution_numbers | string[] | Yes | single: 1件, compare: 2件 |
-| options | object | No | 分析オプション |
-| options.language | string | No | 出力言語（"ja" または "en"、デフォルト: "ja"） |
-
-**レスポンス**
-
-```json
-{
-  "analysis_id": "ana-12345",
-  "status": "processing",
-  "created_at": "2025-01-29T12:00:00Z"
-}
-```
-
----
-
-### GET /api/analysis/{id}
-
-分析結果を取得する。
-
-**レスポンス**
-
-```json
-{
-  "analysis_id": "ana-12345",
-  "status": "completed",
-  "result": {
-    "summary": "本寄書は...",
-    "changes": [
-      {
-        "type": "addition",
-        "description": "新しい要件の追加",
-        "clause": "5.2.1"
-      }
-    ],
-    "issues": [
-      {
-        "description": "既存仕様との整合性確認が必要",
-        "severity": "medium"
-      }
-    ],
-    "evidences": [
-      {
-        "text": "The UE shall support...",
-        "contribution_number": "S1-234567",
-        "clause_number": "5.2.1",
-        "page_number": 12,
-        "score": 0.92
-      }
-    ]
-  },
-  "review_sheet_url": "/api/downloads/rs-12345",
-  "created_at": "2025-01-29T12:00:00Z",
-  "completed_at": "2025-01-29T12:00:30Z"
-}
-```
-
-**ステータス**
-
-| status | 説明 |
-|--------|------|
-| processing | 処理中 |
-| completed | 完了 |
-| failed | 失敗 |
-
----
-
-### GET /api/analysis/{id}/stream
-
-分析結果をストリーミングで取得する（SSE）。
-
-**レスポンス（SSE）**
-
-```
-event: progress
-data: {"stage": "fetching", "progress": 10}
-
-event: progress
-data: {"stage": "analyzing", "progress": 50}
-
-event: partial
-data: {"summary": "要点: 本寄書は..."}
-
-event: complete
-data: {"analysis_id": "ana-12345", "status": "completed"}
-```
-
-**イベントタイプ**
-
-| event | 説明 |
-|-------|------|
-| progress | 進捗情報 |
-| partial | 部分結果 |
-| complete | 完了通知 |
-| error | エラー通知 |
-
----
-
-### GET /api/downloads/{id}
-
-成果物をダウンロードする。
-
-**レスポンス**
-
-- 302 Redirect to signed URL
-- または直接ファイルストリーム
-
-**ヘッダー**
-
-```
-Content-Type: text/markdown
-Content-Disposition: attachment; filename="review-sheet-S1-234567.md"
-```
-
----
-
 ### POST /api/documents/{id}/analyze/custom
 
-カスタム分析を実行する。ユーザー定義のプロンプトで文書を分析。
+カスタム分析を実行する。ユーザー定義のプロンプトで文書を分析。結果は永続化されない。
 
 **リクエスト**
 
@@ -304,26 +166,20 @@ Content-Disposition: attachment; filename="review-sheet-S1-234567.md"
 
 ```json
 {
-  "id": "ana-custom-12345",
-  "document_id": "doc-67890",
-  "type": "custom",
-  "status": "completed",
-  "strategy_version": "v1",
-  "created_at": "2025-01-29T12:00:00Z",
-  "result": {
-    "prompt_text": "セキュリティの観点でサマライズしてください",
-    "prompt_id": "prompt-12345",
-    "answer": "本寄書はセキュリティ観点から以下の点が重要です...",
-    "evidences": [
-      {
-        "text": "Security requirements shall include...",
-        "contribution_number": "S1-234567",
-        "clause_number": "6.1",
-        "page_number": 15,
-        "score": 0.89
-      }
-    ]
-  }
+  "prompt_text": "セキュリティの観点でサマライズしてください",
+  "prompt_id": "prompt-12345",
+  "answer": "本寄書はセキュリティ観点から以下の点が重要です...",
+  "evidences": [
+    {
+      "chunk_id": "chunk-123",
+      "document_id": "doc-67890",
+      "contribution_number": "S1-234567",
+      "content": "Security requirements shall include...",
+      "clause_number": "6.1",
+      "page_number": 15,
+      "relevance_score": 0.89
+    }
+  ]
 }
 ```
 
@@ -577,6 +433,3 @@ FTPからメタデータを同期する。
 
 | エンドポイント | 制限 |
 |---------------|------|
-| POST /api/analysis | 10 req/min/user |
-| GET /api/analysis/* | 60 req/min/user |
-| GET /api/downloads/* | 30 req/min/user |

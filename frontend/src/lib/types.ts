@@ -216,28 +216,7 @@ export interface GroupedChunks {
 
 // Analysis types (Phase 2)
 
-export type AnalysisType = "single" | "compare" | "custom";
 export type AnalysisLanguage = "ja" | "en";
-export type AnalysisStatus = "pending" | "processing" | "completed" | "failed";
-export type ChangeType = "addition" | "modification" | "deletion";
-export type Severity = "high" | "medium" | "low";
-
-export interface Change {
-  type: ChangeType;
-  description: string;
-  clause: string | null;
-}
-
-export interface Issue {
-  description: string;
-  severity: Severity;
-}
-
-export interface Difference {
-  aspect: string;
-  doc1_position: string;
-  doc2_position: string;
-}
 
 export interface Evidence {
   chunk_id: string;
@@ -250,102 +229,6 @@ export interface Evidence {
   relevance_score: number;
   meeting_id: string | null;
 }
-
-export interface SingleAnalysis {
-  summary: string;
-  changes: Change[];
-  issues: Issue[];
-  evidences: Evidence[];
-}
-
-export interface CompareAnalysis {
-  common_points: string[];
-  differences: Difference[];
-  recommendation: string;
-  evidences: Evidence[];
-}
-
-export interface AnalysisOptions {
-  include_summary?: boolean;
-  include_changes?: boolean;
-  include_issues?: boolean;
-  language?: AnalysisLanguage;
-}
-
-export interface AnalysisRequest {
-  type: AnalysisType;
-  contribution_numbers: string[];
-  options?: AnalysisOptions;
-  force?: boolean;
-}
-
-export interface AnalysisResult {
-  id: string;
-  document_id: string;
-  document_ids: string[];
-  contribution_number: string;
-  type: AnalysisType;
-  status: AnalysisStatus;
-  strategy_version: string;
-  options: AnalysisOptions;
-  result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult | null;
-  review_sheet_path: string | null;
-  error_message: string | null;
-  created_at: string;
-  completed_at: string | null;
-  created_by: string | null;
-}
-
-export interface AnalysisListResponse {
-  analyses: AnalysisResult[];
-  total: number;
-}
-
-export interface AnalysisStartResponse {
-  analysis_id: string;
-  status: string;
-  document_id: string;
-  contribution_number: string;
-}
-
-// Analysis display helpers
-export const changeTypeLabels: Record<ChangeType, string> = {
-  addition: "Addition",
-  modification: "Modification",
-  deletion: "Deletion",
-};
-
-export const changeTypeColors: Record<ChangeType, string> = {
-  addition: "bg-green-100 text-green-800",
-  modification: "bg-yellow-100 text-yellow-800",
-  deletion: "bg-red-100 text-red-800",
-};
-
-export const severityLabels: Record<Severity, string> = {
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
-
-export const severityColors: Record<Severity, string> = {
-  high: "bg-red-100 text-red-800",
-  medium: "bg-yellow-100 text-yellow-800",
-  low: "bg-blue-100 text-blue-800",
-};
-
-export const analysisStatusLabels: Record<AnalysisStatus, string> = {
-  pending: "Pending",
-  processing: "Processing",
-  completed: "Completed",
-  failed: "Failed",
-};
-
-export const analysisStatusColors: Record<AnalysisStatus, string> = {
-  pending: "bg-gray-100 text-gray-800",
-  processing: "bg-blue-100 text-blue-800",
-  completed: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-800",
-};
 
 // Language display helpers
 export const languageLabels: Record<AnalysisLanguage, string> = {
@@ -386,20 +269,6 @@ export interface CustomAnalysisResult {
   prompt_id: string | null;
   answer: string;
   evidences: Evidence[];
-}
-
-// Type guard for custom analysis
-export function isCustomAnalysis(
-  result: AnalysisResult["result"]
-): result is CustomAnalysisResult {
-  return result !== null && "answer" in result && "prompt_text" in result;
-}
-
-// Type guard for single analysis
-export function isSingleAnalysis(
-  result: AnalysisResult["result"]
-): result is SingleAnalysis {
-  return result !== null && "summary" in result && "changes" in result;
 }
 
 // ============================================================================

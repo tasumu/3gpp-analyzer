@@ -42,12 +42,6 @@ export function Header() {
               Q&A
             </Link>
             <Link
-              href="/analysis"
-              className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-            >
-              Analysis
-            </Link>
-            <Link
               href="/sync"
               className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
             >

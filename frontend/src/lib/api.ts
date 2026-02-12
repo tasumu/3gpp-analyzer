@@ -4,14 +4,10 @@
 
 import type {
   AnalysisLanguage,
-  AnalysisListResponse,
-  AnalysisOptions,
-  AnalysisRequest,
-  AnalysisResult,
-  AnalysisStartResponse,
   Attachment,
   BatchOperationResponse,
   ChunkListResponse,
+  CustomAnalysisResult,
   CustomPrompt,
   CustomPromptsResponse,
   Document,
@@ -401,23 +397,6 @@ export async function getDocumentChunks(
 
 // Analysis APIs (Phase 2)
 
-export async function startAnalysis(
-  request: AnalysisRequest,
-): Promise<AnalysisStartResponse> {
-  return fetchApi<AnalysisStartResponse>("/analysis", {
-    method: "POST",
-    body: JSON.stringify(request),
-  });
-}
-
-export async function getAnalysis(analysisId: string): Promise<AnalysisResult> {
-  return fetchApi<AnalysisResult>(`/analysis/${analysisId}`);
-}
-
-export async function listAnalyses(limit = 20): Promise<AnalysisListResponse> {
-  return fetchApi<AnalysisListResponse>(`/analysis?limit=${limit}`);
-}
-
 export interface AnalyzeDocumentOptions {
   language?: AnalysisLanguage;
   customPrompt?: string;
@@ -453,35 +432,14 @@ export async function getDocumentSummary(
   return fetchApi<DocumentSummary | null>(`/documents/${documentId}/summary?${params}`);
 }
 
-export async function getDocumentAnalyses(
-  documentId: string,
-): Promise<AnalysisListResponse> {
-  return fetchApi<AnalysisListResponse>(`/documents/${documentId}/analysis`);
-}
-
-export async function createAnalysisStream(analysisId: string): Promise<EventSource> {
-  const token = await getAuthToken();
-  if (!token) {
-    throw new Error("Authentication required for SSE connection");
-  }
-  const url = `${API_BASE}/analysis/${analysisId}/stream`;
-  return new FetchEventSource(url, {
-    Authorization: `Bearer ${token}`,
-  }) as unknown as EventSource;
-}
-
-export function getReviewSheetUrl(analysisId: string): string {
-  return `${API_BASE}/downloads/${analysisId}`;
-}
-
 // Custom Analysis APIs
 
 export async function runCustomAnalysis(
   documentId: string,
   promptText: string,
   options?: { promptId?: string; language?: AnalysisLanguage },
-): Promise<AnalysisResult> {
-  return fetchApi<AnalysisResult>(
+): Promise<CustomAnalysisResult> {
+  return fetchApi<CustomAnalysisResult>(
     `/documents/${documentId}/analyze/custom`,
     {
       method: "POST",
