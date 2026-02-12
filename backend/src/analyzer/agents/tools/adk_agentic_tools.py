@@ -1,5 +1,6 @@
 """Tools for Agentic Search mode agents."""
 
+import asyncio
 import logging
 import uuid
 from typing import Any
@@ -163,8 +164,14 @@ async def investigate_document(
             storage=ctx.storage,
         )
 
-        # Run the sub-agent
-        runner = ADKAgentRunner(agent=sub_agent, agent_context=sub_context)
+        # Run the sub-agent with a shorter timeout than the main agent
+        from analyzer.agents.adk_agents import SUB_AGENT_TIMEOUT_SECONDS
+
+        runner = ADKAgentRunner(
+            agent=sub_agent,
+            agent_context=sub_context,
+            timeout_seconds=SUB_AGENT_TIMEOUT_SECONDS,
+        )
         analysis_text, evidences = await runner.run(
             user_input=investigation_query,
             user_id="investigation_sub_agent",
@@ -181,6 +188,14 @@ async def investigate_document(
             "evidence_count": len(evidences),
         }
 
+    except asyncio.TimeoutError:
+        logger.warning(f"Sub-agent timed out investigating document {document_id}")
+        return {
+            "document_id": document_id,
+            "contribution_number": contribution_number,
+            "analysis": "Investigation timed out. Use get_document_summary for a quicker overview.",
+            "evidence_count": 0,
+        }
     except Exception as e:
         logger.error(f"Error investigating document {document_id}: {e}")
         return {"error": str(e)}

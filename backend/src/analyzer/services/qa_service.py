@@ -4,7 +4,7 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from analyzer.agents.adk_agents import (
@@ -195,7 +195,7 @@ class QAService:
             scope_id=effective_scope_id,
             mode=mode,
             evidences=unique_evidences,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             created_by=user_id,
         )
 
@@ -365,7 +365,7 @@ class QAService:
                 scope_id=scope_id,
                 mode=mode,
                 evidences=evidences,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
                 created_by=user_id,
             )
 

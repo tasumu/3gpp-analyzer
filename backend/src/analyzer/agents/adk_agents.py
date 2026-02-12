@@ -1,5 +1,6 @@
 """ADK-based agent factory functions and runner."""
 
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncGenerator
@@ -9,7 +10,12 @@ from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.genai.types import Content, Part
 
-from analyzer.agents.context import AgentToolContext, set_current_agent_context
+from analyzer.agents.context import (
+    AgentToolContext,
+    reset_agent_context,
+    set_current_agent_context,
+)
+from analyzer.agents.guardrails import create_iteration_limit_callback, validate_tool_args
 from analyzer.agents.session_manager import (
     cleanup_expired_sessions,
     get_session_service,
@@ -33,6 +39,12 @@ from analyzer.models.evidence import Evidence
 logger = logging.getLogger(__name__)
 
 APP_NAME = "3gpp-analyzer"
+
+# Agent execution limits
+MAIN_AGENT_MAX_LLM_CALLS = 25
+SUB_AGENT_MAX_LLM_CALLS = 5
+AGENT_TIMEOUT_SECONDS = 300  # 5 minutes
+SUB_AGENT_TIMEOUT_SECONDS = 60  # 1 minute
 
 
 def create_qa_agent(
@@ -466,6 +478,8 @@ Structure your response clearly:
             list_meeting_attachments,
             read_attachment,
         ],
+        before_model_callback=create_iteration_limit_callback(MAIN_AGENT_MAX_LLM_CALLS),
+        before_tool_callback=validate_tool_args,
     )
 
 
@@ -473,7 +487,7 @@ def create_document_investigation_agent(
     document_id: str,
     contribution_number: str | None = None,
     language: str = "ja",
-    model: str = "gemini-3-pro-preview",
+    model: str = "gemini-3-flash-preview",
 ) -> LlmAgent:
     """
     Create a lightweight agent for investigating a specific document.
@@ -526,6 +540,7 @@ Provide a focused analysis answering the investigation query.
         description=f"Agent for investigating document {doc_ref}",
         instruction=instruction,
         tools=[get_document_content],
+        before_model_callback=create_iteration_limit_callback(SUB_AGENT_MAX_LLM_CALLS),
     )
 
 
@@ -578,13 +593,15 @@ class ADKAgentRunner:
     """
     Runner wrapper for ADK agents with context management.
 
-    Handles session creation, context injection, and evidence tracking.
+    Handles session creation, context injection, evidence tracking,
+    and execution timeouts.
     """
 
     def __init__(
         self,
         agent: LlmAgent,
         agent_context: AgentToolContext,
+        timeout_seconds: int = AGENT_TIMEOUT_SECONDS,
     ):
         """
         Initialize the runner.
@@ -592,15 +609,54 @@ class ADKAgentRunner:
         Args:
             agent: The LlmAgent to run.
             agent_context: Context with services and configuration.
+            timeout_seconds: Maximum execution time in seconds.
         """
         self.agent = agent
         self.agent_context = agent_context
+        self.timeout_seconds = timeout_seconds
         self.session_service = get_session_service()
         self.runner = Runner(
             agent=agent,
             app_name=APP_NAME,
             session_service=self.session_service,
         )
+
+    async def _ensure_session(
+        self,
+        user_id: str,
+        session_id: str,
+    ) -> str:
+        """Ensure a session exists, creating one if needed.
+
+        Args:
+            user_id: User identifier.
+            session_id: Session identifier.
+
+        Returns:
+            The session_id (same as input).
+        """
+        await cleanup_expired_sessions()
+
+        existing_session = await self.session_service.get_session(
+            app_name=APP_NAME,
+            user_id=user_id,
+            session_id=session_id,
+        )
+        if existing_session is None:
+            await self.session_service.create_session(
+                app_name=APP_NAME,
+                user_id=user_id,
+                session_id=session_id,
+                state={},  # Empty state - context is in contextvar
+            )
+            track_session(session_id)
+            logger.debug(f"Created new session: {session_id}")
+        else:
+            touch_session(session_id)
+            logger.debug(
+                f"Reusing existing session: {session_id} with {len(existing_session.events)} events"
+            )
+        return session_id
 
     async def run(
         self,
@@ -618,60 +674,44 @@ class ADKAgentRunner:
 
         Returns:
             Tuple of (response_text, used_evidences).
+
+        Raises:
+            asyncio.TimeoutError: If execution exceeds timeout_seconds.
         """
         # Reset evidence tracking
         self.agent_context.reset_evidences()
 
-        # Set context in contextvar (avoids pickle issues with session state)
-        set_current_agent_context(self.agent_context)
+        # Save and set context (token-based restore for safe nesting)
+        token = set_current_agent_context(self.agent_context)
 
         try:
-            # Periodically cleanup expired sessions
-            await cleanup_expired_sessions()
-
-            # Reuse existing session or create new one
             session_id = session_id or str(uuid.uuid4())
-            existing_session = await self.session_service.get_session(
-                app_name=APP_NAME,
-                user_id=user_id,
-                session_id=session_id,
-            )
-            if existing_session is None:
-                await self.session_service.create_session(
-                    app_name=APP_NAME,
-                    user_id=user_id,
-                    session_id=session_id,
-                    state={},  # Empty state - context is in contextvar
-                )
-                track_session(session_id)
-                logger.debug(f"Created new session: {session_id}")
-            else:
-                touch_session(session_id)
-                logger.debug(
-                    f"Reusing existing session: {session_id} "
-                    f"with {len(existing_session.events)} events"
-                )
+            await self._ensure_session(user_id, session_id)
 
-            # Build message
             user_message = Content(parts=[Part(text=user_input)])
 
-            # Run agent
-            full_text = ""
-            async for event in self.runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=user_message,
-            ):
-                if event.is_final_response():
-                    if event.content and event.content.parts:
-                        for part in event.content.parts:
-                            if hasattr(part, "text") and part.text:
-                                full_text = part.text
+            async def _execute() -> str:
+                full_text = ""
+                async for event in self.runner.run_async(
+                    user_id=user_id,
+                    session_id=session_id,
+                    new_message=user_message,
+                ):
+                    if event.is_final_response():
+                        if event.content and event.content.parts:
+                            for part in event.content.parts:
+                                if hasattr(part, "text") and part.text:
+                                    full_text = part.text
+                return full_text
 
+            full_text = await asyncio.wait_for(_execute(), timeout=self.timeout_seconds)
             return full_text, self.agent_context.get_unique_evidences()
+        except asyncio.TimeoutError:
+            logger.error(f"Agent '{self.agent.name}' timed out after {self.timeout_seconds}s")
+            raise
         finally:
-            # Reset contextvar
-            set_current_agent_context(None)
+            # Restore previous context (safe for nested sub-agent calls)
+            reset_agent_context(token)
 
     async def run_stream(
         self,
@@ -696,37 +736,13 @@ class ADKAgentRunner:
         # Reset evidence tracking
         self.agent_context.reset_evidences()
 
-        # Set context in contextvar (avoids pickle issues with session state)
-        set_current_agent_context(self.agent_context)
+        # Save and set context (token-based restore for safe nesting)
+        token = set_current_agent_context(self.agent_context)
 
         try:
-            # Periodically cleanup expired sessions
-            await cleanup_expired_sessions()
-
-            # Reuse existing session or create new one
             session_id = session_id or str(uuid.uuid4())
-            existing_session = await self.session_service.get_session(
-                app_name=APP_NAME,
-                user_id=user_id,
-                session_id=session_id,
-            )
-            if existing_session is None:
-                await self.session_service.create_session(
-                    app_name=APP_NAME,
-                    user_id=user_id,
-                    session_id=session_id,
-                    state={},  # Empty state - context is in contextvar
-                )
-                track_session(session_id)
-                logger.debug(f"Created new session: {session_id}")
-            else:
-                touch_session(session_id)
-                logger.debug(
-                    f"Reusing existing session: {session_id} "
-                    f"with {len(existing_session.events)} events"
-                )
+            await self._ensure_session(user_id, session_id)
 
-            # Build message
             user_message = Content(parts=[Part(text=user_input)])
 
             # Run agent with streaming
@@ -783,5 +799,5 @@ class ADKAgentRunner:
                 "evidences": self.agent_context.get_unique_evidences(),
             }
         finally:
-            # Reset contextvar
-            set_current_agent_context(None)
+            # Restore previous context (safe for nested sub-agent calls)
+            reset_agent_context(token)

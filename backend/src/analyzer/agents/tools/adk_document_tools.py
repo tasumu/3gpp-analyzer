@@ -1,5 +1,6 @@
 """Document tools for ADK-based meeting analysis agents."""
 
+import asyncio
 import io
 import logging
 from typing import Any
@@ -152,7 +153,8 @@ async def get_document_summary(
                 .order_by("created_at", direction="DESCENDING")
                 .limit(1)
             )
-            docs = list(query.stream())
+            # Wrap synchronous Firestore query to avoid blocking the event loop
+            docs = await asyncio.to_thread(lambda: list(query.stream()))
             if docs:
                 analysis_data = docs[0].to_dict()
                 analysis_result = analysis_data.get("result", {})

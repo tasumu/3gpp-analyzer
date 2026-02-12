@@ -31,6 +31,15 @@ def set_current_agent_context(ctx: "AgentToolContext | None") -> contextvars.Tok
     return _agent_context_var.set(ctx)
 
 
+def reset_agent_context(token: contextvars.Token) -> None:
+    """Restore the previous AgentToolContext using a token from set_current_agent_context.
+
+    This is safe for nested sub-agent calls: each level saves a token and
+    restores the parent context when done.
+    """
+    _agent_context_var.reset(token)
+
+
 @dataclass
 class AgentToolContext:
     """
