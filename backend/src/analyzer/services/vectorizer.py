@@ -24,7 +24,7 @@ class VectorizerService:
         firestore: FirestoreClient,
         project_id: str,
         location: str = "asia-northeast1",
-        model: str = "text-embedding-004",
+        model: str = "gemini-embedding-001",
         dimensions: int = 768,
         batch_size: int = 100,
     ):

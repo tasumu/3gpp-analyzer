@@ -72,8 +72,15 @@ class FirestoreEvidenceProvider(EvidenceProvider):
         # Note: Firestore vector search returns results sorted by similarity
         evidence_list = []
         for i, chunk_data in enumerate(results):
-            # Calculate relevance score (1.0 for most relevant, decreasing)
-            relevance_score = 1.0 - (i / max(len(results), 1)) * 0.5
+            # Use real cosine distance from Firestore if available
+            vector_distance = chunk_data.pop("vector_distance", None)
+            if vector_distance is not None:
+                # COSINE distance: 0 = identical, 2 = opposite
+                # Convert to similarity: 1.0 = identical, 0.0 = opposite
+                relevance_score = max(0.0, min(1.0, 1.0 - (vector_distance / 2.0)))
+            else:
+                # Fallback: position-based score (for backward compatibility)
+                relevance_score = 1.0 - (i / max(len(results), 1)) * 0.5
             evidence = Evidence.from_chunk(chunk_data, relevance_score)
             evidence_list.append(evidence)
 

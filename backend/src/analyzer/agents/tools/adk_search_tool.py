@@ -115,7 +115,7 @@ async def search_evidence(
                 {
                     "chunk_id": ev.chunk_id,
                     "contribution_number": ev.contribution_number,
-                    "content": ev.content[:500] + "..." if len(ev.content) > 500 else ev.content,
+                    "content": ev.content,
                     "clause_number": ev.clause_number,
                     "clause_title": ev.clause_title,
                     "page_number": ev.page_number,
