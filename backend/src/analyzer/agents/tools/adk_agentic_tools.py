@@ -159,6 +159,8 @@ async def investigate_document(
             scope_id=document_id,
             language=ctx.language,
             filters={"document_id": document_id},
+            firestore=ctx.firestore,
+            storage=ctx.storage,
         )
 
         # Run the sub-agent

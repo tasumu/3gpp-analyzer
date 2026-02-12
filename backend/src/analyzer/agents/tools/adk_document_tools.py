@@ -1,5 +1,6 @@
 """Document tools for ADK-based meeting analysis agents."""
 
+import io
 import logging
 from typing import Any
 
@@ -8,6 +9,33 @@ from google.adk.tools import ToolContext
 from analyzer.agents.context import AgentToolContext, get_current_agent_context
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_docx_text(content: bytes) -> str:
+    """Extract text from .docx bytes using python-docx.
+
+    Returns paragraphs and tables formatted as markdown.
+    """
+    from docx import Document as DocxDocument
+
+    doc = DocxDocument(io.BytesIO(content))
+    parts: list[str] = []
+
+    for para in doc.paragraphs:
+        if para.text.strip():
+            parts.append(para.text)
+
+    for table in doc.tables:
+        rows_text: list[str] = []
+        for i, row in enumerate(table.rows):
+            cells = [cell.text.strip() for cell in row.cells]
+            rows_text.append("| " + " | ".join(cells) + " |")
+            if i == 0:
+                rows_text.append("| " + " | ".join(["---"] * len(cells)) + " |")
+        if rows_text:
+            parts.append("\n".join(rows_text))
+
+    return "\n\n".join(parts)
 
 
 async def list_meeting_documents(
@@ -147,17 +175,19 @@ async def get_document_summary(
 
 async def get_document_content(
     document_id: str,
-    max_chunks: int = 50,
+    max_chunks: int = 500,
     tool_context: ToolContext = None,
 ) -> dict[str, Any]:
     """
-    Get the full content of a specific document as organized chunks.
+    Get the full content of a specific document.
 
-    Use this when you need to read the complete document content.
+    For indexed documents, returns all chunks organized by sections.
+    For non-indexed documents with a .docx file in GCS, falls back to
+    direct text extraction from the original file.
 
     Args:
         document_id: The document ID to get content for.
-        max_chunks: Maximum number of chunks to return. Default: 50.
+        max_chunks: Maximum number of chunks to return. Default: 500.
         tool_context: ADK tool context (injected automatically by ADK).
 
     Returns:
@@ -179,6 +209,10 @@ async def get_document_content(
             document_id=document_id,
             top_k=max_chunks,
         )
+
+        # Fallback: if no chunks exist, try reading the original file from GCS
+        if not evidences and ctx.storage and ctx.firestore:
+            return await _get_document_content_from_gcs(ctx, document_id)
 
         # Organize by clause
         content_sections = []
@@ -204,3 +238,43 @@ async def get_document_content(
     except Exception as e:
         logger.error(f"Error getting content for document {document_id}: {e}")
         return {"error": str(e), "sections": [], "total_chunks": 0}
+
+
+async def _get_document_content_from_gcs(ctx: AgentToolContext, document_id: str) -> dict[str, Any]:
+    """Fallback: read document content directly from GCS for non-indexed documents."""
+    doc_data = await ctx.firestore.get_document(document_id)
+    if not doc_data:
+        return {
+            "error": f"Document not found: {document_id}",
+            "sections": [],
+            "total_chunks": 0,
+        }
+
+    source_file = doc_data.get("source_file", {})
+    gcs_path = source_file.get("gcs_normalized_path") or source_file.get("gcs_original_path")
+    filename = source_file.get("filename", "")
+
+    if not gcs_path:
+        return {
+            "error": "Document file not available in GCS (not yet downloaded)",
+            "sections": [],
+            "total_chunks": 0,
+        }
+
+    if not filename.lower().endswith(".docx"):
+        return {
+            "error": f"Direct reading not supported for {filename} (only .docx)",
+            "sections": [],
+            "total_chunks": 0,
+        }
+
+    logger.info(f"Reading non-indexed document from GCS: {gcs_path}")
+    content_bytes = await ctx.storage.download_bytes(gcs_path)
+    text = _extract_docx_text(content_bytes)
+
+    return {
+        "document_id": document_id,
+        "sections": [{"clause": "Full Document", "title": "", "content": text, "page": None}],
+        "total_chunks": 1,
+        "source": "gcs_fallback",
+    }

@@ -186,6 +186,7 @@ def get_attachment_service(
 def get_qa_service(
     evidence_provider: Annotated[EvidenceProvider, Depends(get_evidence_provider)],
     firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
+    storage: Annotated[StorageClient, Depends(get_storage_client)],
     document_service: Annotated[DocumentService, Depends(get_document_service)],
     attachment_service: Annotated[AttachmentService, Depends(get_attachment_service)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -199,6 +200,7 @@ def get_qa_service(
         model=settings.qa_model,
         document_service=document_service,
         attachment_service=attachment_service,
+        storage=storage,
     )
 
 

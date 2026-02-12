@@ -17,6 +17,7 @@ from analyzer.models.evidence import Evidence
 from analyzer.models.qa import QAMode, QAResult, QAScope, QAStreamEvent
 from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
+from analyzer.providers.storage_client import StorageClient
 from analyzer.services.attachment_service import AttachmentService
 from analyzer.services.document_service import DocumentService
 
@@ -47,6 +48,7 @@ class QAService:
         save_results: bool = True,
         document_service: DocumentService | None = None,
         attachment_service: "AttachmentService | None" = None,
+        storage: StorageClient | None = None,
     ):
         """
         Initialize QAService.
@@ -60,6 +62,7 @@ class QAService:
             save_results: Whether to save Q&A results to Firestore.
             document_service: Document service (required for agentic mode).
             attachment_service: Attachment service (for user-uploaded files).
+            storage: Storage client (for GCS fallback in document reading).
         """
         self.evidence_provider = evidence_provider
         self.firestore = firestore
@@ -68,6 +71,7 @@ class QAService:
         self.model = model
         self.save_results = save_results
         self.document_service = document_service
+        self.storage = storage
         self.attachment_service = attachment_service
 
     async def answer(
@@ -149,6 +153,7 @@ class QAService:
                 filters=filters,
                 document_service=self.document_service,
                 firestore=self.firestore,
+                storage=self.storage,
                 attachment_service=self.attachment_service,
                 meeting_id=effective_scope_id,
             )
@@ -288,6 +293,7 @@ class QAService:
                 filters=filters,
                 document_service=self.document_service,
                 firestore=self.firestore,
+                storage=self.storage,
                 attachment_service=self.attachment_service,
                 meeting_id=effective_scope_id,
             )

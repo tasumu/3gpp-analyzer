@@ -9,6 +9,7 @@ from analyzer.models.evidence import Evidence
 if TYPE_CHECKING:
     from analyzer.providers.base import EvidenceProvider
     from analyzer.providers.firestore_client import FirestoreClient
+    from analyzer.providers.storage_client import StorageClient
     from analyzer.services.attachment_service import AttachmentService
     from analyzer.services.document_service import DocumentService
 
@@ -55,6 +56,7 @@ class AgentToolContext:
     # Optional services (for meeting agent)
     document_service: "DocumentService | None" = None
     firestore: "FirestoreClient | None" = None
+    storage: "StorageClient | None" = None
     attachment_service: "AttachmentService | None" = None
 
     # Language preference

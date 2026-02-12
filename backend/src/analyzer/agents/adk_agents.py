@@ -361,11 +361,9 @@ include_non_indexed=True to find TDoc List spreadsheets
 - Use **list_meeting_attachments** to check for user-uploaded supplementary files
 
 For documents found:
-- If status is "indexed": use **investigate_document** to understand the meeting structure \
-and identify which agenda items relate to the user's question
-- If status is not "indexed" but analyzable is true: the Agenda exists but hasn't been \
-processed yet; check user attachments for equivalent information
-- If analyzable is false (e.g., .xlsx TDoc_List): check user attachments for this data
+- If the document is a .docx (indexed or not): use **investigate_document** to read and \
+understand the meeting structure. It works for both indexed and non-indexed .docx documents.
+- If the document is .xlsx or other non-.docx format: check user attachments for this data
 - If user attachments exist: use **read_attachment** to read their content
 
 Use the Agenda information to identify which agenda items relate to the user's question.
@@ -508,12 +506,11 @@ Focus on extracting specific, relevant information.
 ## Available Tools
 1. **get_document_content**: Read the full document content (organized by sections)
    - Always use document_id='{document_id}'
-2. **search_evidence**: Search within this document for specific topics
-   - Always use document_id='{document_id}' filter
+   - For indexed documents, returns all chunks with clause/page metadata
+   - For non-indexed documents, falls back to reading the original .docx from storage
 
 ## Guidelines
-- Start by reading the document content with get_document_content
-- Use search_evidence for targeted searches within the document if needed
+- Read the full document content with get_document_content
 - Provide specific details: clause numbers, page numbers, exact proposals
 - Be concise but thorough — focus on what's relevant to the query
 - Cite clauses and page numbers: [Clause 5.2.1, Page 3]
@@ -528,7 +525,7 @@ Provide a focused analysis answering the investigation query.
         name="document_investigation_agent",
         description=f"Agent for investigating document {doc_ref}",
         instruction=instruction,
-        tools=[get_document_content, search_evidence],
+        tools=[get_document_content],
     )
 
 
