@@ -364,9 +364,9 @@ Use **list_meeting_documents_enhanced** to explore the meeting's contributions:
 
 ### 4. Investigate Key Documents
 For documents you've identified as highly relevant:
-- Use **investigate_document** to get detailed analysis of specific documents
-  (this delegates to a specialized sub-agent that reads the full content)
-- Use **get_document_summary** for a quick overview when full investigation isn't needed
+- First use **get_document_summary** to quickly check the overview. If `has_analysis` is false
+  or you need deeper investigation, use **investigate_document** for detailed analysis
+  (this delegates to a specialized sub-agent that reads the full content).
 
 ### 5. Supplement with RAG Search
 Use **search_evidence** to:
