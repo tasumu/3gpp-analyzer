@@ -17,6 +17,7 @@ from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.providers.firestore_provider import FirestoreEvidenceProvider
 from analyzer.providers.storage_client import StorageClient
 from analyzer.services.analysis_service import AnalysisService
+from analyzer.services.attachment_service import AttachmentService
 from analyzer.services.custom_prompt_service import CustomPromptService
 from analyzer.services.document_service import DocumentService
 from analyzer.services.ftp_sync import FTPSyncService
@@ -174,10 +175,19 @@ def get_report_prompt_service(
     return ReportPromptService(firestore=firestore)
 
 
+def get_attachment_service(
+    firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
+    storage: Annotated[StorageClient, Depends(get_storage_client)],
+) -> AttachmentService:
+    """Get AttachmentService instance."""
+    return AttachmentService(firestore=firestore, storage=storage)
+
+
 def get_qa_service(
     evidence_provider: Annotated[EvidenceProvider, Depends(get_evidence_provider)],
     firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
     document_service: Annotated[DocumentService, Depends(get_document_service)],
+    attachment_service: Annotated[AttachmentService, Depends(get_attachment_service)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> QAService:
     """Get QAService instance."""
@@ -188,6 +198,7 @@ def get_qa_service(
         location=settings.vertex_ai_location,
         model=settings.qa_model,
         document_service=document_service,
+        attachment_service=attachment_service,
     )
 
 
@@ -253,6 +264,7 @@ AnalysisServiceDep = Annotated[AnalysisService, Depends(get_analysis_service)]
 ReviewSheetGeneratorDep = Annotated[ReviewSheetGenerator, Depends(get_review_sheet_generator)]
 CustomPromptServiceDep = Annotated[CustomPromptService, Depends(get_custom_prompt_service)]
 ReportPromptServiceDep = Annotated[ReportPromptService, Depends(get_report_prompt_service)]
+AttachmentServiceDep = Annotated[AttachmentService, Depends(get_attachment_service)]
 QAServiceDep = Annotated[QAService, Depends(get_qa_service)]
 MeetingServiceDep = Annotated[MeetingService, Depends(get_meeting_service)]
 MeetingReportGeneratorDep = Annotated[MeetingReportGenerator, Depends(get_meeting_report_generator)]

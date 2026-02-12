@@ -17,6 +17,7 @@ from analyzer.models.evidence import Evidence
 from analyzer.models.qa import QAMode, QAResult, QAScope, QAStreamEvent
 from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
+from analyzer.services.attachment_service import AttachmentService
 from analyzer.services.document_service import DocumentService
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ class QAService:
         model: str = "gemini-3-pro-preview",
         save_results: bool = True,
         document_service: DocumentService | None = None,
+        attachment_service: "AttachmentService | None" = None,
     ):
         """
         Initialize QAService.
@@ -57,6 +59,7 @@ class QAService:
             model: LLM model name for Q&A.
             save_results: Whether to save Q&A results to Firestore.
             document_service: Document service (required for agentic mode).
+            attachment_service: Attachment service (for user-uploaded files).
         """
         self.evidence_provider = evidence_provider
         self.firestore = firestore
@@ -65,6 +68,7 @@ class QAService:
         self.model = model
         self.save_results = save_results
         self.document_service = document_service
+        self.attachment_service = attachment_service
 
     async def answer(
         self,
@@ -145,6 +149,7 @@ class QAService:
                 filters=filters,
                 document_service=self.document_service,
                 firestore=self.firestore,
+                attachment_service=self.attachment_service,
                 meeting_id=effective_scope_id,
             )
         else:
@@ -283,6 +288,7 @@ class QAService:
                 filters=filters,
                 document_service=self.document_service,
                 firestore=self.firestore,
+                attachment_service=self.attachment_service,
                 meeting_id=effective_scope_id,
             )
         else:

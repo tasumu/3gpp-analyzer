@@ -441,6 +441,17 @@ export interface QAResult {
   created_at: string;
 }
 
+// Attachment Types (user-uploaded supplementary files)
+export interface Attachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  meeting_id: string;
+  file_size_bytes: number;
+  uploaded_by: string;
+  created_at: string;
+}
+
 // Meeting Summary Types (P3-02)
 export interface DocumentSummary {
   document_id: string;

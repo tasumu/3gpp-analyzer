@@ -18,7 +18,9 @@ from analyzer.agents.session_manager import (
 )
 from analyzer.agents.tools.adk_agentic_tools import (
     investigate_document,
+    list_meeting_attachments,
     list_meeting_documents_enhanced,
+    read_attachment,
 )
 from analyzer.agents.tools.adk_document_tools import (
     get_document_content,
@@ -350,32 +352,51 @@ Follow this workflow for each question:
 - Determine if the user wants: specific technical details, decision outcomes,
   document comparisons, trend analysis, etc.
 
-### 2. Plan Your Investigation
+### 2. Check Meeting Reference Documents
+Before planning, gather structural context about the meeting:
+- Use **list_meeting_documents_enhanced** with search_text="Agenda" and \
+include_non_indexed=True to find Agenda documents
+- Use **list_meeting_documents_enhanced** with search_text="TDoc_List" and \
+include_non_indexed=True to find TDoc List spreadsheets
+- Use **list_meeting_attachments** to check for user-uploaded supplementary files
+
+For documents found:
+- If status is "indexed": use **investigate_document** to understand the meeting structure \
+and identify which agenda items relate to the user's question
+- If status is not "indexed" but analyzable is true: the Agenda exists but hasn't been \
+processed yet; check user attachments for equivalent information
+- If analyzable is false (e.g., .xlsx TDoc_List): check user attachments for this data
+- If user attachments exist: use **read_attachment** to read their content
+
+Use the Agenda information to identify which agenda items relate to the user's question.
+
+### 3. Plan Your Investigation
 Briefly state your investigation plan before executing it. Consider:
+- Which agenda items relate to the user's question (from Step 2)
 - Which documents might be relevant (by topic, by agenda item, by source company)
 - Whether to search broadly first or target specific documents
 - Whether decision status matters (Agreed, Approved, Revised documents)
 
-### 3. Discover Relevant Documents
+### 4. Discover Relevant Documents
 Use **list_meeting_documents_enhanced** to explore the meeting's contributions:
 - First call without search_text to get an overview (page_size=50, check total count)
 - Use search_text to filter by topic keywords in titles/filenames
 - Note contribution numbers, titles, and sources of relevant documents
 
-### 4. Investigate Key Documents
+### 5. Investigate Key Documents
 For documents you've identified as highly relevant:
 - First use **get_document_summary** to quickly check the overview. If `has_analysis` is false
   or you need deeper investigation, use **investigate_document** for detailed analysis
   (this delegates to a specialized sub-agent that reads the full content).
 
-### 5. Supplement with RAG Search
+### 6. Supplement with RAG Search
 Use **search_evidence** to:
 - Find information that might not be obvious from document titles
 - Verify findings from document investigation
 - Discover connections between documents
 - Fill gaps in your investigation
 
-### 6. Synthesize and Respond
+### 7. Synthesize and Respond
 - Combine findings from all sources
 - Always cite specific contribution numbers: [S2-2401234]
 - If documents contain conflicting information, note the discrepancies
@@ -385,6 +406,7 @@ Use **search_evidence** to:
 
 1. **list_meeting_documents_enhanced**: List/search documents in the meeting
    - Use search_text for keyword filtering (always in English)
+   - Use include_non_indexed=True to discover Agenda and TDoc_List documents
    - Supports pagination (page, page_size)
    - Always use meeting_id='{meeting_id}'
 
@@ -401,6 +423,14 @@ Use **search_evidence** to:
    - Delegates to a specialized sub-agent
    - Provide a focused investigation_query
    - Use for documents requiring detailed analysis
+
+5. **list_meeting_attachments**: List user-uploaded supplementary files
+   - Returns uploaded files for the meeting (e.g., Agenda, TDoc lists)
+   - Always use meeting_id='{meeting_id}'
+
+6. **read_attachment**: Read content of an uploaded attachment
+   - Use attachment_id from list_meeting_attachments results
+   - Useful for reading Agenda files, TDoc lists, or other supplementary documents
 
 ## Decision Status Inference
 
@@ -435,6 +465,8 @@ Structure your response clearly:
             search_evidence,
             get_document_summary,
             investigate_document,
+            list_meeting_attachments,
+            read_attachment,
         ],
     )
 
@@ -532,6 +564,15 @@ def _summarize_tool_result(tool_name: str, response: dict | None) -> str:
     if tool_name == "get_document_content":
         chunks = resp.get("total_chunks", 0)
         return f"Read {chunks} content sections"
+
+    if tool_name == "list_meeting_attachments":
+        total = resp.get("total", 0)
+        return f"Found {total} uploaded attachments"
+
+    if tool_name == "read_attachment":
+        filename = resp.get("filename", "")
+        length = resp.get("total_length", 0)
+        return f"{filename}: Read {length} characters"
 
     return f"Completed ({len(str(resp))} chars)"
 
