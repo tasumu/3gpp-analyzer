@@ -102,7 +102,7 @@ export default function AnalysisListPage() {
                       </Link>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {analysis.type === "single" ? "Single" : "Compare"}
+                      {analysis.type === "single" ? "Single" : "Custom"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span

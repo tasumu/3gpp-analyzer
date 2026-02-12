@@ -216,7 +216,7 @@ export interface GroupedChunks {
 
 // Analysis types (Phase 2)
 
-export type AnalysisType = "single" | "compare" | "custom";
+export type AnalysisType = "single" | "custom";
 export type AnalysisLanguage = "ja" | "en";
 export type AnalysisStatus = "pending" | "processing" | "completed" | "failed";
 export type ChangeType = "addition" | "modification" | "deletion";
@@ -231,12 +231,6 @@ export interface Change {
 export interface Issue {
   description: string;
   severity: Severity;
-}
-
-export interface Difference {
-  aspect: string;
-  doc1_position: string;
-  doc2_position: string;
 }
 
 export interface Evidence {
@@ -255,13 +249,6 @@ export interface SingleAnalysis {
   summary: string;
   changes: Change[];
   issues: Issue[];
-  evidences: Evidence[];
-}
-
-export interface CompareAnalysis {
-  common_points: string[];
-  differences: Difference[];
-  recommendation: string;
   evidences: Evidence[];
 }
 
@@ -288,7 +275,7 @@ export interface AnalysisResult {
   status: AnalysisStatus;
   strategy_version: string;
   options: AnalysisOptions;
-  result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult | null;
+  result: SingleAnalysis | CustomAnalysisResult | null;
   review_sheet_path: string | null;
   error_message: string | null;
   created_at: string;

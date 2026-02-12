@@ -163,8 +163,8 @@ data: {"status": "indexed", "document_id": "doc-12345"}
 
 | フィールド | 型 | 必須 | 説明 |
 |-----------|---|------|------|
-| type | string | Yes | "single" または "compare" |
-| contribution_numbers | string[] | Yes | single: 1件, compare: 2件 |
+| type | string | Yes | "single" または "custom" |
+| contribution_numbers | string[] | Yes | 1件 |
 | options | object | No | 分析オプション |
 | options.language | string | No | 出力言語（"ja" または "en"、デフォルト: "ja"） |
 

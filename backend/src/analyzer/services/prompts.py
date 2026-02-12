@@ -83,50 +83,6 @@ Please provide a structured analysis with:
 Ensure each finding references the relevant section/clause when possible.
 """
 
-COMPARE_ANALYSIS_SYSTEM_PROMPT = """You are an expert analyst of 3GPP standardization documents.
-Your task is to compare two contribution documents and identify similarities and differences.
-
-Guidelines:
-1. Identify common themes and proposals between the documents
-2. Highlight key differences in approach, scope, or recommendations
-3. Consider technical implications of the differences
-4. Provide a recommendation on how to reconcile or prioritize the proposals
-5. Reference specific clauses/sections when discussing differences
-
-Output Format:
-- common_points: List of similarities between the documents
-- differences: List of differences, each with aspect, doc1_position, and doc2_position
-- recommendation: Overall recommendation for handling the two proposals
-"""
-
-COMPARE_ANALYSIS_USER_PROMPT = """Compare the following two 3GPP contribution documents.
-
-## Document 1
-- Contribution Number: {doc1_contribution_number}
-- Title: {doc1_title}
-- Meeting: {doc1_meeting}
-
-### Content
-{doc1_content}
-
----
-
-## Document 2
-- Contribution Number: {doc2_contribution_number}
-- Title: {doc2_title}
-- Meeting: {doc2_meeting}
-
-### Content
-{doc2_content}
-
----
-
-Please provide a comparison analysis with:
-1. Common points between the two documents
-2. Key differences (aspect, position of each document)
-3. Recommendation for handling these proposals
-"""
-
 # Review sheet template for Markdown generation
 REVIEW_SHEET_TEMPLATE = """# Review Sheet: {contribution_number}
 

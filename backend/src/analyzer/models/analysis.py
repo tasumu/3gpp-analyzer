@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from analyzer.models.evidence import Evidence
 
 # Type definitions
-AnalysisType = Literal["single", "compare", "custom"]
+AnalysisType = Literal["single", "custom"]
 AnalysisLanguage = Literal["ja", "en"]
 AnalysisStatus = Literal["pending", "processing", "completed", "failed"]
 ChangeType = Literal["addition", "modification", "deletion"]
@@ -30,29 +30,12 @@ class Issue(BaseModel):
     severity: Severity = Field(..., description="Severity level")
 
 
-class Difference(BaseModel):
-    """A difference between documents in comparison analysis."""
-
-    aspect: str = Field(..., description="The aspect being compared")
-    doc1_position: str = Field(..., description="Position of document 1")
-    doc2_position: str = Field(..., description="Position of document 2")
-
-
 class SingleAnalysis(BaseModel):
     """Result of analyzing a single contribution document."""
 
     summary: str = Field(..., description="Summary of the document's purpose and proposals")
     changes: list[Change] = Field(default_factory=list, description="Proposed changes")
     issues: list[Issue] = Field(default_factory=list, description="Identified issues")
-    evidences: list[Evidence] = Field(default_factory=list, description="Supporting evidence")
-
-
-class CompareAnalysis(BaseModel):
-    """Result of comparing multiple contribution documents."""
-
-    common_points: list[str] = Field(default_factory=list, description="Common points")
-    differences: list[Difference] = Field(default_factory=list, description="Differences")
-    recommendation: str = Field(..., description="Recommended action")
     evidences: list[Evidence] = Field(default_factory=list, description="Supporting evidence")
 
 
@@ -81,7 +64,7 @@ class AnalysisRequest(BaseModel):
 
     type: AnalysisType = Field(..., description="Type of analysis")
     contribution_numbers: list[str] = Field(
-        ..., description="Contribution numbers to analyze", min_length=1, max_length=2
+        ..., description="Contribution numbers to analyze", min_length=1, max_length=1
     )
     options: AnalysisOptions = Field(
         default_factory=AnalysisOptions, description="Analysis options"
@@ -100,7 +83,7 @@ class AnalysisResult(BaseModel):
     status: AnalysisStatus = Field(..., description="Analysis status")
     strategy_version: str = Field(..., description="Analysis strategy version")
     options: AnalysisOptions = Field(default_factory=AnalysisOptions, description="Options used")
-    result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult | None = Field(
+    result: SingleAnalysis | CustomAnalysisResult | None = Field(
         None, description="Analysis result"
     )
     review_sheet_path: str | None = Field(None, description="GCS path to review sheet")

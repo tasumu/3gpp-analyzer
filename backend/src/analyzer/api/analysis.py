@@ -55,12 +55,6 @@ async def start_analysis(
     For single analysis, provide one contribution number.
     Returns analysis_id. Use SSE endpoint to monitor progress.
     """
-    if request.type != "single":
-        raise HTTPException(
-            status_code=400,
-            detail="Only single analysis is currently supported",
-        )
-
     if len(request.contribution_numbers) != 1:
         raise HTTPException(
             status_code=400,

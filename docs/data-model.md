@@ -285,22 +285,15 @@ interface AnalysisResult {
   type: AnalysisType;              // 分析タイプ
   strategy_version: string;        // 分析戦略バージョン
   created_at: timestamp;           // 作成日時
-  result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult;
+  result: SingleAnalysis | CustomAnalysisResult;
 }
 
-type AnalysisType = "single" | "compare" | "custom";
+type AnalysisType = "single" | "custom";
 
 interface SingleAnalysis {
   summary: string;                 // 要点サマリ
   changes: Change[];               // 変更提案
   issues: Issue[];                 // 論点・懸念
-  evidences: Evidence[];           // 根拠
-}
-
-interface CompareAnalysis {
-  common_points: string[];         // 共通点
-  differences: Difference[];       // 相違点
-  recommendation: string;          // 推奨アクション
   evidences: Evidence[];           // 根拠
 }
 
@@ -313,12 +306,6 @@ interface Change {
 interface Issue {
   description: string;
   severity: "high" | "medium" | "low";
-}
-
-interface Difference {
-  aspect: string;                  // 比較観点
-  doc1_position: string;           // 文書1の立場
-  doc2_position: string;           // 文書2の立場
 }
 
 interface CustomAnalysisResult {
@@ -336,7 +323,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Literal
 
-AnalysisType = Literal["single", "compare", "custom"]
+AnalysisType = Literal["single", "custom"]
 ChangeType = Literal["addition", "modification", "deletion"]
 Severity = Literal["high", "medium", "low"]
 
@@ -349,21 +336,10 @@ class Issue(BaseModel):
     description: str
     severity: Severity
 
-class Difference(BaseModel):
-    aspect: str
-    doc1_position: str
-    doc2_position: str
-
 class SingleAnalysis(BaseModel):
     summary: str
     changes: list[Change]
     issues: list[Issue]
-    evidences: list[Evidence]
-
-class CompareAnalysis(BaseModel):
-    common_points: list[str]
-    differences: list[Difference]
-    recommendation: str
     evidences: list[Evidence]
 
 class CustomAnalysisResult(BaseModel):
@@ -378,7 +354,7 @@ class AnalysisResult(BaseModel):
     type: AnalysisType
     strategy_version: str
     created_at: datetime
-    result: SingleAnalysis | CompareAnalysis | CustomAnalysisResult
+    result: SingleAnalysis | CustomAnalysisResult
 ```
 
 ### 5.3 永続化の方針
