@@ -177,6 +177,7 @@ def get_report_prompt_service(
 def get_qa_service(
     evidence_provider: Annotated[EvidenceProvider, Depends(get_evidence_provider)],
     firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
+    document_service: Annotated[DocumentService, Depends(get_document_service)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> QAService:
     """Get QAService instance."""
@@ -186,6 +187,7 @@ def get_qa_service(
         project_id=settings.gcp_project_id,
         location=settings.vertex_ai_location,
         model=settings.qa_model,
+        document_service=document_service,
     )
 
 

@@ -9,6 +9,13 @@ from pydantic import BaseModel, Field
 from analyzer.models.evidence import Evidence
 
 
+class QAMode(str, Enum):
+    """Mode for Q&A processing."""
+
+    RAG = "rag"  # Traditional RAG-only search
+    AGENTIC = "agentic"  # Agentic search with planning and multi-tool exploration
+
+
 class QAScope(str, Enum):
     """Scope for Q&A searches."""
 
@@ -51,6 +58,10 @@ class QARequest(BaseModel):
         default=None,
         description="Session ID for conversation continuity",
     )
+    mode: QAMode = Field(
+        default=QAMode.RAG,
+        description="Q&A mode: rag (RAG-only) or agentic (multi-tool exploration)",
+    )
 
 
 class QAResult(BaseModel):
@@ -69,6 +80,10 @@ class QAResult(BaseModel):
         default_factory=datetime.utcnow,
         description="Timestamp when the result was created",
     )
+    mode: QAMode = Field(
+        default=QAMode.RAG,
+        description="Q&A mode used for this result",
+    )
     created_by: str | None = Field(
         default=None,
         description="User ID who initiated the Q&A",
@@ -81,6 +96,7 @@ class QAResult(BaseModel):
             "answer": self.answer,
             "scope": self.scope.value,
             "scope_id": self.scope_id,
+            "mode": self.mode.value,
             "evidences": [ev.model_dump(mode="json") for ev in self.evidences],
             "created_at": self.created_at,
             "created_by": self.created_by,
@@ -96,6 +112,7 @@ class QAResult(BaseModel):
             answer=data.get("answer", ""),
             scope=QAScope(data.get("scope", "global")),
             scope_id=data.get("scope_id"),
+            mode=QAMode(data.get("mode", "rag")),
             evidences=evidences,
             created_at=data.get("created_at", datetime.utcnow()),
             created_by=data.get("created_by"),

@@ -407,6 +407,7 @@ export function isSingleAnalysis(
 // ============================================================================
 
 // Q&A Types (P3-05)
+export type QAMode = "rag" | "agentic";
 export type QAScope = "document" | "meeting" | "global";
 
 export interface QARequest {
@@ -417,6 +418,7 @@ export interface QARequest {
   filters?: Record<string, unknown> | null;
   language: AnalysisLanguage;
   session_id?: string | null;
+  mode?: QAMode;
 }
 
 export interface QAEvidence {
@@ -569,6 +571,16 @@ export const qaScopeLabelsJa: Record<QAScope, string> = {
   document: "単一寄書",
   meeting: "会合内",
   global: "全体",
+};
+
+export const qaModeLabels: Record<QAMode, string> = {
+  agentic: "Agentic Search",
+  rag: "RAG Search",
+};
+
+export const qaModeDescriptions: Record<QAMode, string> = {
+  agentic: "Agent が調査計画を立て、複数ツールで能動的に探索",
+  rag: "ベクトル検索で関連チャンクを取得し回答",
 };
 
 // Batch Operation Types

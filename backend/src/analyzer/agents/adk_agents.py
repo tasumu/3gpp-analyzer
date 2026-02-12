@@ -16,6 +16,10 @@ from analyzer.agents.session_manager import (
     touch_session,
     track_session,
 )
+from analyzer.agents.tools.adk_agentic_tools import (
+    investigate_document,
+    list_meeting_documents_enhanced,
+)
 from analyzer.agents.tools.adk_document_tools import (
     get_document_content,
     get_document_summary,
@@ -278,6 +282,260 @@ Always include contribution numbers when referencing documents: [S2-2401234]
     )
 
 
+def create_agentic_search_agent(
+    meeting_id: str,
+    model: str = "gemini-3-pro-preview",
+    language: str = "ja",
+) -> LlmAgent:
+    """
+    Create an agentic search agent for multi-step document investigation.
+
+    Unlike the RAG-only Q&A agent, this agent plans its investigation,
+    discovers relevant documents from meeting metadata, and delegates
+    detailed document analysis to a sub-agent.
+
+    Args:
+        meeting_id: Target meeting ID (e.g., 'SA2#162').
+        model: LLM model name.
+        language: Response language (ja or en).
+
+    Returns:
+        Configured LlmAgent instance with planning capabilities.
+    """
+    lang_instructions = {
+        "ja": (
+            "回答は日本語で行ってください。"
+            "技術用語（3GPP用語、仕様書番号、条項番号など）は英語のまま使用してください。"
+            "\n\n"
+            "**CRITICAL: search_evidence や list_meeting_documents の検索クエリは"
+            "必ず英語で行ってください。**\n"
+            "3GPP文書は英語で書かれています。ユーザーの日本語の質問を"
+            "英語の技術用語に変換してから検索してください。"
+        ),
+        "en": "Respond in English. Use standard 3GPP terminology.",
+    }
+
+    lang_refusal = {
+        "ja": (
+            "調査の結果、関連する情報が見つからなかった場合は、"
+            "その旨を明示し、別のアプローチを提案してください。"
+            "事前学習知識からの回答は生成しないでください。"
+        ),
+        "en": (
+            "If investigation yields no relevant results, state this clearly "
+            "and suggest alternative approaches. "
+            "Do NOT generate answers from pre-trained knowledge."
+        ),
+    }
+
+    lang_text = lang_instructions.get(language, lang_instructions["ja"])
+    refusal_text = lang_refusal.get(language, lang_refusal["ja"])
+
+    instruction = f"""You are an expert investigative analyst for 3GPP standardization \
+documents in meeting {meeting_id}.
+
+## Your Role
+
+You are an **agentic researcher** — you don't just search, you **plan and investigate**.
+Your goal is to provide thorough, well-researched answers by exploring the meeting's
+documents systematically.
+
+## Investigation Workflow
+
+Follow this workflow for each question:
+
+### 1. Analyze the Query
+- Understand what the user is asking
+- Identify key topics, technical terms, and the type of answer needed
+- Determine if the user wants: specific technical details, decision outcomes,
+  document comparisons, trend analysis, etc.
+
+### 2. Plan Your Investigation
+Briefly state your investigation plan before executing it. Consider:
+- Which documents might be relevant (by topic, by agenda item, by source company)
+- Whether to search broadly first or target specific documents
+- Whether decision status matters (Agreed, Approved, Revised documents)
+
+### 3. Discover Relevant Documents
+Use **list_meeting_documents_enhanced** to explore the meeting's contributions:
+- First call without search_text to get an overview (page_size=50, check total count)
+- Use search_text to filter by topic keywords in titles/filenames
+- Note contribution numbers, titles, and sources of relevant documents
+
+### 4. Investigate Key Documents
+For documents you've identified as highly relevant:
+- Use **investigate_document** to get detailed analysis of specific documents
+  (this delegates to a specialized sub-agent that reads the full content)
+- Use **get_document_summary** for a quick overview when full investigation isn't needed
+
+### 5. Supplement with RAG Search
+Use **search_evidence** to:
+- Find information that might not be obvious from document titles
+- Verify findings from document investigation
+- Discover connections between documents
+- Fill gaps in your investigation
+
+### 6. Synthesize and Respond
+- Combine findings from all sources
+- Always cite specific contribution numbers: [S2-2401234]
+- If documents contain conflicting information, note the discrepancies
+- Distinguish between agreed/approved outcomes and proposals under discussion
+
+## Available Tools
+
+1. **list_meeting_documents_enhanced**: List/search documents in the meeting
+   - Use search_text for keyword filtering (always in English)
+   - Supports pagination (page, page_size)
+   - Always use meeting_id='{meeting_id}'
+
+2. **search_evidence**: RAG vector search across document content
+   - Useful for semantic similarity search
+   - Always use meeting_id='{meeting_id}' filter
+   - Search queries MUST be in English
+
+3. **get_document_summary**: Get pre-computed summary of a document
+   - Quick overview without reading full content
+   - Use for initial assessment of relevance
+
+4. **investigate_document**: Deep investigation of a specific document
+   - Delegates to a specialized sub-agent
+   - Provide a focused investigation_query
+   - Use for documents requiring detailed analysis
+
+## Decision Status Inference
+
+3GPP documents don't have explicit decision status in metadata. Infer from:
+- Document titles may contain indicators (e.g., "Agreed", "Approved", "Revised")
+- Content may describe decisions or conclusions
+- Revision chains: later contribution numbers may supersede earlier ones
+- When the user asks about agreed/approved outcomes, prioritize finding such indicators
+
+## Constraints
+
+{refusal_text}
+
+## Response Format
+
+{lang_text}
+
+Structure your response clearly:
+1. Brief summary of your investigation approach
+2. Key findings with citations
+3. Detailed analysis organized by topic
+4. Conclusions and any caveats
+"""
+
+    return LlmAgent(
+        model=model,
+        name="agentic_search_agent",
+        description="Agentic search agent for multi-step document investigation",
+        instruction=instruction,
+        tools=[
+            list_meeting_documents_enhanced,
+            search_evidence,
+            get_document_summary,
+            investigate_document,
+        ],
+    )
+
+
+def create_document_investigation_agent(
+    document_id: str,
+    contribution_number: str | None = None,
+    language: str = "ja",
+    model: str = "gemini-3-pro-preview",
+) -> LlmAgent:
+    """
+    Create a lightweight agent for investigating a specific document.
+
+    This agent is used as a sub-agent (via AgentTool) by the agentic search agent.
+    It reads document content and provides focused analysis.
+
+    Args:
+        document_id: Document ID to investigate.
+        contribution_number: Contribution number for context.
+        language: Response language.
+        model: LLM model name.
+
+    Returns:
+        Configured LlmAgent instance for document investigation.
+    """
+    doc_ref = contribution_number or document_id
+
+    lang_text = {
+        "ja": "分析結果は日本語で回答してください。技術用語は英語のまま使用してください。",
+        "en": "Respond in English with standard 3GPP terminology.",
+    }.get(language, "分析結果は日本語で回答してください。技術用語は英語のまま使用してください。")
+
+    instruction = f"""You are a document analyst investigating 3GPP contribution {doc_ref}.
+
+## Your Task
+Read and analyze the content of this document to answer the investigation query.
+Focus on extracting specific, relevant information.
+
+## Available Tools
+1. **get_document_content**: Read the full document content (organized by sections)
+   - Always use document_id='{document_id}'
+2. **search_evidence**: Search within this document for specific topics
+   - Always use document_id='{document_id}' filter
+
+## Guidelines
+- Start by reading the document content with get_document_content
+- Use search_evidence for targeted searches within the document if needed
+- Provide specific details: clause numbers, page numbers, exact proposals
+- Be concise but thorough — focus on what's relevant to the query
+- Cite clauses and page numbers: [Clause 5.2.1, Page 3]
+
+## Response Format
+{lang_text}
+Provide a focused analysis answering the investigation query.
+"""
+
+    return LlmAgent(
+        model=model,
+        name="document_investigation_agent",
+        description=f"Agent for investigating document {doc_ref}",
+        instruction=instruction,
+        tools=[get_document_content, search_evidence],
+    )
+
+
+def _summarize_tool_result(tool_name: str, response: dict | None) -> str:
+    """Create a brief human-readable summary of a tool result for streaming."""
+    if not response:
+        return "No result"
+
+    resp = response if isinstance(response, dict) else {}
+
+    if "error" in resp:
+        return f"Error: {resp['error']}"
+
+    if tool_name in ("list_meeting_documents_enhanced", "list_meeting_documents"):
+        total = resp.get("total", 0)
+        returned = resp.get("returned", 0)
+        return f"Found {total} documents (showing {returned})"
+
+    if tool_name == "search_evidence":
+        count = resp.get("count", 0)
+        return f"{count} relevant results found"
+
+    if tool_name == "get_document_summary":
+        has_analysis = resp.get("has_analysis", False)
+        cn = resp.get("contribution_number", "")
+        return f"{cn}: {'Summary available' if has_analysis else 'No analysis available'}"
+
+    if tool_name == "investigate_document":
+        cn = resp.get("contribution_number", "")
+        ev_count = resp.get("evidence_count", 0)
+        return f"{cn}: Analysis complete ({ev_count} evidence pieces)"
+
+    if tool_name == "get_document_content":
+        chunks = resp.get("total_chunks", 0)
+        return f"Read {chunks} content sections"
+
+    return f"Completed ({len(str(resp))} chars)"
+
+
 class ADKAgentRunner:
     """
     Runner wrapper for ADK agents with context management.
@@ -440,6 +698,32 @@ class ADKAgentRunner:
                 session_id=session_id,
                 new_message=user_message,
             ):
+                # Detect function call events (tool invocations)
+                if event.content and event.content.parts:
+                    for part in event.content.parts:
+                        if hasattr(part, "function_call") and part.function_call:
+                            fc = part.function_call
+                            # Summarize args to avoid flooding the stream
+                            args_summary = {}
+                            if fc.args:
+                                for k, v in fc.args.items():
+                                    val = str(v)
+                                    args_summary[k] = val[:100] + "..." if len(val) > 100 else val
+                            yield {
+                                "type": "tool_call",
+                                "tool": fc.name,
+                                "args": args_summary,
+                            }
+                        if hasattr(part, "function_response") and part.function_response:
+                            fr = part.function_response
+                            # Build a brief summary of the tool result
+                            summary = _summarize_tool_result(fr.name, fr.response)
+                            yield {
+                                "type": "tool_result",
+                                "tool": fr.name,
+                                "summary": summary,
+                            }
+
                 # Yield partial text updates
                 if hasattr(event, "partial") and event.partial:
                     if event.content and event.content.parts:
