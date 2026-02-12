@@ -278,6 +278,7 @@ class FirestoreClient:
             query_vector=Vector(query_embedding),
             distance_measure=DistanceMeasure.COSINE,
             limit=top_k,
+            distance_result_field="vector_distance",
         )
 
         # Execute and collect results
