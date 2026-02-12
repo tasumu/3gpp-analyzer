@@ -59,19 +59,6 @@ class AnalysisOptions(BaseModel):
     )
 
 
-class AnalysisRequest(BaseModel):
-    """Request to start an analysis."""
-
-    type: AnalysisType = Field(..., description="Type of analysis")
-    contribution_numbers: list[str] = Field(
-        ..., description="Contribution numbers to analyze", min_length=1, max_length=1
-    )
-    options: AnalysisOptions = Field(
-        default_factory=AnalysisOptions, description="Analysis options"
-    )
-    force: bool = Field(default=False, description="Force re-analysis even if cached")
-
-
 class AnalysisResult(BaseModel):
     """Persistent analysis result."""
 
@@ -103,16 +90,3 @@ class AnalysisResult(BaseModel):
         """Create from Firestore document."""
         data["id"] = doc_id
         return cls.model_validate(data)
-
-
-class AnalysisStreamEvent(BaseModel):
-    """Event for SSE streaming during analysis."""
-
-    event: Literal["progress", "partial", "complete", "error"] = Field(
-        ..., description="Event type"
-    )
-    stage: str | None = Field(None, description="Current stage of analysis")
-    progress: int | None = Field(None, description="Progress percentage (0-100)")
-    partial_result: dict | None = Field(None, description="Partial result data")
-    analysis_id: str | None = Field(None, description="Analysis ID on completion")
-    error: str | None = Field(None, description="Error message if failed")

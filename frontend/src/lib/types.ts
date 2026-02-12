@@ -259,13 +259,6 @@ export interface AnalysisOptions {
   language?: AnalysisLanguage;
 }
 
-export interface AnalysisRequest {
-  type: AnalysisType;
-  contribution_numbers: string[];
-  options?: AnalysisOptions;
-  force?: boolean;
-}
-
 export interface AnalysisResult {
   id: string;
   document_id: string;
@@ -286,13 +279,6 @@ export interface AnalysisResult {
 export interface AnalysisListResponse {
   analyses: AnalysisResult[];
   total: number;
-}
-
-export interface AnalysisStartResponse {
-  analysis_id: string;
-  status: string;
-  document_id: string;
-  contribution_number: string;
 }
 
 // Analysis display helpers

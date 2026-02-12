@@ -234,7 +234,7 @@ RAG抽象化までを構築。これだけでも「文書の検索・閲覧」�
 
 | ID | 機能 | 詳細 | 状態 |
 |----|------|------|------|
-| P2-01 | `analyze_single()` | 単体寄書の分析（要点、変更点、論点） | ✅ 完了 |
+| P2-01 | `generate_summary()` | 単体寄書の分析（要点、キーポイント抽出） | ✅ 完了 |
 | P2-03 | `generate_review_sheet()` | レビューシート生成 | ✅ 完了 |
 | P2-04 | 分析結果の永続化 | Firestoreに保存、再分析コスト削減 | ✅ 完了 |
 | P2-05 | 分析UI | 分析実行、結果表示、ダウンロード | ✅ 完了 |
@@ -320,15 +320,15 @@ Phase 2 の関数をツールとして統合した汎用エージェント。
 
 ```python
 # Phase 2: 個別関数として実装
-async def analyze_single(doc_id: str) -> AnalysisResult:
+async def generate_summary(doc_id: str) -> DocumentSummary:
     ...
 
 # Phase 3: エージェントのツールとしてラップ
 @tool
-async def analyze_single_tool(doc_id: str) -> str:
-    """寄書を分析し、要点・変更点・論点を抽出する"""
-    result = await analyze_single(doc_id)  # Phase 2を再利用
-    return result.to_markdown()
+async def analyze_document_tool(doc_id: str) -> str:
+    """寄書を分析し、要点・キーポイントを抽出する"""
+    result = await generate_summary(doc_id)  # Phase 2を再利用
+    return result.summary
 
 # Phase 3: 複合的な処理
 async def summarize_meeting(meeting: str):
