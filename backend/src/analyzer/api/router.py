@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from analyzer.api.admin import router as admin_router
 from analyzer.api.analysis import router as analysis_router
+from analyzer.api.attachments import router as attachments_router
 from analyzer.api.auth import router as auth_router
 from analyzer.api.custom_analysis import router as custom_analysis_router
 from analyzer.api.documents import router as documents_router
@@ -26,6 +27,7 @@ api_router.include_router(custom_analysis_router, tags=["custom-analysis"])
 api_router.include_router(report_prompts_router, tags=["report-prompts"])
 api_router.include_router(qa_router, tags=["qa"])
 api_router.include_router(meeting_router, tags=["meeting"])
+api_router.include_router(attachments_router, tags=["attachments"])
 
 # Internal API router (not exposed to public)
 internal_router = APIRouter()

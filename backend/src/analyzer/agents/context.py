@@ -9,6 +9,8 @@ from analyzer.models.evidence import Evidence
 if TYPE_CHECKING:
     from analyzer.providers.base import EvidenceProvider
     from analyzer.providers.firestore_client import FirestoreClient
+    from analyzer.providers.storage_client import StorageClient
+    from analyzer.services.attachment_service import AttachmentService
     from analyzer.services.document_service import DocumentService
 
 # Context variable for storing AgentToolContext during agent execution.
@@ -27,6 +29,15 @@ def get_current_agent_context() -> "AgentToolContext | None":
 def set_current_agent_context(ctx: "AgentToolContext | None") -> contextvars.Token:
     """Set the current AgentToolContext in contextvar. Returns a token for reset."""
     return _agent_context_var.set(ctx)
+
+
+def reset_agent_context(token: contextvars.Token) -> None:
+    """Restore the previous AgentToolContext using a token from set_current_agent_context.
+
+    This is safe for nested sub-agent calls: each level saves a token and
+    restores the parent context when done.
+    """
+    _agent_context_var.reset(token)
 
 
 @dataclass
@@ -54,6 +65,8 @@ class AgentToolContext:
     # Optional services (for meeting agent)
     document_service: "DocumentService | None" = None
     firestore: "FirestoreClient | None" = None
+    storage: "StorageClient | None" = None
+    attachment_service: "AttachmentService | None" = None
 
     # Language preference
     language: str = "ja"

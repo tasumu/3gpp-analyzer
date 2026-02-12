@@ -7,7 +7,7 @@ Includes automatic session cleanup based on TTL to prevent memory leaks.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from google.adk.sessions import InMemorySessionService
 
@@ -54,7 +54,7 @@ def track_session(session_id: str) -> None:
     Args:
         session_id: The session ID to track.
     """
-    _session_timestamps[session_id] = datetime.utcnow()
+    _session_timestamps[session_id] = datetime.now(UTC)
 
 
 def touch_session(session_id: str) -> None:
@@ -65,7 +65,7 @@ def touch_session(session_id: str) -> None:
         session_id: The session ID to update.
     """
     if session_id in _session_timestamps:
-        _session_timestamps[session_id] = datetime.utcnow()
+        _session_timestamps[session_id] = datetime.now(UTC)
 
 
 async def cleanup_expired_sessions() -> int:
@@ -77,7 +77,7 @@ async def cleanup_expired_sessions() -> int:
     """
     global _last_cleanup
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     # Skip if cleanup was done recently
     if _last_cleanup and now - _last_cleanup < CLEANUP_INTERVAL:

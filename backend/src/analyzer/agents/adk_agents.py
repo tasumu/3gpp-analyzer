@@ -1,5 +1,6 @@
 """ADK-based agent factory functions and runner."""
 
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncGenerator
@@ -9,7 +10,12 @@ from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.genai.types import Content, Part
 
-from analyzer.agents.context import AgentToolContext, set_current_agent_context
+from analyzer.agents.context import (
+    AgentToolContext,
+    reset_agent_context,
+    set_current_agent_context,
+)
+from analyzer.agents.guardrails import create_iteration_limit_callback, validate_tool_args
 from analyzer.agents.session_manager import (
     cleanup_expired_sessions,
     get_session_service,
@@ -18,7 +24,9 @@ from analyzer.agents.session_manager import (
 )
 from analyzer.agents.tools.adk_agentic_tools import (
     investigate_document,
+    list_meeting_attachments,
     list_meeting_documents_enhanced,
+    read_attachment,
 )
 from analyzer.agents.tools.adk_document_tools import (
     get_document_content,
@@ -31,6 +39,12 @@ from analyzer.models.evidence import Evidence
 logger = logging.getLogger(__name__)
 
 APP_NAME = "3gpp-analyzer"
+
+# Agent execution limits
+MAIN_AGENT_MAX_LLM_CALLS = 25
+SUB_AGENT_MAX_LLM_CALLS = 5
+AGENT_TIMEOUT_SECONDS = 300  # 5 minutes
+SUB_AGENT_TIMEOUT_SECONDS = 60  # 1 minute
 
 
 def create_qa_agent(
@@ -350,32 +364,49 @@ Follow this workflow for each question:
 - Determine if the user wants: specific technical details, decision outcomes,
   document comparisons, trend analysis, etc.
 
-### 2. Plan Your Investigation
+### 2. Check Meeting Reference Documents
+Before planning, gather structural context about the meeting:
+- Use **list_meeting_documents_enhanced** with search_text="Agenda" and \
+include_non_indexed=True to find Agenda documents
+- Use **list_meeting_documents_enhanced** with search_text="TDoc_List" and \
+include_non_indexed=True to find TDoc List spreadsheets
+- Use **list_meeting_attachments** to check for user-uploaded supplementary files
+
+For documents found:
+- If the document is a .docx (indexed or not): use **investigate_document** to read and \
+understand the meeting structure. It works for both indexed and non-indexed .docx documents.
+- If the document is .xlsx or other non-.docx format: check user attachments for this data
+- If user attachments exist: use **read_attachment** to read their content
+
+Use the Agenda information to identify which agenda items relate to the user's question.
+
+### 3. Plan Your Investigation
 Briefly state your investigation plan before executing it. Consider:
+- Which agenda items relate to the user's question (from Step 2)
 - Which documents might be relevant (by topic, by agenda item, by source company)
 - Whether to search broadly first or target specific documents
 - Whether decision status matters (Agreed, Approved, Revised documents)
 
-### 3. Discover Relevant Documents
+### 4. Discover Relevant Documents
 Use **list_meeting_documents_enhanced** to explore the meeting's contributions:
 - First call without search_text to get an overview (page_size=50, check total count)
 - Use search_text to filter by topic keywords in titles/filenames
 - Note contribution numbers, titles, and sources of relevant documents
 
-### 4. Investigate Key Documents
+### 5. Investigate Key Documents
 For documents you've identified as highly relevant:
 - First use **get_document_summary** to quickly check the overview. If `has_analysis` is false
   or you need deeper investigation, use **investigate_document** for detailed analysis
   (this delegates to a specialized sub-agent that reads the full content).
 
-### 5. Supplement with RAG Search
+### 6. Supplement with RAG Search
 Use **search_evidence** to:
 - Find information that might not be obvious from document titles
 - Verify findings from document investigation
 - Discover connections between documents
 - Fill gaps in your investigation
 
-### 6. Synthesize and Respond
+### 7. Synthesize and Respond
 - Combine findings from all sources
 - Always cite specific contribution numbers: [S2-2401234]
 - If documents contain conflicting information, note the discrepancies
@@ -385,6 +416,7 @@ Use **search_evidence** to:
 
 1. **list_meeting_documents_enhanced**: List/search documents in the meeting
    - Use search_text for keyword filtering (always in English)
+   - Use include_non_indexed=True to discover Agenda and TDoc_List documents
    - Supports pagination (page, page_size)
    - Always use meeting_id='{meeting_id}'
 
@@ -401,6 +433,14 @@ Use **search_evidence** to:
    - Delegates to a specialized sub-agent
    - Provide a focused investigation_query
    - Use for documents requiring detailed analysis
+
+5. **list_meeting_attachments**: List user-uploaded supplementary files
+   - Returns uploaded files for the meeting (e.g., Agenda, TDoc lists)
+   - Always use meeting_id='{meeting_id}'
+
+6. **read_attachment**: Read content of an uploaded attachment
+   - Use attachment_id from list_meeting_attachments results
+   - Useful for reading Agenda files, TDoc lists, or other supplementary documents
 
 ## Decision Status Inference
 
@@ -435,7 +475,11 @@ Structure your response clearly:
             search_evidence,
             get_document_summary,
             investigate_document,
+            list_meeting_attachments,
+            read_attachment,
         ],
+        before_model_callback=create_iteration_limit_callback(MAIN_AGENT_MAX_LLM_CALLS),
+        before_tool_callback=validate_tool_args,
     )
 
 
@@ -443,7 +487,7 @@ def create_document_investigation_agent(
     document_id: str,
     contribution_number: str | None = None,
     language: str = "ja",
-    model: str = "gemini-3-pro-preview",
+    model: str = "gemini-3-flash-preview",
 ) -> LlmAgent:
     """
     Create a lightweight agent for investigating a specific document.
@@ -476,12 +520,11 @@ Focus on extracting specific, relevant information.
 ## Available Tools
 1. **get_document_content**: Read the full document content (organized by sections)
    - Always use document_id='{document_id}'
-2. **search_evidence**: Search within this document for specific topics
-   - Always use document_id='{document_id}' filter
+   - For indexed documents, returns all chunks with clause/page metadata
+   - For non-indexed documents, falls back to reading the original .docx from storage
 
 ## Guidelines
-- Start by reading the document content with get_document_content
-- Use search_evidence for targeted searches within the document if needed
+- Read the full document content with get_document_content
 - Provide specific details: clause numbers, page numbers, exact proposals
 - Be concise but thorough — focus on what's relevant to the query
 - Cite clauses and page numbers: [Clause 5.2.1, Page 3]
@@ -496,7 +539,8 @@ Provide a focused analysis answering the investigation query.
         name="document_investigation_agent",
         description=f"Agent for investigating document {doc_ref}",
         instruction=instruction,
-        tools=[get_document_content, search_evidence],
+        tools=[get_document_content],
+        before_model_callback=create_iteration_limit_callback(SUB_AGENT_MAX_LLM_CALLS),
     )
 
 
@@ -533,6 +577,15 @@ def _summarize_tool_result(tool_name: str, response: dict | None) -> str:
         chunks = resp.get("total_chunks", 0)
         return f"Read {chunks} content sections"
 
+    if tool_name == "list_meeting_attachments":
+        total = resp.get("total", 0)
+        return f"Found {total} uploaded attachments"
+
+    if tool_name == "read_attachment":
+        filename = resp.get("filename", "")
+        length = resp.get("total_length", 0)
+        return f"{filename}: Read {length} characters"
+
     return f"Completed ({len(str(resp))} chars)"
 
 
@@ -540,13 +593,15 @@ class ADKAgentRunner:
     """
     Runner wrapper for ADK agents with context management.
 
-    Handles session creation, context injection, and evidence tracking.
+    Handles session creation, context injection, evidence tracking,
+    and execution timeouts.
     """
 
     def __init__(
         self,
         agent: LlmAgent,
         agent_context: AgentToolContext,
+        timeout_seconds: int = AGENT_TIMEOUT_SECONDS,
     ):
         """
         Initialize the runner.
@@ -554,15 +609,54 @@ class ADKAgentRunner:
         Args:
             agent: The LlmAgent to run.
             agent_context: Context with services and configuration.
+            timeout_seconds: Maximum execution time in seconds.
         """
         self.agent = agent
         self.agent_context = agent_context
+        self.timeout_seconds = timeout_seconds
         self.session_service = get_session_service()
         self.runner = Runner(
             agent=agent,
             app_name=APP_NAME,
             session_service=self.session_service,
         )
+
+    async def _ensure_session(
+        self,
+        user_id: str,
+        session_id: str,
+    ) -> str:
+        """Ensure a session exists, creating one if needed.
+
+        Args:
+            user_id: User identifier.
+            session_id: Session identifier.
+
+        Returns:
+            The session_id (same as input).
+        """
+        await cleanup_expired_sessions()
+
+        existing_session = await self.session_service.get_session(
+            app_name=APP_NAME,
+            user_id=user_id,
+            session_id=session_id,
+        )
+        if existing_session is None:
+            await self.session_service.create_session(
+                app_name=APP_NAME,
+                user_id=user_id,
+                session_id=session_id,
+                state={},  # Empty state - context is in contextvar
+            )
+            track_session(session_id)
+            logger.debug(f"Created new session: {session_id}")
+        else:
+            touch_session(session_id)
+            logger.debug(
+                f"Reusing existing session: {session_id} with {len(existing_session.events)} events"
+            )
+        return session_id
 
     async def run(
         self,
@@ -580,60 +674,44 @@ class ADKAgentRunner:
 
         Returns:
             Tuple of (response_text, used_evidences).
+
+        Raises:
+            asyncio.TimeoutError: If execution exceeds timeout_seconds.
         """
         # Reset evidence tracking
         self.agent_context.reset_evidences()
 
-        # Set context in contextvar (avoids pickle issues with session state)
-        set_current_agent_context(self.agent_context)
+        # Save and set context (token-based restore for safe nesting)
+        token = set_current_agent_context(self.agent_context)
 
         try:
-            # Periodically cleanup expired sessions
-            await cleanup_expired_sessions()
-
-            # Reuse existing session or create new one
             session_id = session_id or str(uuid.uuid4())
-            existing_session = await self.session_service.get_session(
-                app_name=APP_NAME,
-                user_id=user_id,
-                session_id=session_id,
-            )
-            if existing_session is None:
-                await self.session_service.create_session(
-                    app_name=APP_NAME,
-                    user_id=user_id,
-                    session_id=session_id,
-                    state={},  # Empty state - context is in contextvar
-                )
-                track_session(session_id)
-                logger.debug(f"Created new session: {session_id}")
-            else:
-                touch_session(session_id)
-                logger.debug(
-                    f"Reusing existing session: {session_id} "
-                    f"with {len(existing_session.events)} events"
-                )
+            await self._ensure_session(user_id, session_id)
 
-            # Build message
             user_message = Content(parts=[Part(text=user_input)])
 
-            # Run agent
-            full_text = ""
-            async for event in self.runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=user_message,
-            ):
-                if event.is_final_response():
-                    if event.content and event.content.parts:
-                        for part in event.content.parts:
-                            if hasattr(part, "text") and part.text:
-                                full_text = part.text
+            async def _execute() -> str:
+                full_text = ""
+                async for event in self.runner.run_async(
+                    user_id=user_id,
+                    session_id=session_id,
+                    new_message=user_message,
+                ):
+                    if event.is_final_response():
+                        if event.content and event.content.parts:
+                            for part in event.content.parts:
+                                if hasattr(part, "text") and part.text:
+                                    full_text = part.text
+                return full_text
 
+            full_text = await asyncio.wait_for(_execute(), timeout=self.timeout_seconds)
             return full_text, self.agent_context.get_unique_evidences()
+        except asyncio.TimeoutError:
+            logger.error(f"Agent '{self.agent.name}' timed out after {self.timeout_seconds}s")
+            raise
         finally:
-            # Reset contextvar
-            set_current_agent_context(None)
+            # Restore previous context (safe for nested sub-agent calls)
+            reset_agent_context(token)
 
     async def run_stream(
         self,
@@ -658,37 +736,13 @@ class ADKAgentRunner:
         # Reset evidence tracking
         self.agent_context.reset_evidences()
 
-        # Set context in contextvar (avoids pickle issues with session state)
-        set_current_agent_context(self.agent_context)
+        # Save and set context (token-based restore for safe nesting)
+        token = set_current_agent_context(self.agent_context)
 
         try:
-            # Periodically cleanup expired sessions
-            await cleanup_expired_sessions()
-
-            # Reuse existing session or create new one
             session_id = session_id or str(uuid.uuid4())
-            existing_session = await self.session_service.get_session(
-                app_name=APP_NAME,
-                user_id=user_id,
-                session_id=session_id,
-            )
-            if existing_session is None:
-                await self.session_service.create_session(
-                    app_name=APP_NAME,
-                    user_id=user_id,
-                    session_id=session_id,
-                    state={},  # Empty state - context is in contextvar
-                )
-                track_session(session_id)
-                logger.debug(f"Created new session: {session_id}")
-            else:
-                touch_session(session_id)
-                logger.debug(
-                    f"Reusing existing session: {session_id} "
-                    f"with {len(existing_session.events)} events"
-                )
+            await self._ensure_session(user_id, session_id)
 
-            # Build message
             user_message = Content(parts=[Part(text=user_input)])
 
             # Run agent with streaming
@@ -745,5 +799,5 @@ class ADKAgentRunner:
                 "evidences": self.agent_context.get_unique_evidences(),
             }
         finally:
-            # Reset contextvar
-            set_current_agent_context(None)
+            # Restore previous context (safe for nested sub-agent calls)
+            reset_agent_context(token)

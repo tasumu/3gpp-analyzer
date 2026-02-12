@@ -9,6 +9,7 @@ import type {
   AnalysisRequest,
   AnalysisResult,
   AnalysisStartResponse,
+  Attachment,
   BatchOperationResponse,
   ChunkListResponse,
   CustomPrompt,
@@ -623,6 +624,49 @@ export async function listQAResults(
   params.set("limit", limit.toString());
 
   return fetchApi<QAResult[]>(`/qa?${params.toString()}`);
+}
+
+// ============================================================================
+// Attachment APIs (user-uploaded supplementary files)
+// ============================================================================
+
+export async function uploadAttachment(
+  meetingId: string,
+  file: File,
+): Promise<Attachment> {
+  const token = await getAuthToken();
+  if (!token) throw new Error("Authentication required");
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(
+    `${API_BASE}/meetings/${encodeURIComponent(meetingId)}/attachments`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    },
+  );
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new ApiError(response.status, error.detail || "Upload failed");
+  }
+  return response.json();
+}
+
+export async function listAttachments(
+  meetingId: string,
+): Promise<Attachment[]> {
+  return fetchApi<Attachment[]>(
+    `/meetings/${encodeURIComponent(meetingId)}/attachments`,
+  );
+}
+
+export async function deleteAttachment(
+  attachmentId: string,
+): Promise<void> {
+  await fetchApi(`/attachments/${attachmentId}`, { method: "DELETE" });
 }
 
 // ============================================================================

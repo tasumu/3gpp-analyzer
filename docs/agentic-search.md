@@ -32,14 +32,21 @@ Q&A画面の新しいモード「Agentic Search」の設計。従来の RAG Sear
 │  Tools:                                         │
 │  ├── list_meeting_documents (拡張版)              │
 │  │   └─ タイトル検索・ページネーション対応            │
+│  ├── discover_agenda_documents                   │
+│  │   └─ Agenda/TDoc_List ファイル名部分検索         │
 │  ├── search_evidence (既存)                      │
-│  │   └─ RAGベクトル検索                            │
+│  │   └─ RAGベクトル検索（meeting横断）              │
 │  ├── get_document_summary (既存)                  │
 │  │   └─ 事前計算済みサマリー取得                     │
-│  └── investigate_document (AgentTool)            │
-│      └── Document Investigation Agent            │
-│          ├── get_document_content                │
-│          └── search_evidence                     │
+│  ├── investigate_document (AgentTool)            │
+│  │   └── Document Investigation Agent            │
+│  │       └── get_document_content                │
+│  │           ├─ indexed: 全チャンク読み(max 500)   │
+│  │           └─ 非indexed: GCS .docxフォールバック  │
+│  ├── list_meeting_attachments                    │
+│  │   └─ ユーザーアップロード添付一覧                  │
+│  └── read_attachment                             │
+│      └─ 添付ファイル内容読み取り                     │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -117,8 +124,13 @@ async def investigate_document(
 
 内部動作:
 1. `create_document_investigation_agent()` でサブAgent 生成
-2. サブAgent は `get_document_content` と `search_evidence` を使って調査
+2. サブAgent は `get_document_content` で文書全体を読み取り・分析
+   - indexed 文書: 全チャンク取得（max_chunks=500、clause/page メタデータ付き）
+   - 非indexed .docx文書: GCS から原本をダウンロードし python-docx でテキスト抽出
 3. サブAgent の応答テキスト（分析結果）のみを返却
+
+**設計判断**: サブAgent にはRAG検索（`search_evidence`）を持たせない。
+全文読解に専念し、RAG検索は親Agent 側で meeting 横断の補完・検証用途に使う。
 
 返却値:
 ```json
@@ -130,25 +142,48 @@ async def investigate_document(
 }
 ```
 
+### discover_agenda_documents
+
+Agenda や TDoc_List などの会合構造文書をファイル名部分一致で探索。
+
+```python
+async def discover_agenda_documents(
+    meeting_id: str,
+    tool_context: ToolContext = None,
+) -> dict[str, Any]:
+```
+
+ファイル名に "agenda" または "tdoc_list" を含む文書を検索。
+indexed / 非indexed を問わず検出し、status 情報を含めて返却。
+
+### read_attachment / list_meeting_attachments
+
+ユーザーがアップロードした添付ファイル（Agenda の Excel 版等）を読み取るツール。
+非indexed 文書の代替手段として利用。
+
 ## Agentic Search Agent のプロンプト設計
 
 ### 調査ワークフロー（指示概要）
 
 1. **クエリ分析**: ユーザーの質問を分析し、何を知りたいのか明確にする
-2. **調査計画**: どのアプローチで調査するか計画を立てる
-3. **ドキュメント探索**: `list_meeting_documents` で会合の寄書一覧を取得
-4. **関連寄書特定**: タイトル・ソースから関連しそうな寄書を特定
-5. **詳細調査**: `investigate_document` で重要な寄書を深掘り
-6. **補強検索**: `search_evidence` で漏れがないか確認
-7. **回答生成**: 調査結果をサマライズして回答
+2. **Agenda/TDoc探索**: `discover_agenda_documents` で会合構造文書を探索し、`investigate_document` で議題構成を把握
+3. **調査計画**: Agenda 情報とクエリから、どの寄書を調査すべきか計画
+4. **ドキュメント探索**: `list_meeting_documents` で会合の寄書一覧を取得
+5. **関連寄書特定**: タイトル・ソースから関連しそうな寄書を特定
+6. **詳細調査**: `investigate_document` で重要な寄書を深掘り（indexed/非indexed問わず）
+7. **補強検索**: `search_evidence` で漏れがないか確認（meeting横断RAG検索）
+8. **添付確認**: 必要に応じて `list_meeting_attachments` / `read_attachment` でユーザー添付を活用
+9. **回答生成**: 調査結果をサマライズして回答
 
 ### Agent が活用する情報
 
+- **Agenda / TDoc_List**: 会合の議題構成・寄書一覧（最初に取得）
 - **ドキュメントタイトル**: 寄書の目的・内容の概要がわかる
 - **ソース（source）**: 提案元の企業・団体
 - **Contribution Number**: 寄書番号のパターン（revision は番号の末尾等で推測）
-- **RAG 検索結果**: セマンティック検索で関連チャンクを取得
-- **文書内容**: `investigate_document` で個別文書の詳細を取得
+- **RAG 検索結果**: セマンティック検索で関連チャンクを取得（meeting横断の補完用）
+- **文書内容**: `investigate_document` で個別文書の全文を取得・分析
+- **ユーザー添付**: Excel 等の非 .docx データをユーザーがアップロード
 
 ### 決定ステータス（Agreed/Approved/Revised等）の推測
 

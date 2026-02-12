@@ -4,8 +4,21 @@ import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
 import { MultipleMeetingSelector } from "@/components/MultipleMeetingSelector";
-import { askQuestion, createQAStream } from "@/lib/api";
-import type { AnalysisLanguage, QAEvidence, QAMode, QAResult, QAScope } from "@/lib/types";
+import {
+  askQuestion,
+  createQAStream,
+  deleteAttachment,
+  listAttachments,
+  uploadAttachment,
+} from "@/lib/api";
+import type {
+  AnalysisLanguage,
+  Attachment,
+  QAEvidence,
+  QAMode,
+  QAResult,
+  QAScope,
+} from "@/lib/types";
 import { languageLabels, qaModeLabels, qaScopeLabels, qaScopeLabelsJa } from "@/lib/types";
 
 interface ToolStep {
@@ -29,6 +42,8 @@ const toolDisplayNames: Record<string, string> = {
   get_document_summary: "Reading summary",
   investigate_document: "Investigating document",
   get_document_content: "Reading document",
+  list_meeting_attachments: "Checking attachments",
+  read_attachment: "Reading attachment",
 };
 
 function ToolStepItem({ step }: { step: ToolStep }) {
@@ -96,7 +111,7 @@ function generateSessionId(): string {
 export default function QAPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
-  const [mode, setMode] = useState<QAMode>("rag");
+  const [mode, setMode] = useState<QAMode>("agentic");
   const [scope, setScope] = useState<QAScope>("global");
   const [scopeId, setScopeId] = useState<string | null>(null);
   const [scopeIds, setScopeIds] = useState<string[]>([]);
@@ -106,9 +121,12 @@ export default function QAPage() {
   const [expandedEvidences, setExpandedEvidences] = useState<Record<string, boolean>>({});
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [sessionId, setSessionId] = useState<string>(generateSessionId);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -117,6 +135,17 @@ export default function QAPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load attachments when meeting changes in agentic mode
+  useEffect(() => {
+    if (mode === "agentic" && scopeIds.length === 1) {
+      listAttachments(scopeIds[0])
+        .then(setAttachments)
+        .catch(() => setAttachments([]));
+    } else {
+      setAttachments([]);
+    }
+  }, [mode, scopeIds]);
 
   const toggleEvidences = (messageId: string) => {
     setExpandedEvidences((prev) => ({
@@ -155,6 +184,38 @@ export default function QAPage() {
     } else {
       setScope("global");
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || scopeIds.length !== 1) return;
+    setIsUploading(true);
+    try {
+      const attachment = await uploadAttachment(scopeIds[0], file);
+      setAttachments((prev) => [attachment, ...prev]);
+      toast.success(`Uploaded: ${file.name}`);
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    try {
+      await deleteAttachment(attachmentId);
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+      toast.success("Attachment deleted");
+    } catch {
+      toast.error("Delete failed");
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -468,6 +529,60 @@ export default function QAPage() {
               onSelect={handleMeetingSelect}
               maxSelections={mode === "agentic" ? 1 : 2}
             />
+          )}
+
+          {/* Attachments (shown in agentic mode with meeting selected) */}
+          {mode === "agentic" && scopeIds.length === 1 && (
+            <div className="border-t border-gray-200 pt-2 mt-1">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Attachments:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200
+                           text-gray-700 rounded border border-gray-300
+                           disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUploading ? "Uploading..." : "Upload file"}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileUpload}
+                  accept=".docx,.xlsx,.xls,.pdf,.txt,.csv"
+                  className="hidden"
+                />
+                <span className="text-xs text-gray-400">
+                  .docx, .xlsx, .txt, .csv
+                </span>
+              </div>
+              {attachments.length > 0 && (
+                <div className="mt-1.5 space-y-1">
+                  {attachments.map((a) => (
+                    <div
+                      key={a.id}
+                      className="flex items-center gap-2 text-sm text-gray-600"
+                    >
+                      <span className="text-gray-400">📎</span>
+                      <span className="truncate max-w-xs">{a.filename}</span>
+                      <span className="text-gray-400 text-xs">
+                        ({formatFileSize(a.file_size_bytes)})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAttachment(a.id)}
+                        className="text-red-400 hover:text-red-600 text-xs ml-auto"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Document ID Input (shown when scope is document in RAG mode) */}
