@@ -10,10 +10,9 @@ import {
 } from "@/lib/api";
 import type {
   AnalysisLanguage,
-  AnalysisResult,
+  CustomAnalysisResult,
   CustomPrompt,
 } from "@/lib/types";
-import { isCustomAnalysis } from "@/lib/types";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 interface CustomAnalysisSectionProps {
@@ -29,7 +28,7 @@ export function CustomAnalysisSection({
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
   const [customText, setCustomText] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [result, setResult] = useState<CustomAnalysisResult | null>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [isLoadingPrompts, setIsLoadingPrompts] = useState(true);
@@ -106,9 +105,6 @@ export function CustomAnalysisSection({
     setSelectedPromptId(prompt.id);
     setCustomText(prompt.prompt_text);
   }
-
-  const customResult =
-    result?.result && isCustomAnalysis(result.result) ? result.result : null;
 
   return (
     <div className="space-y-4">
@@ -241,10 +237,10 @@ export function CustomAnalysisSection({
       )}
 
       {/* Result Display */}
-      {customResult && (
+      {result && (
         <div className="p-4 bg-white border border-gray-200 rounded-lg">
           <h4 className="font-medium text-gray-900 mb-3">Result</h4>
-          <MarkdownRenderer content={customResult.answer} />
+          <MarkdownRenderer content={result.answer} />
         </div>
       )}
     </div>

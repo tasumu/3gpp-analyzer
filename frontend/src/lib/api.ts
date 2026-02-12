@@ -4,12 +4,10 @@
 
 import type {
   AnalysisLanguage,
-  AnalysisListResponse,
-  AnalysisOptions,
-  AnalysisResult,
   Attachment,
   BatchOperationResponse,
   ChunkListResponse,
+  CustomAnalysisResult,
   CustomPrompt,
   CustomPromptsResponse,
   Document,
@@ -399,10 +397,6 @@ export async function getDocumentChunks(
 
 // Analysis APIs (Phase 2)
 
-export async function listAnalyses(limit = 20): Promise<AnalysisListResponse> {
-  return fetchApi<AnalysisListResponse>(`/analysis?limit=${limit}`);
-}
-
 export interface AnalyzeDocumentOptions {
   language?: AnalysisLanguage;
   customPrompt?: string;
@@ -438,24 +432,14 @@ export async function getDocumentSummary(
   return fetchApi<DocumentSummary | null>(`/documents/${documentId}/summary?${params}`);
 }
 
-export async function getDocumentAnalyses(
-  documentId: string,
-): Promise<AnalysisListResponse> {
-  return fetchApi<AnalysisListResponse>(`/documents/${documentId}/analysis`);
-}
-
-export function getReviewSheetUrl(analysisId: string): string {
-  return `${API_BASE}/downloads/${analysisId}`;
-}
-
 // Custom Analysis APIs
 
 export async function runCustomAnalysis(
   documentId: string,
   promptText: string,
   options?: { promptId?: string; language?: AnalysisLanguage },
-): Promise<AnalysisResult> {
-  return fetchApi<AnalysisResult>(
+): Promise<CustomAnalysisResult> {
+  return fetchApi<CustomAnalysisResult>(
     `/documents/${documentId}/analyze/custom`,
     {
       method: "POST",

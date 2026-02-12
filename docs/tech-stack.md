@@ -125,13 +125,13 @@ url = blob.generate_signed_url(
 Firestore
 ├── documents/           # Document メタデータ
 ├── chunks/              # Chunk + embedding
-├── analysis_results/    # 分析結果
+├── document_summaries/  # サマリーキャッシュ
 └── users/               # ユーザー情報
 
 Cloud Storage (GCS)
 ├── original/            # FTPからDLした元ファイル
 ├── normalized/          # 正規化済み docx
-└── outputs/             # レビューシート等
+└── outputs/             # レポート等
 ```
 
 ### ローカル開発

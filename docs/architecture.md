@@ -103,7 +103,7 @@ class AnalysisAgent:
     def __init__(self, evidence_provider: EvidenceProvider):
         self.evidence_provider = evidence_provider
 
-    async def analyze(self, contribution_id: str) -> AnalysisResult:
+    async def analyze(self, contribution_id: str) -> DocumentSummary:
         # Evidence取得（RAG実装を知らない）
         evidences = await self.evidence_provider.search(
             query="...",
@@ -187,13 +187,13 @@ async def search_evidence(
 Firestore (構造化データ + ベクトル)
 ├── documents/           # Document メタデータ
 ├── chunks/              # Chunk + embedding（ベクトル検索対象）
-├── analysis_results/    # 分析結果
+├── document_summaries/  # サマリーキャッシュ
 └── users/               # ユーザー情報
 
 Cloud Storage (ファイル)
 ├── original/            # FTPからDLした元ファイル
 ├── normalized/          # 正規化済み docx
-└── outputs/             # レビューシート等の生成物
+└── outputs/             # レポート等の生成物
 ```
 
 ### 5.2 Firestore Vector Search

@@ -3,24 +3,18 @@
 import hashlib
 import json
 import logging
-import uuid
 from datetime import datetime
 from typing import Any
 
 from google import genai
 from google.genai import types
 
-from analyzer.models.analysis import (
-    AnalysisOptions,
-    AnalysisResult,
-    CustomAnalysisResult,
-)
+from analyzer.models.analysis import CustomAnalysisResult
 from analyzer.models.document import Document
 from analyzer.models.evidence import Evidence
 from analyzer.models.meeting_analysis import DocumentSummary
 from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
-from analyzer.providers.storage_client import StorageClient
 from analyzer.services.prompts import (
     CUSTOM_ANALYSIS_USER_PROMPT,
     get_custom_analysis_system_prompt,
@@ -35,18 +29,15 @@ class AnalysisService:
 
     Implements:
     - generate_summary(): Unified document summary generation
-    - analyze_custom(): Custom prompt analysis
-    - get_result() / get_cached_result() / list_by_document(): Result retrieval
+    - analyze_custom(): Custom prompt analysis (stateless, no persistence)
     """
 
-    ANALYSIS_RESULTS_COLLECTION = "analysis_results"
     DOCUMENT_SUMMARIES_COLLECTION = "document_summaries"
 
     def __init__(
         self,
         evidence_provider: EvidenceProvider,
         firestore: FirestoreClient,
-        storage: StorageClient,
         project_id: str,
         location: str = "asia-northeast1",
         model: str = "gemini-3-flash-preview",
@@ -57,8 +48,7 @@ class AnalysisService:
 
         Args:
             evidence_provider: EvidenceProvider for retrieving document chunks.
-            firestore: FirestoreClient for persistence.
-            storage: StorageClient for review sheet storage.
+            firestore: FirestoreClient for summary cache.
             project_id: GCP project ID.
             location: GCP region for Vertex AI.
             model: LLM model name.
@@ -66,7 +56,6 @@ class AnalysisService:
         """
         self.evidence_provider = evidence_provider
         self.firestore = firestore
-        self.storage = storage
         self.strategy_version = strategy_version
         self.model = model
 
@@ -368,9 +357,11 @@ Return JSON with "summary" and "key_points" fields."""
         prompt_id: str | None = None,
         language: str = "ja",
         user_id: str | None = None,
-    ) -> AnalysisResult:
+    ) -> CustomAnalysisResult:
         """
         Analyze a document with a custom user prompt.
+
+        Results are returned directly without persistence.
 
         Args:
             document_id: Document ID to analyze.
@@ -380,7 +371,7 @@ Return JSON with "summary" and "key_points" fields."""
             user_id: User ID who initiated the analysis.
 
         Returns:
-            AnalysisResult with CustomAnalysisResult.
+            CustomAnalysisResult with answer and evidences.
         """
         # Get document metadata
         doc_data = await self.firestore.get_document(document_id)
@@ -392,142 +383,48 @@ Return JSON with "summary" and "key_points" fields."""
 
         contribution_number = doc_data.get("contribution_number") or ""
 
-        # Create analysis record
-        analysis_id = str(uuid.uuid4())
-        options = AnalysisOptions(language=language)
+        # Get all evidence from the document
+        evidences = await self.evidence_provider.get_by_document(document_id, top_k=100)
+        if not evidences:
+            raise ValueError(f"No content found for document: {document_id}")
 
-        analysis = AnalysisResult(
-            id=analysis_id,
-            document_id=document_id,
-            document_ids=[document_id],
+        # Build content for LLM
+        evidence_content = self._format_evidence_for_prompt(evidences)
+
+        # Get document info
+        title = doc_data.get("title", "Unknown")
+        meeting_id = doc_data.get("meeting", {}).get("id", "")
+        meeting_name = doc_data.get("meeting", {}).get("name", meeting_id)
+        source = doc_data.get("source", "Unknown")
+
+        # Build prompts
+        system_prompt = get_custom_analysis_system_prompt(language)
+        user_prompt = CUSTOM_ANALYSIS_USER_PROMPT.format(
             contribution_number=contribution_number,
-            type="custom",
-            status="processing",
-            strategy_version=self.strategy_version,
-            options=options,
-            created_by=user_id,
+            title=title,
+            meeting=meeting_name,
+            source=source,
+            custom_prompt=custom_prompt,
+            evidence_content=evidence_content,
         )
 
-        # Save initial state
-        await self._save_analysis(analysis)
-
-        try:
-            # Get all evidence from the document
-            evidences = await self.evidence_provider.get_by_document(document_id, top_k=100)
-            if not evidences:
-                raise ValueError(f"No content found for document: {document_id}")
-
-            # Build content for LLM
-            evidence_content = self._format_evidence_for_prompt(evidences)
-
-            # Get document info
-            title = doc_data.get("title", "Unknown")
-            meeting_id = doc_data.get("meeting", {}).get("id", "")
-            meeting_name = doc_data.get("meeting", {}).get("name", meeting_id)
-            source = doc_data.get("source", "Unknown")
-
-            # Build prompts
-            system_prompt = get_custom_analysis_system_prompt(language)
-            user_prompt = CUSTOM_ANALYSIS_USER_PROMPT.format(
-                contribution_number=contribution_number,
-                title=title,
-                meeting=meeting_name,
-                source=source,
-                custom_prompt=custom_prompt,
-                evidence_content=evidence_content,
-            )
-
-            # Call LLM (non-structured output for custom analysis)
-            response = self._genai_client.models.generate_content(
-                model=self.model,
-                contents=[
-                    types.Content(
-                        role="user",
-                        parts=[types.Part(text=f"{system_prompt}\n\n{user_prompt}")],
-                    ),
-                ],
-            )
-
-            answer = response.text
-
-            # Create custom analysis result
-            custom_result = CustomAnalysisResult(
-                prompt_text=custom_prompt,
-                prompt_id=prompt_id,
-                answer=answer,
-                evidences=self._select_supporting_evidence(evidences)[:5],
-            )
-
-            # Update analysis with result
-            analysis.result = custom_result
-            analysis.status = "completed"
-            analysis.completed_at = datetime.utcnow()
-
-        except Exception as e:
-            logger.exception(f"Custom analysis failed for document {document_id}")
-            analysis.status = "failed"
-            analysis.error_message = str(e)
-
-        # Save final state
-        await self._save_analysis(analysis)
-
-        return analysis
-
-    async def get_result(self, analysis_id: str) -> AnalysisResult | None:
-        """Get analysis result by ID."""
-        doc_ref = self.firestore.client.collection(self.ANALYSIS_RESULTS_COLLECTION).document(
-            analysis_id
-        )
-        doc = doc_ref.get()
-        if not doc.exists:
-            return None
-
-        return AnalysisResult.from_firestore(doc.id, doc.to_dict())
-
-    async def get_cached_result(
-        self,
-        document_id: str,
-        analysis_type: str,
-    ) -> AnalysisResult | None:
-        """Get cached analysis result for a document."""
-        # Query by document_id, type, and strategy_version
-        query = (
-            self.firestore.client.collection(self.ANALYSIS_RESULTS_COLLECTION)
-            .where("document_id", "==", document_id)
-            .where("type", "==", analysis_type)
-            .where("strategy_version", "==", self.strategy_version)
-            .where("status", "==", "completed")
-            .order_by("created_at", direction="DESCENDING")
-            .limit(1)
+        # Call LLM (non-structured output for custom analysis)
+        response = self._genai_client.models.generate_content(
+            model=self.model,
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=[types.Part(text=f"{system_prompt}\n\n{user_prompt}")],
+                ),
+            ],
         )
 
-        docs = list(query.stream())
-        if not docs:
-            return None
-
-        doc = docs[0]
-        return AnalysisResult.from_firestore(doc.id, doc.to_dict())
-
-    async def list_by_document(self, document_id: str) -> list[AnalysisResult]:
-        """List all analyses for a document."""
-        query = (
-            self.firestore.client.collection(self.ANALYSIS_RESULTS_COLLECTION)
-            .where("document_id", "==", document_id)
-            .order_by("created_at", direction="DESCENDING")
+        return CustomAnalysisResult(
+            prompt_text=custom_prompt,
+            prompt_id=prompt_id,
+            answer=response.text,
+            evidences=self._select_supporting_evidence(evidences)[:5],
         )
-
-        results = []
-        for doc in query.stream():
-            results.append(AnalysisResult.from_firestore(doc.id, doc.to_dict()))
-
-        return results
-
-    async def _save_analysis(self, analysis: AnalysisResult) -> None:
-        """Save analysis result to Firestore."""
-        doc_ref = self.firestore.client.collection(self.ANALYSIS_RESULTS_COLLECTION).document(
-            analysis.id
-        )
-        doc_ref.set(analysis.to_firestore())
 
     def _format_evidence_for_prompt(self, evidences: list[Evidence]) -> str:
         """Format evidence list for LLM prompt."""
@@ -552,35 +449,4 @@ Return JSON with "summary" and "key_points" fields."""
         all_evidence: list[Evidence],
     ) -> list[Evidence]:
         """Select most relevant evidence to include in result."""
-        # For now, include top evidence items
-        # Could be enhanced to match evidence to specific findings
         return all_evidence[:10]
-
-    async def _call_llm_structured(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        output_schema: type,
-    ):
-        """Call LLM with structured output schema."""
-        response = self._genai_client.models.generate_content(
-            model=self.model,
-            contents=[
-                types.Content(
-                    role="user",
-                    parts=[types.Part(text=f"{system_prompt}\n\n{user_prompt}")],
-                ),
-            ],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=output_schema,
-            ),
-        )
-
-        # Parse the JSON response
-        import json
-
-        result_text = response.text
-        result_data = json.loads(result_text)
-        return output_schema.model_validate(result_data)
-

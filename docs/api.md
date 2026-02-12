@@ -142,27 +142,9 @@ data: {"status": "indexed", "document_id": "doc-12345"}
 
 ---
 
-### GET /api/downloads/{id}
-
-成果物をダウンロードする。
-
-**レスポンス**
-
-- 302 Redirect to signed URL
-- または直接ファイルストリーム
-
-**ヘッダー**
-
-```
-Content-Type: text/markdown
-Content-Disposition: attachment; filename="review-sheet-S1-234567.md"
-```
-
----
-
 ### POST /api/documents/{id}/analyze/custom
 
-カスタム分析を実行する。ユーザー定義のプロンプトで文書を分析。
+カスタム分析を実行する。ユーザー定義のプロンプトで文書を分析。結果は永続化されない。
 
 **リクエスト**
 
@@ -184,26 +166,20 @@ Content-Disposition: attachment; filename="review-sheet-S1-234567.md"
 
 ```json
 {
-  "id": "ana-custom-12345",
-  "document_id": "doc-67890",
-  "type": "custom",
-  "status": "completed",
-  "strategy_version": "v1",
-  "created_at": "2025-01-29T12:00:00Z",
-  "result": {
-    "prompt_text": "セキュリティの観点でサマライズしてください",
-    "prompt_id": "prompt-12345",
-    "answer": "本寄書はセキュリティ観点から以下の点が重要です...",
-    "evidences": [
-      {
-        "text": "Security requirements shall include...",
-        "contribution_number": "S1-234567",
-        "clause_number": "6.1",
-        "page_number": 15,
-        "score": 0.89
-      }
-    ]
-  }
+  "prompt_text": "セキュリティの観点でサマライズしてください",
+  "prompt_id": "prompt-12345",
+  "answer": "本寄書はセキュリティ観点から以下の点が重要です...",
+  "evidences": [
+    {
+      "chunk_id": "chunk-123",
+      "document_id": "doc-67890",
+      "contribution_number": "S1-234567",
+      "content": "Security requirements shall include...",
+      "clause_number": "6.1",
+      "page_number": 15,
+      "relevance_score": 0.89
+    }
+  ]
 }
 ```
 
@@ -457,5 +433,3 @@ FTPからメタデータを同期する。
 
 | エンドポイント | 制限 |
 |---------------|------|
-| GET /api/analysis | 60 req/min/user |
-| GET /api/downloads/* | 30 req/min/user |
