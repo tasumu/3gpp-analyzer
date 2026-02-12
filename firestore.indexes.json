@@ -36,6 +36,15 @@
       "collectionGroup": "documents",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "meeting.id", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "ASCENDING" },
+        { "fieldPath": "source_file.ftp_path", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "documents",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "updated_at", "order": "DESCENDING" }
       ]

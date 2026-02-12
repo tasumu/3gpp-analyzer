@@ -394,7 +394,8 @@ export default function QAPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Q&A</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Ask questions about 3GPP documents.
+              Ask questions about 3GPP documents. Responses may take a few
+              minutes.
             </p>
           </div>
           <button
