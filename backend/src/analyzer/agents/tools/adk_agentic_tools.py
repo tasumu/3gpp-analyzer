@@ -7,6 +7,7 @@ from typing import Any
 from google.adk.tools import ToolContext
 
 from analyzer.agents.context import AgentToolContext, get_current_agent_context
+from analyzer.models.document import DocumentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ async def list_meeting_documents_enhanced(
     try:
         documents, total = await ctx.document_service.list_documents(
             meeting_id=meeting_id,
-            status="indexed",
+            status=DocumentStatus.INDEXED,
             search_text=search_text,
             page=page,
             page_size=page_size,
