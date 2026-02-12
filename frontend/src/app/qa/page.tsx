@@ -53,13 +53,21 @@ function ToolStepItem({ step }: { step: ToolStep }) {
   const isCall = step.type === "tool_call";
 
   let callDetail = "";
-  if (isCall && step.tool === "investigate_document" && step.args) {
-    const cn = step.args.contribution_number;
-    const title = step.args.document_title;
-    if (cn && title) {
-      callDetail = `${cn}: ${title}`;
-    } else if (cn) {
-      callDetail = cn;
+  if (isCall && step.args) {
+    if (step.tool === "investigate_document") {
+      const cn = step.args.contribution_number;
+      const title = step.args.document_title;
+      if (cn && title) {
+        callDetail = `${cn}: ${title}`;
+      } else if (cn) {
+        callDetail = cn;
+      }
+    } else if (step.tool === "search_evidence") {
+      if (step.args.query) callDetail = `"${step.args.query}"`;
+    } else if (step.tool === "list_meeting_documents_enhanced") {
+      if (step.args.search_text) callDetail = `"${step.args.search_text}"`;
+    } else if (step.tool === "get_document_summary") {
+      if (step.args.document_id) callDetail = step.args.document_id;
     }
   }
 
@@ -716,7 +724,7 @@ export default function QAPage() {
                     )}
                   </>
                 ) : (
-                  <MarkdownRenderer content={message.content} showCopyButton={false} />
+                  <MarkdownRenderer content={message.content} showCopyButton={true} />
                 )}
 
                 {/* Evidences */}
