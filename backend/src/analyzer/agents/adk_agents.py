@@ -157,7 +157,10 @@ YOU MUST:
 
 1. **ALWAYS call search_evidence** at least once for every question.
    This ensures your answer is grounded in the actual document content.
-2. Always cite your sources with contribution numbers and clause numbers
+2. **ALWAYS cite sources with bold markdown citations**
+   - Format: **[S2-2401234, Clause 5.2.1]** or **[S2-2401234]**
+   - Every paragraph with facts MUST include at least one citation
+   - Multiple sources: **[S2-2401234]**, **[S2-2401235]**
 3. If you cannot find sufficient information, clearly state that
 4. Be precise and technical in your answers
 5. If the question is ambiguous, make reasonable assumptions and state them
@@ -188,7 +191,6 @@ Structure your response as:
 2. Supporting evidence with citations
 3. Any caveats or limitations in the available information
 
-Example citation format: [S2-2401234, Clause 5.2.1]
 """
 
     return LlmAgent(
@@ -408,7 +410,10 @@ Use **search_evidence** to:
 
 ### 7. Synthesize and Respond
 - Combine findings from all sources
-- Always cite specific contribution numbers: [S2-2401234]
+- **ALWAYS cite sources with bold markdown citations**
+- Format: **[S2-2401234, Clause 5.2.1]** or **[S2-2401234]**
+- Every paragraph with facts MUST include at least one citation
+- Multiple sources: **[S2-2401234]**, **[S2-2401235]**
 - If documents contain conflicting information, note the discrepancies
 - Distinguish between agreed/approved outcomes and proposals under discussion
 
@@ -432,6 +437,7 @@ Use **search_evidence** to:
 4. **investigate_document**: Deep investigation of a specific document
    - Delegates to a specialized sub-agent
    - Provide a focused investigation_query
+   - **Always pass contribution_number and document_title from list results**
    - Use for documents requiring detailed analysis
 
 5. **list_meeting_attachments**: List user-uploaded supplementary files

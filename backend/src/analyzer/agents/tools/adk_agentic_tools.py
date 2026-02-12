@@ -100,6 +100,8 @@ async def list_meeting_documents_enhanced(
 async def investigate_document(
     document_id: str,
     investigation_query: str,
+    contribution_number: str | None = None,
+    document_title: str | None = None,
     tool_context: ToolContext = None,
 ) -> dict[str, Any]:
     """
@@ -117,6 +119,10 @@ async def investigate_document(
         investigation_query: What to look for in this document.
             Be specific about what information you need.
             Example: 'What changes does this document propose to DRX parameters?'
+        contribution_number: The contribution number of the document (e.g., 'S2-2401234').
+            Pass this from list_meeting_documents_enhanced results for progress display.
+        document_title: The title of the document.
+            Pass this from list_meeting_documents_enhanced results for progress display.
         tool_context: ADK tool context (injected automatically by ADK).
 
     Returns:
@@ -135,13 +141,17 @@ async def investigate_document(
     logger.info(f"Investigating document {document_id}: query='{investigation_query[:50]}...'")
 
     try:
-        # Get document metadata for context
+        # Get document metadata for context, merging with passed params
         doc_data = None
-        contribution_number = None
+        looked_up_cn = None
         if ctx.firestore:
             doc_data = await ctx.firestore.get_document(document_id)
             if doc_data:
-                contribution_number = doc_data.get("contribution_number")
+                looked_up_cn = doc_data.get("contribution_number")
+                if not document_title:
+                    document_title = doc_data.get("title")
+
+        effective_cn = looked_up_cn or contribution_number
 
         if not doc_data:
             return {"error": f"Document not found: {document_id}"}
@@ -149,7 +159,7 @@ async def investigate_document(
         # Create a sub-agent for document investigation
         sub_agent = create_document_investigation_agent(
             document_id=document_id,
-            contribution_number=contribution_number,
+            contribution_number=effective_cn,
             language=ctx.language,
         )
 
@@ -183,7 +193,7 @@ async def investigate_document(
 
         return {
             "document_id": document_id,
-            "contribution_number": contribution_number,
+            "contribution_number": effective_cn,
             "analysis": analysis_text,
             "evidence_count": len(evidences),
         }
@@ -192,7 +202,7 @@ async def investigate_document(
         logger.warning(f"Sub-agent timed out investigating document {document_id}")
         return {
             "document_id": document_id,
-            "contribution_number": contribution_number,
+            "contribution_number": effective_cn,
             "analysis": "Investigation timed out. Use get_document_summary for a quicker overview.",
             "evidence_count": 0,
         }
