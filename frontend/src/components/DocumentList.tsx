@@ -136,7 +136,7 @@ export function DocumentList({
       )}
 
       <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full table-fixed divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-3 w-10">
@@ -147,22 +147,22 @@ export function DocumentList({
                   className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
                 />
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 w-48 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 ID / Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Title
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 w-32 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Meeting
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 w-20 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Size
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 w-36 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Updated
               </th>
             </tr>
@@ -184,31 +184,42 @@ export function DocumentList({
                     className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
                   />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Link
-                    href={`/documents/${doc.id}`}
-                    className="text-primary-600 hover:text-primary-900 font-medium"
-                  >
-                    {doc.contribution_number || doc.filename}
-                  </Link>
-                  {doc.document_type !== "contribution" && (
-                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                      {doc.document_type}
-                    </span>
-                  )}
-                  {!doc.analyzable && (
-                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
-                      DL Only
-                    </span>
-                  )}
+                <td className="px-6 py-4">
+                  <div className="flex items-center min-w-0">
+                    <Link
+                      href={`/documents/${doc.id}`}
+                      className="text-primary-600 hover:text-primary-900 font-medium truncate"
+                      title={doc.contribution_number || doc.filename}
+                    >
+                      {doc.contribution_number || doc.filename}
+                    </Link>
+                    {doc.document_type !== "contribution" && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 shrink-0">
+                        {doc.document_type}
+                      </span>
+                    )}
+                    {!doc.analyzable && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 shrink-0">
+                        DL Only
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="text-sm text-gray-900 truncate max-w-md">
+                  <div
+                    className="text-sm text-gray-900 truncate"
+                    title={doc.title || doc.filename}
+                  >
                     {doc.title || doc.filename}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {doc.meeting_name || "-"}
+                <td className="px-6 py-4">
+                  <div
+                    className="text-sm text-gray-500 truncate"
+                    title={doc.meeting_name || "-"}
+                  >
+                    {doc.meeting_name || "-"}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">

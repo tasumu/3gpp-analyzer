@@ -270,7 +270,7 @@ export default function DocumentDetailPage() {
 
       {/* Custom Document Analysis (only for indexed analyzable documents) */}
       {document.analyzable && document.status === "indexed" && (
-        <CollapsibleSection title="Custom Document Analysis" defaultExpanded={false}>
+        <CollapsibleSection title="Custom Document Analysis" defaultExpanded={true}>
           <CustomAnalysisSection documentId={document.id} language={analysisLanguage} />
         </CollapsibleSection>
       )}
