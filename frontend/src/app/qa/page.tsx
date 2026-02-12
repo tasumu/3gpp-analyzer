@@ -5,8 +5,14 @@ import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
 import { MultipleMeetingSelector } from "@/components/MultipleMeetingSelector";
 import { askQuestion, createQAStream } from "@/lib/api";
-import type { AnalysisLanguage, QAEvidence, QAResult, QAScope } from "@/lib/types";
-import { languageLabels, qaScopeLabels, qaScopeLabelsJa } from "@/lib/types";
+import type { AnalysisLanguage, QAEvidence, QAMode, QAResult, QAScope } from "@/lib/types";
+import { languageLabels, qaModeLabels, qaScopeLabels, qaScopeLabelsJa } from "@/lib/types";
+
+interface ToolStep {
+  type: "tool_call" | "tool_result";
+  tool: string;
+  detail: string;
+}
 
 interface Message {
   id: string;
@@ -14,6 +20,35 @@ interface Message {
   content: string;
   evidences?: QAEvidence[];
   isStreaming?: boolean;
+  steps?: ToolStep[];
+}
+
+const toolDisplayNames: Record<string, string> = {
+  list_meeting_documents_enhanced: "Listing documents",
+  search_evidence: "Searching",
+  get_document_summary: "Reading summary",
+  investigate_document: "Investigating document",
+  get_document_content: "Reading document",
+};
+
+function ToolStepItem({ step }: { step: ToolStep }) {
+  const displayName = toolDisplayNames[step.tool] || step.tool;
+  const isCall = step.type === "tool_call";
+
+  return (
+    <div className="flex items-start gap-2 text-xs text-gray-500">
+      <span className="mt-0.5 flex-shrink-0">
+        {isCall ? "\u{1F50D}" : "\u{2192}"}
+      </span>
+      <span>
+        {isCall ? (
+          <span className="font-medium text-gray-600">{displayName}</span>
+        ) : (
+          <span className="text-gray-500">{step.detail}</span>
+        )}
+      </span>
+    </div>
+  );
 }
 
 function QAEvidenceItem({ evidence }: { evidence: QAEvidence }) {
@@ -61,6 +96,7 @@ function generateSessionId(): string {
 export default function QAPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
+  const [mode, setMode] = useState<QAMode>("rag");
   const [scope, setScope] = useState<QAScope>("global");
   const [scopeId, setScopeId] = useState<string | null>(null);
   const [scopeIds, setScopeIds] = useState<string[]>([]);
@@ -68,6 +104,7 @@ export default function QAPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [useStreaming, setUseStreaming] = useState(true);
   const [expandedEvidences, setExpandedEvidences] = useState<Record<string, boolean>>({});
+  const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [sessionId, setSessionId] = useState<string>(generateSessionId);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -86,6 +123,21 @@ export default function QAPage() {
       ...prev,
       [messageId]: !prev[messageId],
     }));
+  };
+
+  const toggleSteps = (messageId: string) => {
+    setExpandedSteps((prev) => ({
+      ...prev,
+      [messageId]: !prev[messageId],
+    }));
+  };
+
+  const handleModeChange = (newMode: QAMode) => {
+    setMode(newMode);
+    if (newMode === "agentic") {
+      // Agentic mode requires meeting scope
+      setScope("meeting");
+    }
   };
 
   const handleScopeChange = (newScope: QAScope) => {
@@ -131,6 +183,7 @@ export default function QAPage() {
             type: "assistant",
             content: "",
             isStreaming: true,
+            steps: [],
           },
         ]);
 
@@ -140,11 +193,59 @@ export default function QAPage() {
           scopeId || undefined,
           scopeIds.length > 0 ? scopeIds : undefined,
           language,
-          sessionId
+          sessionId,
+          mode,
         );
 
         let fullAnswer = "";
         let evidences: QAEvidence[] = [];
+        const steps: ToolStep[] = [];
+
+        // Handle tool_call events (agentic mode)
+        eventSource.addEventListener("tool_call", (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const step: ToolStep = {
+              type: "tool_call",
+              tool: data.tool || "",
+              detail: Object.entries(data.args || {})
+                .map(([k, v]) => `${k}=${v}`)
+                .join(", "),
+            };
+            steps.push(step);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessageId
+                  ? { ...m, steps: [...steps] }
+                  : m
+              )
+            );
+          } catch {
+            console.error("Failed to parse tool_call data");
+          }
+        });
+
+        // Handle tool_result events (agentic mode)
+        eventSource.addEventListener("tool_result", (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const step: ToolStep = {
+              type: "tool_result",
+              tool: data.tool || "",
+              detail: data.summary || "",
+            };
+            steps.push(step);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessageId
+                  ? { ...m, steps: [...steps] }
+                  : m
+              )
+            );
+          } catch {
+            console.error("Failed to parse tool_result data");
+          }
+        });
 
         // Handle chunk events (streaming text)
         eventSource.addEventListener("chunk", (event) => {
@@ -240,6 +341,7 @@ export default function QAPage() {
           scope_ids: scopeIds.length > 0 ? scopeIds : undefined,
           language,
           session_id: sessionId,
+          mode,
         });
 
         setMessages((prev) => [
@@ -279,7 +381,6 @@ export default function QAPage() {
 
   const clearChat = () => {
     setMessages([]);
-    // Generate a new session ID to start fresh
     setSessionId(generateSessionId());
   };
 
@@ -293,7 +394,7 @@ export default function QAPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Q&A</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Ask questions about 3GPP documents using RAG-powered search.
+              Ask questions about 3GPP documents.
             </p>
           </div>
           <button
@@ -307,43 +408,69 @@ export default function QAPage() {
 
         {/* Settings Bar */}
         <div className="flex flex-wrap items-center gap-4 py-4 border-b">
-          {/* Scope Selector */}
+          {/* Mode Selector */}
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">Scope:</label>
+            <label className="text-sm font-medium text-gray-700">Mode:</label>
             <div className="flex rounded-md shadow-sm">
-              {(["global", "meeting", "document"] as QAScope[]).map((s) => (
+              {(["agentic", "rag"] as QAMode[]).map((m) => (
                 <button
-                  key={s}
-                  onClick={() => handleScopeChange(s)}
+                  key={m}
+                  onClick={() => handleModeChange(m)}
                   className={`px-3 py-1.5 text-sm font-medium border ${
-                    scope === s
-                      ? "bg-blue-50 border-blue-500 text-blue-700 z-10"
+                    mode === m
+                      ? m === "agentic"
+                        ? "bg-purple-50 border-purple-500 text-purple-700 z-10"
+                        : "bg-blue-50 border-blue-500 text-blue-700 z-10"
                       : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
                   } ${
-                    s === "global"
-                      ? "rounded-l-md"
-                      : s === "document"
-                        ? "rounded-r-md -ml-px"
-                        : "-ml-px"
+                    m === "agentic" ? "rounded-l-md" : "rounded-r-md -ml-px"
                   }`}
                 >
-                  {scopeLabels[s]}
+                  {qaModeLabels[m]}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Meeting Selector (shown when scope is meeting) */}
-          {scope === "meeting" && (
+          {/* Scope Selector (hidden in agentic mode - always meeting) */}
+          {mode === "rag" && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">Scope:</label>
+              <div className="flex rounded-md shadow-sm">
+                {(["global", "meeting", "document"] as QAScope[]).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => handleScopeChange(s)}
+                    className={`px-3 py-1.5 text-sm font-medium border ${
+                      scope === s
+                        ? "bg-blue-50 border-blue-500 text-blue-700 z-10"
+                        : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                    } ${
+                      s === "global"
+                        ? "rounded-l-md"
+                        : s === "document"
+                          ? "rounded-r-md -ml-px"
+                          : "-ml-px"
+                    }`}
+                  >
+                    {scopeLabels[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Meeting Selector (shown in agentic mode or meeting scope) */}
+          {(mode === "agentic" || scope === "meeting") && (
             <MultipleMeetingSelector
               selectedMeetingIds={scopeIds}
               onSelect={handleMeetingSelect}
-              maxSelections={2}
+              maxSelections={mode === "agentic" ? 1 : 2}
             />
           )}
 
-          {/* Document ID Input (shown when scope is document) */}
-          {scope === "document" && (
+          {/* Document ID Input (shown when scope is document in RAG mode) */}
+          {mode === "rag" && scope === "document" && (
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700">
                 Document ID:
@@ -397,7 +524,9 @@ export default function QAPage() {
             <div className="text-center text-gray-500 py-12">
               <p className="text-lg">Start a conversation</p>
               <p className="text-sm mt-2">
-                Ask any question about 3GPP standardization documents.
+                {mode === "agentic"
+                  ? "Ask questions about a meeting. The agent will plan and investigate."
+                  : "Ask any question about 3GPP standardization documents."}
               </p>
             </div>
           )}
@@ -416,8 +545,35 @@ export default function QAPage() {
                     : "bg-gray-100 text-gray-900"
                 }`}
               >
+                {/* Tool Steps (agentic mode) */}
+                {message.type === "assistant" && message.steps && message.steps.length > 0 && (
+                  <div className="mb-3 pb-2 border-b border-gray-200">
+                    <button
+                      onClick={() => toggleSteps(message.id)}
+                      className="text-xs font-medium text-purple-600 hover:text-purple-800 mb-1"
+                    >
+                      {expandedSteps[message.id]
+                        ? "Hide investigation steps"
+                        : `Investigation steps (${message.steps.length})`}
+                    </button>
+                    {(expandedSteps[message.id] || message.isStreaming) && (
+                      <div className="space-y-1 mt-1">
+                        {message.steps.map((step, idx) => (
+                          <ToolStepItem key={idx} step={step} />
+                        ))}
+                        {message.isStreaming && !message.content && (
+                          <div className="flex items-center gap-2 text-xs text-gray-400">
+                            <span className="inline-block w-2 h-2 bg-purple-400 rounded-full animate-pulse" />
+                            Investigating...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="whitespace-pre-wrap">{message.content}</div>
-                {message.isStreaming && (
+                {message.isStreaming && message.content && (
                   <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1" />
                 )}
 

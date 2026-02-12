@@ -11,7 +11,7 @@ from analyzer.dependencies import (
     CurrentUserDep,
     QAServiceDep,
 )
-from analyzer.models.qa import QARequest, QAResult, QAScope
+from analyzer.models.qa import QAMode, QARequest, QAResult, QAScope
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class QAResponse(BaseModel):
     answer: str
     scope: str
     scope_id: str | None
+    mode: str = "rag"
     evidences: list[dict]
     created_at: str
 
@@ -38,6 +39,7 @@ def qa_result_to_response(result: QAResult) -> QAResponse:
         answer=result.answer,
         scope=result.scope.value,
         scope_id=result.scope_id,
+        mode=result.mode.value,
         evidences=[
             {
                 "chunk_id": ev.chunk_id,
@@ -80,6 +82,7 @@ async def ask_question(
             language=request.language,
             user_id=current_user.uid,
             session_id=request.session_id,
+            mode=QAMode(request.mode),
         )
         return qa_result_to_response(result)
     except ValueError as e:
@@ -99,6 +102,7 @@ async def ask_question_stream(
     scope_ids: str | None = Query(None, description="Multiple scope identifiers (comma-separated)"),
     language: str = Query("ja", pattern="^(ja|en)$", description="Response language"),
     session_id: str | None = Query(None, description="Session ID for conversation continuity"),
+    mode: str = Query("rag", pattern="^(rag|agentic)$", description="Q&A mode"),
 ):
     """
     Answer a question with streaming response (SSE).
@@ -107,6 +111,8 @@ async def ask_question_stream(
 
     Events:
     - chunk: Text chunk of the answer
+    - tool_call: Tool invocation info (agentic mode)
+    - tool_result: Tool result summary (agentic mode)
     - evidence: Supporting evidence
     - done: Final result with complete answer
     - error: Error message if something went wrong
@@ -123,6 +129,11 @@ async def ask_question_stream(
 
         return EventSourceResponse(error_generator())
 
+    try:
+        qa_mode = QAMode(mode)
+    except ValueError:
+        qa_mode = QAMode.RAG
+
     async def event_generator():
         try:
             # Parse scope_ids from comma-separated string
@@ -138,11 +149,22 @@ async def ask_question_stream(
                 language=language,
                 user_id=current_user.uid,
                 session_id=session_id,
+                mode=qa_mode,
             ):
                 if event.type == "chunk":
                     yield {
                         "event": "chunk",
                         "data": json.dumps({"content": event.content}),
+                    }
+                elif event.type == "tool_call":
+                    yield {
+                        "event": "tool_call",
+                        "data": event.content or "{}",
+                    }
+                elif event.type == "tool_result":
+                    yield {
+                        "event": "tool_result",
+                        "data": event.content or "{}",
                     }
                 elif event.type == "evidence":
                     yield {

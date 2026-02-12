@@ -33,6 +33,7 @@ import type {
   MultiMeetingSummarizeRequest,
   MultiMeetingSummary,
   ProcessRequest,
+  QAMode,
   QARequest,
   QAResult,
   QAScope,
@@ -578,6 +579,7 @@ export async function createQAStream(
   scopeIds?: string[],
   language: AnalysisLanguage = "ja",
   sessionId?: string,
+  mode: QAMode = "rag",
 ): Promise<EventSource> {
   const token = await getAuthToken();
   if (!token) {
@@ -588,6 +590,7 @@ export async function createQAStream(
     question,
     scope,
     language,
+    mode,
   });
 
   // Support multiple scope IDs (takes precedence over single scope_id)

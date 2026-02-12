@@ -1,17 +1,23 @@
 """Q&A Service for RAG-based question answering (P3-05)."""
 
+import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 
-from analyzer.agents.adk_agents import ADKAgentRunner, create_qa_agent
+from analyzer.agents.adk_agents import (
+    ADKAgentRunner,
+    create_agentic_search_agent,
+    create_qa_agent,
+)
 from analyzer.agents.context import AgentToolContext
 from analyzer.models.evidence import Evidence
-from analyzer.models.qa import QAResult, QAScope, QAStreamEvent
+from analyzer.models.qa import QAMode, QAResult, QAScope, QAStreamEvent
 from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
+from analyzer.services.document_service import DocumentService
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +44,7 @@ class QAService:
         location: str = "asia-northeast1",
         model: str = "gemini-3-pro-preview",
         save_results: bool = True,
+        document_service: DocumentService | None = None,
     ):
         """
         Initialize QAService.
@@ -49,6 +56,7 @@ class QAService:
             location: GCP region for Vertex AI.
             model: LLM model name for Q&A.
             save_results: Whether to save Q&A results to Firestore.
+            document_service: Document service (required for agentic mode).
         """
         self.evidence_provider = evidence_provider
         self.firestore = firestore
@@ -56,6 +64,7 @@ class QAService:
         self.location = location
         self.model = model
         self.save_results = save_results
+        self.document_service = document_service
 
     async def answer(
         self,
@@ -67,9 +76,10 @@ class QAService:
         language: str = "ja",
         user_id: str | None = None,
         session_id: str | None = None,
+        mode: QAMode = QAMode.RAG,
     ) -> QAResult:
         """
-        Answer a question using RAG.
+        Answer a question using RAG or agentic search.
 
         Args:
             question: The user's question.
@@ -80,6 +90,7 @@ class QAService:
             language: Response language (ja or en).
             user_id: User ID who initiated the Q&A.
             session_id: Session ID for conversation continuity.
+            mode: Q&A mode (rag or agentic).
 
         Returns:
             QAResult with the answer and supporting evidence.
@@ -91,15 +102,12 @@ class QAService:
         effective_scope_id = scope_id
         multi_meeting_mode = False
         if scope_ids and len(scope_ids) > 1:
-            # Multiple meetings selected - use global scope for agent creation
-            # to avoid hardcoding a specific meeting_id in system instruction
             effective_scope_id = None
             multi_meeting_mode = True
             if filters is None:
                 filters = {}
             filters["meeting_id__in"] = scope_ids
         elif scope_ids and len(scope_ids) == 1:
-            # Single meeting in scope_ids - treat as normal meeting scope
             effective_scope_id = scope_ids[0]
 
         # Validate scope_id
@@ -110,30 +118,50 @@ class QAService:
         ):
             raise ValueError(f"scope_id or scope_ids is required for scope={scope.value}")
 
+        # Agentic mode requires meeting scope
+        if mode == QAMode.AGENTIC and scope != QAScope.MEETING:
+            raise ValueError("Agentic search mode requires meeting scope")
+        if mode == QAMode.AGENTIC and not effective_scope_id:
+            raise ValueError("Agentic search mode requires a meeting_id (scope_id)")
+
         logger.info(
-            f"Processing Q&A: question='{question[:50]}...', "
+            f"Processing Q&A ({mode.value}): question='{question[:50]}...', "
             f"scope={scope.value}, scope_id={effective_scope_id}, "
             f"scope_ids={scope_ids}, multi_meeting_mode={multi_meeting_mode}"
         )
 
-        # Create ADK agent
-        # For multi-meeting Q&A, use global scope to avoid hardcoding meeting_id
-        agent_scope = "global" if multi_meeting_mode else scope.value
-        agent = create_qa_agent(
-            model=self.model,
-            scope=agent_scope,
-            scope_id=effective_scope_id,
-            language=language,
-        )
-
-        # Create context with services
-        agent_context = AgentToolContext(
-            evidence_provider=self.evidence_provider,
-            scope=scope.value,
-            scope_id=effective_scope_id,
-            language=language,
-            filters=filters,
-        )
+        # Create agent based on mode
+        if mode == QAMode.AGENTIC:
+            agent = create_agentic_search_agent(
+                meeting_id=effective_scope_id,
+                model=self.model,
+                language=language,
+            )
+            agent_context = AgentToolContext(
+                evidence_provider=self.evidence_provider,
+                scope=scope.value,
+                scope_id=effective_scope_id,
+                language=language,
+                filters=filters,
+                document_service=self.document_service,
+                firestore=self.firestore,
+                meeting_id=effective_scope_id,
+            )
+        else:
+            agent_scope = "global" if multi_meeting_mode else scope.value
+            agent = create_qa_agent(
+                model=self.model,
+                scope=agent_scope,
+                scope_id=effective_scope_id,
+                language=language,
+            )
+            agent_context = AgentToolContext(
+                evidence_provider=self.evidence_provider,
+                scope=scope.value,
+                scope_id=effective_scope_id,
+                language=language,
+                filters=filters,
+            )
 
         # Create runner and execute
         runner = ADKAgentRunner(agent=agent, agent_context=agent_context)
@@ -155,6 +183,7 @@ class QAService:
             answer=answer_text,
             scope=scope,
             scope_id=effective_scope_id,
+            mode=mode,
             evidences=unique_evidences,
             created_at=datetime.utcnow(),
             created_by=user_id,
@@ -176,6 +205,7 @@ class QAService:
         language: str = "ja",
         user_id: str | None = None,
         session_id: str | None = None,
+        mode: QAMode = QAMode.RAG,
     ) -> AsyncGenerator[QAStreamEvent, None]:
         """
         Answer a question with streaming response.
@@ -189,6 +219,7 @@ class QAService:
             language: Response language (ja or en).
             user_id: User ID who initiated the Q&A.
             session_id: Session ID for conversation continuity.
+            mode: Q&A mode (rag or agentic).
 
         Yields:
             QAStreamEvent objects with answer chunks and evidence.
@@ -197,15 +228,12 @@ class QAService:
         effective_scope_id = scope_id
         multi_meeting_mode = False
         if scope_ids and len(scope_ids) > 1:
-            # Multiple meetings selected - use global scope for agent creation
-            # to avoid hardcoding a specific meeting_id in system instruction
             effective_scope_id = None
             multi_meeting_mode = True
             if filters is None:
                 filters = {}
             filters["meeting_id__in"] = scope_ids
         elif scope_ids and len(scope_ids) == 1:
-            # Single meeting in scope_ids - treat as normal meeting scope
             effective_scope_id = scope_ids[0]
 
         # Validate scope_id
@@ -220,30 +248,58 @@ class QAService:
             )
             return
 
+        # Agentic mode requires meeting scope
+        if mode == QAMode.AGENTIC and scope != QAScope.MEETING:
+            yield QAStreamEvent(
+                type="error",
+                error="Agentic search mode requires meeting scope",
+            )
+            return
+        if mode == QAMode.AGENTIC and not effective_scope_id:
+            yield QAStreamEvent(
+                type="error",
+                error="Agentic search mode requires a meeting_id",
+            )
+            return
+
         logger.info(
-            f"Processing streaming Q&A: question='{question[:50]}...', "
+            f"Processing streaming Q&A ({mode.value}): question='{question[:50]}...', "
             f"scope={scope.value}, scope_id={effective_scope_id}, "
             f"scope_ids={scope_ids}, multi_meeting_mode={multi_meeting_mode}"
         )
 
-        # Create ADK agent
-        # For multi-meeting Q&A, use global scope to avoid hardcoding meeting_id
-        agent_scope = "global" if multi_meeting_mode else scope.value
-        agent = create_qa_agent(
-            model=self.model,
-            scope=agent_scope,
-            scope_id=effective_scope_id,
-            language=language,
-        )
-
-        # Create context with services
-        agent_context = AgentToolContext(
-            evidence_provider=self.evidence_provider,
-            scope=scope.value,
-            scope_id=effective_scope_id,
-            language=language,
-            filters=filters,
-        )
+        # Create agent based on mode
+        if mode == QAMode.AGENTIC:
+            agent = create_agentic_search_agent(
+                meeting_id=effective_scope_id,
+                model=self.model,
+                language=language,
+            )
+            agent_context = AgentToolContext(
+                evidence_provider=self.evidence_provider,
+                scope=scope.value,
+                scope_id=effective_scope_id,
+                language=language,
+                filters=filters,
+                document_service=self.document_service,
+                firestore=self.firestore,
+                meeting_id=effective_scope_id,
+            )
+        else:
+            agent_scope = "global" if multi_meeting_mode else scope.value
+            agent = create_qa_agent(
+                model=self.model,
+                scope=agent_scope,
+                scope_id=effective_scope_id,
+                language=language,
+            )
+            agent_context = AgentToolContext(
+                evidence_provider=self.evidence_provider,
+                scope=scope.value,
+                scope_id=effective_scope_id,
+                language=language,
+                filters=filters,
+            )
 
         # Create runner
         runner = ADKAgentRunner(agent=agent, agent_context=agent_context)
@@ -260,6 +316,26 @@ class QAService:
                 if event["type"] == "chunk":
                     full_answer += event.get("content", "")
                     yield QAStreamEvent(type="chunk", content=event.get("content", ""))
+                elif event["type"] == "tool_call":
+                    yield QAStreamEvent(
+                        type="tool_call",
+                        content=json.dumps(
+                            {
+                                "tool": event.get("tool", ""),
+                                "args": event.get("args", {}),
+                            }
+                        ),
+                    )
+                elif event["type"] == "tool_result":
+                    yield QAStreamEvent(
+                        type="tool_result",
+                        content=json.dumps(
+                            {
+                                "tool": event.get("tool", ""),
+                                "summary": event.get("summary", ""),
+                            }
+                        ),
+                    )
                 elif event["type"] == "done":
                     full_answer = event.get("content", full_answer)
                     evidences = event.get("evidences", [])
@@ -275,6 +351,7 @@ class QAService:
                 answer=full_answer,
                 scope=scope,
                 scope_id=scope_id,
+                mode=mode,
                 evidences=evidences,
                 created_at=datetime.utcnow(),
                 created_by=user_id,
