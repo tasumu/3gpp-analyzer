@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 import { MultipleMeetingSelector } from "@/components/MultipleMeetingSelector";
 import {
   askQuestion,
@@ -25,6 +26,7 @@ interface ToolStep {
   type: "tool_call" | "tool_result";
   tool: string;
   detail: string;
+  args?: Record<string, string>;
 }
 
 interface Message {
@@ -50,6 +52,17 @@ function ToolStepItem({ step }: { step: ToolStep }) {
   const displayName = toolDisplayNames[step.tool] || step.tool;
   const isCall = step.type === "tool_call";
 
+  let callDetail = "";
+  if (isCall && step.tool === "investigate_document" && step.args) {
+    const cn = step.args.contribution_number;
+    const title = step.args.document_title;
+    if (cn && title) {
+      callDetail = `${cn}: ${title}`;
+    } else if (cn) {
+      callDetail = cn;
+    }
+  }
+
   return (
     <div className="flex items-start gap-2 text-xs text-gray-500">
       <span className="mt-0.5 flex-shrink-0">
@@ -57,7 +70,12 @@ function ToolStepItem({ step }: { step: ToolStep }) {
       </span>
       <span>
         {isCall ? (
-          <span className="font-medium text-gray-600">{displayName}</span>
+          <>
+            <span className="font-medium text-gray-600">{displayName}</span>
+            {callDetail && (
+              <span className="text-gray-500 ml-1">- {callDetail}</span>
+            )}
+          </>
         ) : (
           <span className="text-gray-500">{step.detail}</span>
         )}
@@ -66,7 +84,7 @@ function ToolStepItem({ step }: { step: ToolStep }) {
   );
 }
 
-function QAEvidenceItem({ evidence }: { evidence: QAEvidence }) {
+function QAEvidenceItem({ evidence, index }: { evidence: QAEvidence; index: number }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const citation = [
@@ -85,7 +103,7 @@ function QAEvidenceItem({ evidence }: { evidence: QAEvidence }) {
 
   return (
     <div className="border-l-2 border-blue-300 pl-3 py-1 text-sm">
-      <div className="text-xs text-gray-500 font-medium">{citation}</div>
+      <div className="text-xs text-gray-500 font-medium">[{index}] {citation}</div>
       <div className="mt-1 text-gray-700">
         {isExpanded ? evidence.content : preview}
       </div>
@@ -266,12 +284,14 @@ export default function QAPage() {
         eventSource.addEventListener("tool_call", (event) => {
           try {
             const data = JSON.parse(event.data);
+            const argsMap = data.args || {};
             const step: ToolStep = {
               type: "tool_call",
               tool: data.tool || "",
-              detail: Object.entries(data.args || {})
+              detail: Object.entries(argsMap)
                 .map(([k, v]) => `${k}=${v}`)
                 .join(", "),
+              args: argsMap,
             };
             steps.push(step);
             setMessages((prev) =>
@@ -688,9 +708,15 @@ export default function QAPage() {
                   </div>
                 )}
 
-                <div className="whitespace-pre-wrap">{message.content}</div>
-                {message.isStreaming && message.content && (
-                  <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1" />
+                {message.isStreaming ? (
+                  <>
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    {message.content && (
+                      <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1" />
+                    )}
+                  </>
+                ) : (
+                  <MarkdownRenderer content={message.content} showCopyButton={false} />
                 )}
 
                 {/* Evidences */}
@@ -705,7 +731,7 @@ export default function QAPage() {
                           {message.evidences
                             .slice(0, expandedEvidences[message.id] ? undefined : 5)
                             .map((ev, idx) => (
-                              <QAEvidenceItem key={idx} evidence={ev} />
+                              <QAEvidenceItem key={idx} evidence={ev} index={idx + 1} />
                             ))}
                           {message.evidences.length > 5 && (
                             <button

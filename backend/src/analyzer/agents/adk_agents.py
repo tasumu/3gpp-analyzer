@@ -157,7 +157,10 @@ YOU MUST:
 
 1. **ALWAYS call search_evidence** at least once for every question.
    This ensures your answer is grounded in the actual document content.
-2. Always cite your sources with contribution numbers and clause numbers
+2. **ALWAYS cite sources with bold markdown citations**
+   - Format: **[S2-2401234, Clause 5.2.1]** or **[S2-2401234]**
+   - Every paragraph with facts MUST include at least one citation
+   - Multiple sources: **[S2-2401234]**, **[S2-2401235]**
 3. If you cannot find sufficient information, clearly state that
 4. Be precise and technical in your answers
 5. If the question is ambiguous, make reasonable assumptions and state them
@@ -188,7 +191,6 @@ Structure your response as:
 2. Supporting evidence with citations
 3. Any caveats or limitations in the available information
 
-Example citation format: [S2-2401234, Clause 5.2.1]
 """
 
     return LlmAgent(
@@ -407,10 +409,16 @@ Use **search_evidence** to:
 - Fill gaps in your investigation
 
 ### 7. Synthesize and Respond
-- Combine findings from all sources
-- Always cite specific contribution numbers: [S2-2401234]
+- Combine findings from all sources into a comprehensive response
+- Do NOT over-summarize: include important details, specific proposals, \
+and technical specifics found during investigation
+- Omit only information that is clearly irrelevant to the question
+- **ALWAYS cite sources with bold markdown citations**
+- Format: **[S2-2401234, Clause 5.2.1]** or **[S2-2401234]**
+- Every paragraph with facts MUST include at least one citation
+- Multiple sources: **[S2-2401234]**, **[S2-2401235]**
 - If documents contain conflicting information, note the discrepancies
-- Distinguish between agreed/approved outcomes and proposals under discussion
+- Distinguish between agreed/approved outcomes and proposals
 
 ## Available Tools
 
@@ -432,6 +440,7 @@ Use **search_evidence** to:
 4. **investigate_document**: Deep investigation of a specific document
    - Delegates to a specialized sub-agent
    - Provide a focused investigation_query
+   - **Always pass contribution_number and document_title from list results**
    - Use for documents requiring detailed analysis
 
 5. **list_meeting_attachments**: List user-uploaded supplementary files
@@ -458,11 +467,20 @@ Use **search_evidence** to:
 
 {lang_text}
 
-Structure your response clearly:
-1. Brief summary of your investigation approach
-2. Key findings with citations
-3. Detailed analysis organized by topic
-4. Conclusions and any caveats
+Structure your response clearly with sufficient detail:
+1. Summary of your investigation approach (which documents you examined)
+2. Main findings with citations — include specific proposals, \
+parameter values, and technical details from the documents
+3. Detailed analysis organized by topic — cover each relevant \
+document's contribution, not just the overall conclusion
+4. Comparison or relationships between documents if multiple are relevant
+5. Conclusions and any caveats
+
+IMPORTANT: Your answer should reflect the depth of your investigation. \
+If you investigated 5 documents, the answer should cover findings from \
+each relevant one, not just a 3-sentence summary. Include specific \
+clauses, proposed changes, and technical details that users would find \
+valuable. Avoid being overly brief.
 """
 
     return LlmAgent(
@@ -526,7 +544,10 @@ Focus on extracting specific, relevant information.
 ## Guidelines
 - Read the full document content with get_document_content
 - Provide specific details: clause numbers, page numbers, exact proposals
-- Be concise but thorough — focus on what's relevant to the query
+- Be thorough — include all relevant findings, not just a brief summary
+- Report specific proposed changes, parameter values, and key technical \
+points found in the document
+- Only omit information that is clearly irrelevant to the query
 - Cite clauses and page numbers: [Clause 5.2.1, Page 3]
 
 ## Response Format
