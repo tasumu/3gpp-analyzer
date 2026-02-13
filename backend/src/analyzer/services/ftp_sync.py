@@ -344,11 +344,15 @@ class FTPSyncService:
         """
         Generate unique document ID.
 
-        For contribution documents, use the contribution number as ID.
+        For contribution documents, use contribution number + file extension as ID
+        (e.g., "S1-123456_zip"). This ensures different file formats of the same
+        contribution are stored as separate documents.
         For other documents, generate a stable hash from the FTP path.
         """
         if contribution_number:
-            return contribution_number
+            filename = ftp_path.rsplit("/", 1)[-1] if "/" in ftp_path else ftp_path
+            ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+            return f"{contribution_number}_{ext}" if ext else contribution_number
         # Generate stable hash from ftp_path (first 16 chars of SHA256)
         return hashlib.sha256(ftp_path.encode()).hexdigest()[:16]
 
@@ -636,6 +640,23 @@ class FTPSyncService:
 
             except Exception as e:
                 result["errors"].append(f"Error processing {file_info['filename']}: {e}")
+
+        # Clean up legacy documents that used contribution number only as ID
+        # (without file extension suffix). These are now replaced by per-file documents.
+        legacy_ids: set[str] = set()
+        for file_info in files:
+            contrib = self._parse_contribution_number(file_info["filename"])
+            if contrib:
+                legacy_ids.add(contrib)
+
+        for legacy_id in legacy_ids:
+            try:
+                existing = await self.firestore.get_document(legacy_id)
+                if existing:
+                    await self.firestore.delete_document(legacy_id)
+                    logger.info(f"Cleaned up legacy document: {legacy_id}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up legacy document {legacy_id}: {e}")
 
         return result
 
