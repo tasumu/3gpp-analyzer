@@ -344,15 +344,17 @@ class FTPSyncService:
         """
         Generate unique document ID.
 
-        For contribution documents, use contribution number + file extension as ID
-        (e.g., "S1-123456_zip"). This ensures different file formats of the same
-        contribution are stored as separate documents.
+        For contribution documents, use the full filename stem (e.g., "S1-123456r01")
+        plus file extension as ID. This ensures different revisions (S1-123456 vs
+        S1-123456r01) and different formats (.zip vs .pptx) are separate documents.
+        The contribution_number field is still used for grouping related files.
         For other documents, generate a stable hash from the FTP path.
         """
         if contribution_number:
             filename = ftp_path.rsplit("/", 1)[-1] if "/" in ftp_path else ftp_path
-            ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-            return f"{contribution_number}_{ext}" if ext else contribution_number
+            # Use full filename as ID (lowercased, spaces replaced with underscores)
+            doc_id = filename.lower().replace(" ", "_")
+            return doc_id
         # Generate stable hash from ftp_path (first 16 chars of SHA256)
         return hashlib.sha256(ftp_path.encode()).hexdigest()[:16]
 
@@ -641,13 +643,20 @@ class FTPSyncService:
             except Exception as e:
                 result["errors"].append(f"Error processing {file_info['filename']}: {e}")
 
-        # Clean up legacy documents that used contribution number only as ID
-        # (without file extension suffix). These are now replaced by per-file documents.
+        # Clean up legacy documents that used old ID formats:
+        # - v1: contribution number only (e.g., "S1-123456")
+        # - v2: contribution number + extension (e.g., "S1-123456_zip")
+        # Both are now replaced by full filename IDs (e.g., "s1-123456.zip").
         legacy_ids: set[str] = set()
         for file_info in files:
             contrib = self._parse_contribution_number(file_info["filename"])
             if contrib:
                 legacy_ids.add(contrib)
+                # Also check v2 format: contribution_ext
+                filename = file_info["filename"]
+                ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+                if ext:
+                    legacy_ids.add(f"{contrib}_{ext}")
 
         for legacy_id in legacy_ids:
             try:
