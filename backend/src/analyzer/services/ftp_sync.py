@@ -661,9 +661,57 @@ class FTPSyncService:
         for legacy_id in legacy_ids:
             try:
                 existing = await self.firestore.get_document(legacy_id)
-                if existing:
+                if not existing:
+                    continue
+
+                legacy_status = existing.get("status", DocumentStatus.METADATA_ONLY.value)
+                if legacy_status == DocumentStatus.METADATA_ONLY.value:
+                    # Safe to delete: no processed data to lose
                     await self.firestore.delete_document(legacy_id)
                     logger.info(f"Cleaned up legacy document: {legacy_id}")
+                else:
+                    # Migrate processed data to the new-format document
+                    legacy_filename = existing.get("source_file", {}).get("filename", "")
+                    new_id = legacy_filename.lower().replace(" ", "_") if legacy_filename else None
+                    if new_id:
+                        new_doc = await self.firestore.get_document(new_id)
+                        if new_doc:
+                            # Copy processing data from legacy to new document
+                            migrate_fields = {
+                                "status": existing.get("status"),
+                                "chunk_count": existing.get("chunk_count", 0),
+                                "title": existing.get("title"),
+                                "source": existing.get("source"),
+                                "error_message": existing.get("error_message"),
+                            }
+                            # Preserve GCS paths from legacy document
+                            legacy_source = existing.get("source_file", {})
+                            if legacy_source.get("gcs_original_path"):
+                                new_source = new_doc.get("source_file", {})
+                                new_source["gcs_original_path"] = legacy_source["gcs_original_path"]
+                                new_source["gcs_normalized_path"] = legacy_source.get(
+                                    "gcs_normalized_path"
+                                )
+                                migrate_fields["source_file"] = new_source
+
+                            # Remove None values
+                            migrate_fields = {k: v for k, v in migrate_fields.items() if v}
+                            await self.firestore.update_document(new_id, migrate_fields)
+
+                            # Update chunks to reference new document ID
+                            await self.firestore.update_chunks_document_id(legacy_id, new_id)
+
+                            await self.firestore.delete_document(legacy_id)
+                            logger.info(
+                                f"Migrated processed legacy document: {legacy_id} -> {new_id}"
+                            )
+                        else:
+                            logger.warning(
+                                f"Skipping legacy document {legacy_id}: "
+                                f"new-format document {new_id} not found"
+                            )
+                    else:
+                        logger.warning(f"Skipping legacy document {legacy_id}: no filename found")
             except Exception as e:
                 logger.warning(f"Failed to clean up legacy document {legacy_id}: {e}")
 
