@@ -367,20 +367,25 @@ async def batch_process_meeting_stream(
 
     async def event_generator():
         try:
-            # Get documents to process
-            if force:
-                # Get all analyzable documents
-                all_docs, _ = await document_service.list_documents(
+            # Get all documents with pagination
+            all_docs = []
+            page = 1
+            batch_size = 5000
+            while True:
+                batch, total = await document_service.list_documents(
                     meeting_id=meeting_id,
-                    page_size=1000,
+                    page=page,
+                    page_size=batch_size,
                 )
+                all_docs.extend(batch)
+                if len(all_docs) >= total or not batch:
+                    break
+                page += 1
+
+            # Filter documents to process
+            if force:
                 documents = [doc for doc in all_docs if doc.analyzable]
             else:
-                # Get only unindexed analyzable documents
-                all_docs, _ = await document_service.list_documents(
-                    meeting_id=meeting_id,
-                    page_size=1000,
-                )
                 documents = [
                     doc
                     for doc in all_docs
