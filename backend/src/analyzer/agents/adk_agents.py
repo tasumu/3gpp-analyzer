@@ -418,7 +418,7 @@ valuable. Avoid being overly brief.
         language=language,
         model="gemini-3-flash-preview",
     )
-    investigation_tool = AgentTool(agent=investigation_agent, skip_summarization=True)
+    investigation_tool = AgentTool(agent=investigation_agent, skip_summarization=False)
 
     return LlmAgent(
         model=model,
