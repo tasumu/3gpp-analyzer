@@ -1,6 +1,7 @@
 """Document processing orchestration service."""
 
 import asyncio
+import logging
 import tempfile
 from pathlib import Path
 from typing import AsyncGenerator, Callable, Literal
@@ -10,11 +11,14 @@ from pydantic import BaseModel
 from analyzer.chunking.extractor import DocxExtractor
 from analyzer.chunking.heading_based import HeadingBasedChunking
 from analyzer.models.api import StatusUpdate
+from analyzer.models.chunk import Chunk
 from analyzer.models.document import Document, DocumentStatus
 from analyzer.services.document_service import DocumentService
 from analyzer.services.ftp_sync import FTPSyncService
 from analyzer.services.normalizer import NormalizerService
 from analyzer.services.vectorizer import VectorizerService
+
+logger = logging.getLogger(__name__)
 
 
 class BatchProcessEvent(BaseModel):
@@ -158,30 +162,40 @@ class ProcessorService:
                     return await self.document_service.get(document_id)
                 raise
 
-            # Step 3: Download normalized file for chunking
+            # Step 3: Chunk the document(s)
             emit_status(DocumentStatus.CHUNKING, 0.3, "Extracting structure")
 
-            with tempfile.TemporaryDirectory() as tmpdir:
-                local_path = Path(tmpdir) / "document.docx"
-                await self.document_service.storage.download_file(
-                    normalized_path,
-                    local_path,
-                )
+            # Refresh doc to get updated gcs_original_path after download
+            doc = await self.document_service.get(document_id)
 
-                # Extract title if not set
-                if not doc.title:
-                    title = self.extractor.extract_title(local_path)
-                    if title:
-                        await self.document_service.update(document_id, {"title": title})
+            if (
+                doc.source_file.filename.lower().endswith(".zip")
+                and doc.source_file.gcs_original_path
+            ):
+                # ZIP: extract and chunk ALL Word documents inside
+                chunks = await self._chunk_zip_contents(doc, document_id, emit_status)
+            else:
+                # Non-ZIP: chunk the single normalized file
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    local_path = Path(tmpdir) / "document.docx"
+                    await self.document_service.storage.download_file(
+                        normalized_path,
+                        local_path,
+                    )
 
-                # Step 4: Chunk the document
-                emit_status(DocumentStatus.CHUNKING, 0.4, "Creating chunks")
-                chunks = await self.chunker.chunk_document(
-                    local_path,
-                    document_id,
-                    doc.contribution_number,
-                    doc.meeting.id if doc.meeting else None,
-                )
+                    # Extract title if not set
+                    if not doc.title:
+                        title = self.extractor.extract_title(local_path)
+                        if title:
+                            await self.document_service.update(document_id, {"title": title})
+
+                    emit_status(DocumentStatus.CHUNKING, 0.4, "Creating chunks")
+                    chunks = await self.chunker.chunk_document(
+                        local_path,
+                        document_id,
+                        doc.contribution_number,
+                        doc.meeting.id if doc.meeting else None,
+                    )
 
             # Step 5: Vectorize and index
             emit_status(DocumentStatus.INDEXING, 0.5, "Generating embeddings")
@@ -219,6 +233,78 @@ class ProcessorService:
                     )
                 )
             raise
+
+    async def _chunk_zip_contents(
+        self,
+        doc: Document,
+        document_id: str,
+        emit_status: Callable,
+    ) -> list[Chunk]:
+        """
+        Extract and chunk all Word documents inside a ZIP archive.
+
+        Downloads the original ZIP from GCS, extracts all .doc/.docx files,
+        converts each to .docx, and chunks them all. All chunks are tagged
+        with the source filename for traceability.
+
+        Args:
+            doc: Document model with source_file info.
+            document_id: Document ID for chunk metadata.
+            emit_status: Callback for status updates.
+
+        Returns:
+            List of chunks from all Word documents in the ZIP.
+        """
+        all_chunks: list[Chunk] = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Download original ZIP from GCS
+            local_zip = tmpdir_path / doc.source_file.filename
+            await self.document_service.storage.download_file(
+                doc.source_file.gcs_original_path,
+                local_zip,
+            )
+
+            # Extract and normalize all Word documents
+            normalized_files = self.normalizer.extract_and_normalize_all(local_zip, tmpdir_path)
+
+            if not normalized_files:
+                logger.warning(f"No Word documents found in ZIP: {doc.source_file.filename}")
+                return []
+
+            total_files = len(normalized_files)
+            logger.info(f"ZIP {doc.source_file.filename} contains {total_files} Word document(s)")
+
+            for i, (source_filename, local_docx_path) in enumerate(normalized_files):
+                # Extract title from the first file if not set
+                if i == 0 and not doc.title:
+                    title = self.extractor.extract_title(local_docx_path)
+                    if title:
+                        await self.document_service.update(document_id, {"title": title})
+
+                emit_status(
+                    DocumentStatus.CHUNKING,
+                    0.3 + (i / total_files) * 0.2,
+                    f"Chunking {source_filename} ({i + 1}/{total_files})",
+                )
+
+                file_chunks = await self.chunker.chunk_document(
+                    local_docx_path,
+                    document_id,
+                    doc.contribution_number,
+                    doc.meeting.id if doc.meeting else None,
+                )
+
+                # Tag each chunk with the source filename
+                for chunk in file_chunks:
+                    chunk.metadata.source_filename = source_filename
+
+                all_chunks.extend(file_chunks)
+                logger.info(f"  {source_filename}: {len(file_chunks)} chunks")
+
+        return all_chunks
 
     async def process_document_stream(
         self,

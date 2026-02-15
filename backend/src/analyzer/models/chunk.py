@@ -37,6 +37,7 @@ class ChunkMetadata(BaseModel):
     heading_hierarchy: list[str] = Field(
         default_factory=list, description="Parent heading hierarchy"
     )
+    source_filename: str | None = Field(None, description="Source filename within ZIP archive")
 
 
 class Chunk(BaseModel):

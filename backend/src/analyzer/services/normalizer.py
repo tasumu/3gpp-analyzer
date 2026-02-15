@@ -312,6 +312,79 @@ class NormalizerService:
 
             return gcs_normalized
 
+    def extract_and_normalize_all(self, zip_path: Path, output_dir: Path) -> list[tuple[str, Path]]:
+        """
+        Extract and normalize all doc/docx files from a ZIP.
+
+        Extracts every Word document (.doc, .docx) from the ZIP archive,
+        converts .doc files to .docx using LibreOffice, and returns paths
+        to all resulting .docx files.
+
+        Args:
+            zip_path: Path to the ZIP file.
+            output_dir: Directory to extract and convert files in.
+
+        Returns:
+            List of (source_filename, local_docx_path) tuples.
+            Sorted with .docx files first, then .doc files.
+            Empty list if no Word documents found.
+        """
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            doc_files = [
+                f
+                for f in zf.namelist()
+                if f.lower().endswith((".doc", ".docx"))
+                and not f.startswith("__MACOSX")
+                and not f.startswith(".")
+            ]
+
+        if not doc_files:
+            return []
+
+        # Sort: .docx first, then .doc
+        docx_files = sorted(f for f in doc_files if f.lower().endswith(".docx"))
+        doc_only = sorted(
+            f for f in doc_files if f.lower().endswith(".doc") and not f.lower().endswith(".docx")
+        )
+        sorted_files = docx_files + doc_only
+
+        results: list[tuple[str, Path]] = []
+        for doc_file in sorted_files:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extract(doc_file, output_dir)
+            extracted_path = output_dir / doc_file
+            source_filename = Path(doc_file).name
+
+            if source_filename.lower().endswith(".docx"):
+                results.append((source_filename, extracted_path))
+            else:
+                # Convert .doc to .docx using LibreOffice
+                try:
+                    result = subprocess.run(
+                        [
+                            "soffice",
+                            "--headless",
+                            "--convert-to",
+                            "docx",
+                            "--outdir",
+                            str(extracted_path.parent),
+                            str(extracted_path),
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=self.timeout,
+                    )
+                    if result.returncode != 0:
+                        continue  # Skip files that fail to convert
+
+                    docx_path = extracted_path.parent / f"{Path(source_filename).stem}.docx"
+                    if docx_path.exists():
+                        results.append((source_filename, docx_path))
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    continue  # Skip files that fail to convert
+
+        return results
+
     async def normalize_batch(
         self,
         document_ids: list[str],
