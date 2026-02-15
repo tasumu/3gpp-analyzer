@@ -219,6 +219,7 @@ def get_meeting_report_generator(
     document_service: Annotated[DocumentService, Depends(get_document_service)],
     firestore: Annotated[FirestoreClient, Depends(get_firestore_client)],
     storage: Annotated[StorageClient, Depends(get_storage_client)],
+    attachment_service: Annotated[AttachmentService, Depends(get_attachment_service)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> MeetingReportGenerator:
     """Get MeetingReportGenerator instance."""
@@ -232,6 +233,7 @@ def get_meeting_report_generator(
         location=settings.vertex_ai_location,
         model=settings.meeting_pro_model,
         expiration_minutes=settings.review_sheet_expiration_minutes,
+        attachment_service=attachment_service,
     )
 
 

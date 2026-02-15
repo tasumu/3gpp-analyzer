@@ -287,6 +287,25 @@ class FetchEventSource {
         }
       }
 
+      // Process any remaining data in buffer after stream ends
+      if (buffer.trim()) {
+        for (const line of buffer.split("\n")) {
+          if (line.startsWith("event:")) {
+            currentEvent = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            if (currentData) {
+              currentData += "\n" + line.slice(5).trim();
+            } else {
+              currentData = line.slice(5).trim();
+            }
+          }
+        }
+      }
+      if (currentData) {
+        const event = new MessageEvent(currentEvent, { data: currentData });
+        this.dispatchEvent(currentEvent, event);
+      }
+
       this.readyState = 2; // CLOSED
     } catch (error) {
       if ((error as Error).name !== "AbortError") {

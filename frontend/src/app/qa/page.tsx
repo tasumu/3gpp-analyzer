@@ -723,9 +723,9 @@ export default function QAPage() {
                       <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1" />
                     )}
                   </>
-                ) : (
+                ) : message.content ? (
                   <MarkdownRenderer content={message.content} showCopyButton={true} />
-                )}
+                ) : null}
 
                 {/* Evidences */}
                 {message.type === "assistant" && !message.isStreaming && (
