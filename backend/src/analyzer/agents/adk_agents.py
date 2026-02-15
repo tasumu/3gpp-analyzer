@@ -32,7 +32,6 @@ from analyzer.agents.tools.adk_agentic_tools import (
 from analyzer.agents.tools.adk_document_tools import (
     get_document_content,
     get_document_summary,
-    list_meeting_documents,
 )
 from analyzer.agents.tools.adk_search_tool import search_evidence
 from analyzer.models.evidence import Evidence
@@ -225,102 +224,6 @@ Structure your response as:
         description="Q&A agent for answering questions about 3GPP documents",
         instruction=instruction,
         tools=[search_evidence],
-    )
-
-
-def create_meeting_report_agent(
-    meeting_id: str,
-    model: str = "gemini-3-pro-preview",
-    language: str = "ja",
-    custom_prompt: str | None = None,
-) -> LlmAgent:
-    """
-    Create a meeting report agent for comprehensive meeting analysis.
-
-    Args:
-        meeting_id: Target meeting ID.
-        model: LLM model name.
-        language: Response language (ja or en).
-        custom_prompt: Optional custom analysis focus.
-
-    Returns:
-        Configured LlmAgent instance.
-    """
-    lang_instructions = {
-        "ja": (
-            "レポートは日本語で作成してください。"
-            "技術用語（3GPP用語、仕様書番号、条項番号など）は英語のまま使用してください。"
-        ),
-        "en": "Write the report in English. Use standard 3GPP terminology.",
-    }
-    lang_text = lang_instructions.get(language, lang_instructions["ja"])
-
-    custom_instruction = ""
-    if custom_prompt:
-        custom_instruction = f"""
-## Custom Analysis Focus
-The user has requested the following specific focus for this report:
-"{custom_prompt}"
-
-Incorporate this perspective throughout your analysis.
-"""
-
-    instruction = f"""You are an expert 3GPP standardization analyst \
-creating a comprehensive meeting report.
-
-## Meeting: {meeting_id}
-
-## Your Task
-Analyze the meeting's contributions and create a comprehensive report covering:
-1. **Overview**: High-level summary of the meeting's focus and outcomes
-2. **Key Topics**: Major themes and discussion points
-3. **Notable Contributions**: Documents that are particularly important or controversial
-4. **Technical Trends**: Emerging patterns or directions
-5. **Potential Conflicts**: Competing proposals or disagreements
-{custom_instruction}
-
-## Available Tools
-
-1. **search_evidence**: Search for specific topics across all meeting documents
-   - Use for: Finding information about specific technical topics
-   - Always search with meeting_id='{meeting_id}'
-
-2. **list_meeting_documents**: Get the list of all contributions in the meeting
-   - Use for: Getting an overview of submissions
-
-3. **get_document_summary**: Get the summary of a specific contribution
-   - Use for: Understanding individual document proposals
-
-4. **get_document_content**: Get the full content of a document
-   - Use for: Deep-diving into specific documents
-
-## Guidelines
-
-- Start by listing the meeting documents to understand the scope
-- Use search_evidence to explore specific topics of interest
-- Cross-reference multiple documents when analyzing trends
-- Cite specific contributions when making claims
-- Be objective and balanced in your analysis
-
-## Output Format
-
-{lang_text}
-
-Structure your analysis clearly with sections and bullet points.
-Always include contribution numbers when referencing documents: [S2-2401234]
-"""
-
-    return LlmAgent(
-        model=model,
-        name="meeting_report_agent",
-        description="Agent for generating comprehensive meeting reports",
-        instruction=instruction,
-        tools=[
-            search_evidence,
-            list_meeting_documents,
-            get_document_summary,
-            get_document_content,
-        ],
     )
 
 
@@ -617,7 +520,7 @@ def _summarize_tool_result(tool_name: str, response: dict | None) -> str:
     if "error" in resp:
         return f"Error: {resp['error']}"
 
-    if tool_name in ("list_meeting_documents_enhanced", "list_meeting_documents"):
+    if tool_name == "list_meeting_documents_enhanced":
         total = resp.get("total", 0)
         returned = resp.get("returned", 0)
         return f"Found {total} documents (showing {returned})"

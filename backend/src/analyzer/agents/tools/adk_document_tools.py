@@ -39,67 +39,6 @@ def _extract_docx_text(content: bytes) -> str:
     return "\n\n".join(parts)
 
 
-async def list_meeting_documents(
-    meeting_id: str,
-    limit: int = 100,
-    tool_context: ToolContext = None,
-) -> dict[str, Any]:
-    """
-    List all indexed documents (contributions) in a specific meeting.
-
-    Use this to get an overview of what documents are available for analysis.
-
-    Args:
-        meeting_id: The meeting ID to list documents for.
-            Format: 'SA2#162' or 'RAN1#100'.
-        limit: Maximum number of documents to return. Default: 100.
-            Use a lower number if you only need a sample.
-        tool_context: ADK tool context (injected automatically by ADK).
-
-    Returns:
-        List of documents with metadata including document_id, contribution_number,
-        title, and source.
-    """
-    # Get context from contextvar (preferred) or ADK's state (fallback)
-    ctx: AgentToolContext | None = get_current_agent_context()
-    if not ctx and tool_context and tool_context.state:
-        ctx = tool_context.state.get("agent_context")
-
-    if not ctx or not ctx.document_service:
-        return {"error": "Document service not available", "documents": [], "total": 0}
-
-    logger.info(f"Listing documents for meeting: {meeting_id}")
-
-    try:
-        documents, total = await ctx.document_service.list_documents(
-            meeting_id=meeting_id,
-            status="indexed",
-            page_size=limit,
-        )
-
-        results = []
-        for doc in documents:
-            results.append(
-                {
-                    "document_id": doc.id,
-                    "contribution_number": doc.contribution_number,
-                    "title": doc.title or "Untitled",
-                    "source": doc.source or "Unknown",
-                }
-            )
-
-        return {
-            "meeting_id": meeting_id,
-            "documents": results,
-            "total": total,
-            "returned": len(results),
-        }
-
-    except Exception as e:
-        logger.error(f"Error listing documents for meeting {meeting_id}: {e}")
-        return {"error": str(e), "documents": [], "total": 0}
-
-
 async def get_document_summary(
     document_id: str,
     tool_context: ToolContext = None,

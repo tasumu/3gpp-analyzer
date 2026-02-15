@@ -4,12 +4,13 @@ import logging
 import uuid
 from datetime import datetime
 
-from analyzer.agents.adk_agents import ADKAgentRunner, create_meeting_report_agent
+from analyzer.agents.adk_agents import ADKAgentRunner, create_agentic_search_agent
 from analyzer.agents.context import AgentToolContext
 from analyzer.models.meeting_analysis import MeetingReport, MeetingSummary
 from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.providers.storage_client import StorageClient
+from analyzer.services.attachment_service import AttachmentService
 from analyzer.services.document_service import DocumentService
 from analyzer.services.meeting_service import MeetingService
 
@@ -38,6 +39,7 @@ class MeetingReportGenerator:
         location: str = "asia-northeast1",
         model: str = "gemini-3-pro-preview",
         expiration_minutes: int = 60,
+        attachment_service: AttachmentService | None = None,
     ):
         """
         Initialize MeetingReportGenerator.
@@ -52,6 +54,7 @@ class MeetingReportGenerator:
             location: GCP region.
             model: Model for report generation agent.
             expiration_minutes: Signed URL expiration time.
+            attachment_service: Service for user-uploaded attachments.
         """
         self.meeting_service = meeting_service
         self.evidence_provider = evidence_provider
@@ -61,6 +64,7 @@ class MeetingReportGenerator:
         self.project_id = project_id
         self.location = location
         self.model = model
+        self.attachment_service = attachment_service
         self.expiration_minutes = expiration_minutes
 
     async def generate(
@@ -101,12 +105,11 @@ class MeetingReportGenerator:
             user_id=user_id,
         )
 
-        # Step 2: Use ADK agent for detailed analysis
-        agent = create_meeting_report_agent(
+        # Step 2: Use agentic search agent for detailed analysis
+        agent = create_agentic_search_agent(
             meeting_id=meeting_id,
             model=self.model,
             language=language,
-            custom_prompt=report_prompt,
         )
 
         # Create context with services
@@ -117,6 +120,8 @@ class MeetingReportGenerator:
             meeting_id=meeting_id,
             document_service=self.document_service,
             firestore=self.firestore,
+            storage=self.storage,
+            attachment_service=self.attachment_service,
             language=language,
         )
 
@@ -204,8 +209,9 @@ Tasks:
 4. Look for emerging trends or patterns
 {custom_instruction}
 
-Use the search_evidence tool to find specific details.
-Provide a detailed analysis with citations."""
+Be objective and balanced in your analysis.
+Cross-reference multiple documents when analyzing trends.
+Use your available tools to find specific details and provide a detailed analysis with citations."""
 
     def _format_report(
         self,
