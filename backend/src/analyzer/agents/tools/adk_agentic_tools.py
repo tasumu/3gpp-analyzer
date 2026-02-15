@@ -1,8 +1,6 @@
 """Tools for Agentic Search mode agents."""
 
-import asyncio
 import logging
-import uuid
 from typing import Any
 
 from google.adk.tools import ToolContext
@@ -95,120 +93,6 @@ async def list_meeting_documents_enhanced(
     except Exception as e:
         logger.error(f"Error listing documents for meeting {meeting_id}: {e}")
         return {"error": str(e), "documents": [], "total": 0}
-
-
-async def investigate_document(
-    document_id: str,
-    investigation_query: str,
-    contribution_number: str | None = None,
-    document_title: str | None = None,
-    tool_context: ToolContext = None,
-) -> dict[str, Any]:
-    """
-    Deeply investigate a specific document to answer a question.
-
-    This tool delegates to a sub-agent that reads the document content
-    and analyzes it in context of the investigation query. Use this when
-    you need detailed understanding of a specific document.
-
-    This is more thorough than get_document_summary but takes longer.
-    Use it for documents you've identified as particularly relevant.
-
-    Args:
-        document_id: The document ID to investigate.
-        investigation_query: What to look for in this document.
-            Be specific about what information you need.
-            Example: 'What changes does this document propose to DRX parameters?'
-        contribution_number: The contribution number of the document (e.g., 'S2-2401234').
-            Pass this from list_meeting_documents_enhanced results for progress display.
-        document_title: The title of the document.
-            Pass this from list_meeting_documents_enhanced results for progress display.
-        tool_context: ADK tool context (injected automatically by ADK).
-
-    Returns:
-        Analysis of the document focused on the investigation query,
-        including the contribution number and evidence count.
-    """
-    from analyzer.agents.adk_agents import ADKAgentRunner, create_document_investigation_agent
-
-    ctx: AgentToolContext | None = get_current_agent_context()
-    if not ctx and tool_context and tool_context.state:
-        ctx = tool_context.state.get("agent_context")
-
-    if not ctx:
-        return {"error": "Agent context not initialized"}
-
-    logger.info(f"Investigating document {document_id}: query='{investigation_query[:50]}...'")
-
-    try:
-        # Get document metadata for context, merging with passed params
-        doc_data = None
-        looked_up_cn = None
-        if ctx.firestore:
-            doc_data = await ctx.firestore.get_document(document_id)
-            if doc_data:
-                looked_up_cn = doc_data.get("contribution_number")
-                if not document_title:
-                    document_title = doc_data.get("title")
-
-        effective_cn = looked_up_cn or contribution_number
-
-        if not doc_data:
-            return {"error": f"Document not found: {document_id}"}
-
-        # Create a sub-agent for document investigation
-        sub_agent = create_document_investigation_agent(
-            document_id=document_id,
-            contribution_number=effective_cn,
-            language=ctx.language,
-        )
-
-        # Create a separate context for the sub-agent
-        sub_context = AgentToolContext(
-            evidence_provider=ctx.evidence_provider,
-            scope="document",
-            scope_id=document_id,
-            language=ctx.language,
-            filters={"document_id": document_id},
-            firestore=ctx.firestore,
-            storage=ctx.storage,
-        )
-
-        # Run the sub-agent with a shorter timeout than the main agent
-        from analyzer.agents.adk_agents import SUB_AGENT_TIMEOUT_SECONDS
-
-        runner = ADKAgentRunner(
-            agent=sub_agent,
-            agent_context=sub_context,
-            timeout_seconds=SUB_AGENT_TIMEOUT_SECONDS,
-        )
-        analysis_text, evidences = await runner.run(
-            user_input=investigation_query,
-            user_id="investigation_sub_agent",
-            session_id=str(uuid.uuid4()),
-        )
-
-        # Track evidences from sub-agent in the main context
-        ctx.used_evidences.extend(evidences)
-
-        return {
-            "document_id": document_id,
-            "contribution_number": effective_cn,
-            "analysis": analysis_text,
-            "evidence_count": len(evidences),
-        }
-
-    except asyncio.TimeoutError:
-        logger.warning(f"Sub-agent timed out investigating document {document_id}")
-        return {
-            "document_id": document_id,
-            "contribution_number": effective_cn,
-            "analysis": "Investigation timed out. Use get_document_summary for a quicker overview.",
-            "evidence_count": 0,
-        }
-    except Exception as e:
-        logger.error(f"Error investigating document {document_id}: {e}")
-        return {"error": str(e)}
 
 
 async def list_meeting_attachments(
