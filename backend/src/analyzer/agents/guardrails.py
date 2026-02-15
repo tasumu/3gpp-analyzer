@@ -18,7 +18,7 @@ from google.genai.types import Content, Part
 logger = logging.getLogger(__name__)
 
 # State key used to track LLM call count within a session
-_LLM_CALL_COUNT_KEY = "_llm_call_count"
+_LLM_CALL_COUNT_KEY = "_adk_llm_call_count"
 
 
 def create_iteration_limit_callback(

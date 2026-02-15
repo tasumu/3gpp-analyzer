@@ -8,7 +8,9 @@ from typing import Any
 
 from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
+from google.adk.tools.agent_tool import AgentTool
 from google.genai.types import Content, Part
+from pydantic import BaseModel, Field
 
 from analyzer.agents.context import (
     AgentToolContext,
@@ -23,7 +25,6 @@ from analyzer.agents.session_manager import (
     track_session,
 )
 from analyzer.agents.tools.adk_agentic_tools import (
-    investigate_document,
     list_meeting_attachments,
     list_meeting_documents_enhanced,
     read_attachment,
@@ -40,11 +41,36 @@ logger = logging.getLogger(__name__)
 
 APP_NAME = "3gpp-analyzer"
 
+
+class InvestigationInput(BaseModel):
+    """Input schema for the document investigation sub-agent."""
+
+    document_id: str = Field(description="The document ID to investigate.")
+    investigation_query: str = Field(
+        description=(
+            "What to look for in this document. Be specific about what information you need. "
+            "Example: 'What changes does this document propose to DRX parameters?'"
+        ),
+    )
+    contribution_number: str | None = Field(
+        default=None,
+        description=(
+            "The contribution number of the document (e.g., 'S2-2401234'). "
+            "Pass this from list_meeting_documents_enhanced results."
+        ),
+    )
+    document_title: str | None = Field(
+        default=None,
+        description=(
+            "The title of the document. Pass this from list_meeting_documents_enhanced results."
+        ),
+    )
+
+
 # Agent execution limits
 MAIN_AGENT_MAX_LLM_CALLS = 25
 SUB_AGENT_MAX_LLM_CALLS = 5
 AGENT_TIMEOUT_SECONDS = 300  # 5 minutes
-SUB_AGENT_TIMEOUT_SECONDS = 60  # 1 minute
 
 
 def create_qa_agent(
@@ -483,6 +509,14 @@ clauses, proposed changes, and technical details that users would find \
 valuable. Avoid being overly brief.
 """
 
+    # Create the document investigation sub-agent wrapped as an AgentTool.
+    # Named "investigate_document" for backward compatibility with frontend tool name checks.
+    investigation_agent = create_document_investigation_agent(
+        language=language,
+        model="gemini-3-flash-preview",
+    )
+    investigation_tool = AgentTool(agent=investigation_agent, skip_summarization=True)
+
     return LlmAgent(
         model=model,
         name="agentic_search_agent",
@@ -492,7 +526,7 @@ valuable. Avoid being overly brief.
             list_meeting_documents_enhanced,
             search_evidence,
             get_document_summary,
-            investigate_document,
+            investigation_tool,
             list_meeting_attachments,
             read_attachment,
         ],
@@ -502,47 +536,48 @@ valuable. Avoid being overly brief.
 
 
 def create_document_investigation_agent(
-    document_id: str,
-    contribution_number: str | None = None,
     language: str = "ja",
     model: str = "gemini-3-flash-preview",
 ) -> LlmAgent:
     """
     Create a lightweight agent for investigating a specific document.
 
-    This agent is used as a sub-agent (via AgentTool) by the agentic search agent.
-    It reads document content and provides focused analysis.
+    This agent is wrapped with AgentTool by the agentic search agent.
+    It receives document_id and investigation_query via input_schema,
+    reads document content, and provides focused analysis.
 
     Args:
-        document_id: Document ID to investigate.
-        contribution_number: Contribution number for context.
         language: Response language.
         model: LLM model name.
 
     Returns:
         Configured LlmAgent instance for document investigation.
     """
-    doc_ref = contribution_number or document_id
-
     lang_text = {
         "ja": "分析結果は日本語で回答してください。技術用語は英語のまま使用してください。",
         "en": "Respond in English with standard 3GPP terminology.",
     }.get(language, "分析結果は日本語で回答してください。技術用語は英語のまま使用してください。")
 
-    instruction = f"""You are a document analyst investigating 3GPP contribution {doc_ref}.
+    instruction = f"""You are a document analyst investigating 3GPP contributions.
 
 ## Your Task
-Read and analyze the content of this document to answer the investigation query.
+You will receive a JSON message containing:
+- document_id: The document to investigate
+- investigation_query: What to look for in the document
+- contribution_number: (optional) The contribution reference
+- document_title: (optional) The document title
+
+Read and analyze the document content to answer the investigation query.
 Focus on extracting specific, relevant information.
 
 ## Available Tools
 1. **get_document_content**: Read the full document content (organized by sections)
-   - Always use document_id='{document_id}'
+   - Use the document_id from the input message
    - For indexed documents, returns all chunks with clause/page metadata
    - For non-indexed documents, falls back to reading the original .docx from storage
 
 ## Guidelines
-- Read the full document content with get_document_content
+- Read the full document content with get_document_content using the document_id from your input
 - Provide specific details: clause numbers, page numbers, exact proposals
 - Be thorough — include all relevant findings, not just a brief summary
 - Report specific proposed changes, parameter values, and key technical \
@@ -557,9 +592,16 @@ Provide a focused analysis answering the investigation query.
 
     return LlmAgent(
         model=model,
-        name="document_investigation_agent",
-        description=f"Agent for investigating document {doc_ref}",
+        name="investigate_document",
+        description=(
+            "Deeply investigate a specific document to answer a question. "
+            "Delegates to a sub-agent that reads the full document content and analyzes it. "
+            "More thorough than get_document_summary but takes longer. "
+            "Use for documents identified as particularly relevant. "
+            "Always pass contribution_number and document_title from list results."
+        ),
         instruction=instruction,
+        input_schema=InvestigationInput,
         tools=[get_document_content],
         before_model_callback=create_iteration_limit_callback(SUB_AGENT_MAX_LLM_CALLS),
     )
@@ -590,9 +632,11 @@ def _summarize_tool_result(tool_name: str, response: dict | None) -> str:
         return f"{cn}: {'Summary available' if has_analysis else 'No analysis available'}"
 
     if tool_name == "investigate_document":
-        cn = resp.get("contribution_number", "")
-        ev_count = resp.get("evidence_count", 0)
-        return f"{cn}: Analysis complete ({ev_count} evidence pieces)"
+        # AgentTool returns merged text wrapped in {'result': text}
+        result_text = resp.get("result")
+        if result_text:
+            return f"Investigation complete ({len(str(result_text))} chars)"
+        return "Investigation complete"
 
     if tool_name == "get_document_content":
         chunks = resp.get("total_chunks", 0)
