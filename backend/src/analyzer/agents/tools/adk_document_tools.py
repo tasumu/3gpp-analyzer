@@ -143,28 +143,22 @@ async def get_document_summary(
             "status": doc_data.get("status", "unknown"),
         }
 
-        # Try to get analysis result
+        # Try to get cached summary from document_summaries collection
         try:
-            query = (
-                ctx.firestore.client.collection("analysis_results")
-                .where("document_id", "==", document_id)
-                .where("type", "==", "single")
-                .where("status", "==", "completed")
-                .order_by("created_at", direction="DESCENDING")
-                .limit(1)
-            )
-            # Wrap synchronous Firestore query to avoid blocking the event loop
-            docs = await asyncio.to_thread(lambda: list(query.stream()))
-            if docs:
-                analysis_data = docs[0].to_dict()
-                analysis_result = analysis_data.get("result", {})
-                result["summary"] = analysis_result.get("summary", "No summary available")
+            language = ctx.language if ctx else "ja"
+            cache_key = f"{document_id}_{language}"
+            doc_ref = ctx.firestore.client.collection("document_summaries").document(cache_key)
+            doc = await asyncio.to_thread(doc_ref.get)
+            if doc.exists:
+                data = doc.to_dict()
+                result["summary"] = data.get("summary", "No summary available")
+                result["key_points"] = data.get("key_points", [])
                 result["has_analysis"] = True
             else:
                 result["summary"] = "No analysis available for this document"
                 result["has_analysis"] = False
         except Exception as e:
-            logger.warning(f"Error fetching analysis for {document_id}: {e}")
+            logger.warning(f"Error fetching summary for {document_id}: {e}")
             result["summary"] = "Unable to retrieve analysis"
             result["has_analysis"] = False
 
