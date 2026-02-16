@@ -26,7 +26,7 @@ import type {
 import { languageLabels, qaModeLabels, qaScopeLabels, qaScopeLabelsJa } from "@/lib/types";
 
 interface ToolStep {
-  type: "tool_call" | "tool_result";
+  type: "tool_call" | "tool_result" | "thinking";
   tool: string;
   detail: string;
   args?: Record<string, string>;
@@ -56,6 +56,15 @@ const toolDisplayNames: Record<string, string> = {
 };
 
 function ToolStepItem({ step }: { step: ToolStep }) {
+  if (step.type === "thinking") {
+    return (
+      <div className="flex items-start gap-2 text-xs text-gray-400 italic">
+        <span className="mt-0.5 flex-shrink-0">{"\u{1F4AD}"}</span>
+        <span className="line-clamp-2">{step.detail}</span>
+      </div>
+    );
+  }
+
   const displayName = toolDisplayNames[step.tool] || step.tool;
   const isCall = step.type === "tool_call";
 
@@ -157,6 +166,7 @@ export default function QAPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [generatingReportId, setGeneratingReportId] = useState<string | null>(null);
+  const [showThinking, setShowThinking] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -290,11 +300,34 @@ export default function QAPage() {
           language,
           sessionId,
           mode,
+          showThinking,
         );
 
         let fullAnswer = "";
         let evidences: QAEvidence[] = [];
         const steps: ToolStep[] = [];
+
+        // Handle thinking events (agentic mode - AI reasoning)
+        eventSource.addEventListener("thinking", (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const step: ToolStep = {
+              type: "thinking",
+              tool: "",
+              detail: data.content || "",
+            };
+            steps.push(step);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessageId
+                  ? { ...m, steps: [...steps] }
+                  : m
+              )
+            );
+          } catch {
+            console.error("Failed to parse thinking data");
+          }
+        });
 
         // Handle tool_call events (agentic mode)
         eventSource.addEventListener("tool_call", (event) => {
@@ -590,6 +623,28 @@ export default function QAPage() {
               ))}
             </div>
           </div>
+
+          {/* Thinking Toggle (agentic mode only) */}
+          {mode === "agentic" && (
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <span className="text-sm text-gray-500">Thinking</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showThinking}
+                onClick={() => setShowThinking(!showThinking)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                  showThinking ? "bg-purple-500" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                    showThinking ? "translate-x-[18px]" : "translate-x-[3px]"
+                  }`}
+                />
+              </button>
+            </label>
+          )}
 
           {/* Scope Selector (hidden in agentic mode - always meeting) */}
           {mode === "rag" && (

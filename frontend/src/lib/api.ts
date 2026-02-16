@@ -559,6 +559,7 @@ export async function createQAStream(
   language: AnalysisLanguage = "ja",
   sessionId?: string,
   mode: QAMode = "rag",
+  showThinking: boolean = false,
 ): Promise<EventSource> {
   const token = await getAuthToken();
   if (!token) {
@@ -581,6 +582,10 @@ export async function createQAStream(
 
   if (sessionId) {
     params.set("session_id", sessionId);
+  }
+
+  if (showThinking) {
+    params.set("show_thinking", "true");
   }
 
   const url = `${API_BASE}/qa/stream?${params.toString()}`;

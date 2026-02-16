@@ -120,6 +120,7 @@ async def ask_question_stream(
     language: str = Query("ja", pattern="^(ja|en)$", description="Response language"),
     session_id: str | None = Query(None, description="Session ID for conversation continuity"),
     mode: str = Query("rag", pattern="^(rag|agentic)$", description="Q&A mode"),
+    show_thinking: bool = Query(False, description="Show AI thinking process (agentic mode)"),
 ):
     """
     Answer a question with streaming response (SSE).
@@ -167,6 +168,7 @@ async def ask_question_stream(
                 user_id=current_user.uid,
                 session_id=session_id,
                 mode=qa_mode,
+                enable_thinking=show_thinking,
             ):
                 if event.type == "chunk":
                     yield {
@@ -182,6 +184,11 @@ async def ask_question_stream(
                     yield {
                         "event": "tool_result",
                         "data": event.content or "{}",
+                    }
+                elif event.type == "thinking":
+                    yield {
+                        "event": "thinking",
+                        "data": json.dumps({"content": event.content}),
                     }
                 elif event.type == "evidence":
                     yield {

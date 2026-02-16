@@ -221,6 +221,7 @@ class QAService:
         user_id: str | None = None,
         session_id: str | None = None,
         mode: QAMode = QAMode.RAG,
+        enable_thinking: bool = False,
     ) -> AsyncGenerator[QAStreamEvent, None]:
         """
         Answer a question with streaming response.
@@ -289,6 +290,7 @@ class QAService:
                 meeting_id=effective_scope_id,
                 model=self.model,
                 language=language,
+                enable_thinking=enable_thinking,
             )
             agent_context = AgentToolContext(
                 evidence_provider=self.evidence_provider,
@@ -352,6 +354,11 @@ class QAService:
                                 "summary": event.get("summary", ""),
                             }
                         ),
+                    )
+                elif event["type"] == "thinking":
+                    yield QAStreamEvent(
+                        type="thinking",
+                        content=event.get("content", ""),
                     )
                 elif event["type"] == "done":
                     full_answer = event.get("content", full_answer)
