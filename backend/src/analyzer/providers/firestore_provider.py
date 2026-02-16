@@ -40,6 +40,15 @@ class FirestoreEvidenceProvider(EvidenceProvider):
             vertexai=True,
             project=project_id,
             location=location,
+            http_options=genai.types.HttpOptions(
+                retry_options=genai.types.HttpRetryOptions(
+                    attempts=3,
+                    initial_delay=1.0,
+                    max_delay=30.0,
+                    exp_base=2.0,
+                    http_status_codes=[429, 503],
+                ),
+            ),
         )
 
     async def _get_query_embedding(self, query: str) -> list[float]:

@@ -7,8 +7,10 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from google.adk.agents import LlmAgent
+from google.adk.models.google_llm import Gemini
 from google.adk.runners import Runner
 from google.adk.tools.agent_tool import AgentTool
+from google.genai import types as genai_types
 from google.genai.types import Content, Part
 from pydantic import BaseModel, Field
 
@@ -17,7 +19,11 @@ from analyzer.agents.context import (
     reset_agent_context,
     set_current_agent_context,
 )
-from analyzer.agents.guardrails import create_iteration_limit_callback, validate_tool_args
+from analyzer.agents.guardrails import (
+    create_iteration_limit_callback,
+    create_rate_limit_error_callback,
+    validate_tool_args,
+)
 from analyzer.agents.session_manager import (
     cleanup_expired_sessions,
     get_session_service,
@@ -70,6 +76,20 @@ class InvestigationInput(BaseModel):
 MAIN_AGENT_MAX_LLM_CALLS = 25
 SUB_AGENT_MAX_LLM_CALLS = 5
 AGENT_TIMEOUT_SECONDS = 300  # 5 minutes
+
+# Retry configuration for Vertex AI rate limit (429) mitigation
+_DEFAULT_RETRY_OPTIONS = genai_types.HttpRetryOptions(
+    attempts=5,  # Up to 5 attempts (1 original + 4 retries)
+    initial_delay=2.0,  # Start with 2s delay
+    max_delay=60.0,  # Cap at 60s
+    exp_base=2.0,  # Exponential backoff: 2s, 4s, 8s, 16s...
+    http_status_codes=[429, 503],  # Retry on rate limit and service unavailable
+)
+
+
+def _create_gemini_model(model_name: str) -> Gemini:
+    """Create a Gemini model instance with retry configuration."""
+    return Gemini(model=model_name, retry_options=_DEFAULT_RETRY_OPTIONS)
 
 
 def create_qa_agent(
@@ -219,11 +239,12 @@ Structure your response as:
 """
 
     return LlmAgent(
-        model=model,
+        model=_create_gemini_model(model),
         name="qa_agent",
         description="Q&A agent for answering questions about 3GPP documents",
         instruction=instruction,
         tools=[search_evidence],
+        on_model_error_callback=create_rate_limit_error_callback(),
     )
 
 
@@ -421,7 +442,7 @@ valuable. Avoid being overly brief.
     investigation_tool = AgentTool(agent=investigation_agent, skip_summarization=False)
 
     return LlmAgent(
-        model=model,
+        model=_create_gemini_model(model),
         name="agentic_search_agent",
         description="Agentic search agent for multi-step document investigation",
         instruction=instruction,
@@ -435,6 +456,7 @@ valuable. Avoid being overly brief.
         ],
         before_model_callback=create_iteration_limit_callback(MAIN_AGENT_MAX_LLM_CALLS),
         before_tool_callback=validate_tool_args,
+        on_model_error_callback=create_rate_limit_error_callback(),
     )
 
 
@@ -494,7 +516,7 @@ Provide a focused analysis answering the investigation query.
 """
 
     return LlmAgent(
-        model=model,
+        model=_create_gemini_model(model),
         name="investigate_document",
         description=(
             "Deeply investigate a specific document to answer a question. "
@@ -507,6 +529,7 @@ Provide a focused analysis answering the investigation query.
         input_schema=InvestigationInput,
         tools=[get_document_content],
         before_model_callback=create_iteration_limit_callback(SUB_AGENT_MAX_LLM_CALLS),
+        on_model_error_callback=create_rate_limit_error_callback(),
     )
 
 
