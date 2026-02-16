@@ -616,6 +616,30 @@ export async function generateQAReport(
   });
 }
 
+export async function listQAReports(
+  limit = 20,
+): Promise<QAReportResponse[]> {
+  const params = new URLSearchParams();
+  params.set("limit", limit.toString());
+  return fetchApi<QAReportResponse[]>(`/qa/reports?${params.toString()}`);
+}
+
+export async function publishQAReport(
+  reportId: string,
+  isPublic: boolean,
+): Promise<QAReportResponse> {
+  return fetchApi<QAReportResponse>(`/qa/reports/${reportId}/publish`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_public: isPublic }),
+  });
+}
+
+export async function deleteQAReport(reportId: string): Promise<void> {
+  await fetchApi<void>(`/qa/reports/${reportId}`, {
+    method: "DELETE",
+  });
+}
+
 // ============================================================================
 // Attachment APIs (user-uploaded supplementary files)
 // ============================================================================

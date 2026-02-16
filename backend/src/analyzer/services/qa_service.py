@@ -571,3 +571,148 @@ class QAService:
             logger.info(f"Saved QA report metadata: {report.id}")
         except Exception as e:
             logger.error(f"Error saving QA report: {e}")
+
+    async def get_report(self, report_id: str, user_id: str | None = None) -> QAReport | None:
+        """Get a saved QA report by ID with access control."""
+        try:
+            doc_ref = self.firestore.client.collection(self.QA_REPORTS_COLLECTION).document(
+                report_id
+            )
+            doc = doc_ref.get()
+            if not doc.exists:
+                return None
+
+            data = doc.to_dict()
+
+            # Access control: owner or public
+            if not data.get("is_public") and data.get("created_by") != user_id:
+                return None
+
+            download_url = ""
+            if self.storage:
+                download_url = await self.storage.generate_signed_url(
+                    gcs_path=data["gcs_path"],
+                    expiration_minutes=60,
+                )
+
+            return QAReport(
+                id=doc.id,
+                qa_result_id=data.get("qa_result_id", ""),
+                question=data.get("question", ""),
+                gcs_path=data.get("gcs_path", ""),
+                download_url=download_url,
+                created_at=data.get("created_at", datetime.now(UTC)),
+                created_by=data.get("created_by"),
+                is_public=data.get("is_public", False),
+            )
+        except Exception as e:
+            logger.error(f"Error fetching QA report: {e}")
+            return None
+
+    async def list_reports(self, user_id: str, limit: int = 20) -> list[QAReport]:
+        """List QA reports visible to the user (own + public)."""
+        try:
+            collection = self.firestore.client.collection(self.QA_REPORTS_COLLECTION)
+
+            # Query own reports
+            own_query = (
+                collection.where("created_by", "==", user_id)
+                .order_by("created_at", direction="DESCENDING")
+                .limit(limit)
+            )
+            own_docs = {doc.id: doc for doc in own_query.stream()}
+
+            # Query public reports
+            public_query = (
+                collection.where("is_public", "==", True)
+                .order_by("created_at", direction="DESCENDING")
+                .limit(limit)
+            )
+            for doc in public_query.stream():
+                if doc.id not in own_docs:
+                    own_docs[doc.id] = doc
+
+            # Build reports with signed URLs
+            reports = []
+            for doc in own_docs.values():
+                data = doc.to_dict()
+                download_url = ""
+                if self.storage:
+                    download_url = await self.storage.generate_signed_url(
+                        gcs_path=data["gcs_path"],
+                        expiration_minutes=60,
+                    )
+                reports.append(
+                    QAReport(
+                        id=doc.id,
+                        qa_result_id=data.get("qa_result_id", ""),
+                        question=data.get("question", ""),
+                        gcs_path=data.get("gcs_path", ""),
+                        download_url=download_url,
+                        created_at=data.get("created_at", datetime.now(UTC)),
+                        created_by=data.get("created_by"),
+                        is_public=data.get("is_public", False),
+                    )
+                )
+
+            # Sort by created_at DESC
+            reports.sort(key=lambda r: r.created_at, reverse=True)
+            return reports[:limit]
+
+        except Exception as e:
+            logger.error(f"Error listing QA reports: {e}")
+            return []
+
+    async def publish_report(self, report_id: str, user_id: str, is_public: bool) -> QAReport:
+        """Toggle the public visibility of a QA report. Only the owner can publish."""
+        doc_ref = self.firestore.client.collection(self.QA_REPORTS_COLLECTION).document(report_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            raise ValueError(f"QA report not found: {report_id}")
+
+        data = doc.to_dict()
+        if data.get("created_by") != user_id:
+            raise PermissionError("Only the report owner can change visibility")
+
+        doc_ref.update({"is_public": is_public})
+
+        download_url = ""
+        if self.storage:
+            download_url = await self.storage.generate_signed_url(
+                gcs_path=data["gcs_path"],
+                expiration_minutes=60,
+            )
+
+        return QAReport(
+            id=doc.id,
+            qa_result_id=data.get("qa_result_id", ""),
+            question=data.get("question", ""),
+            gcs_path=data.get("gcs_path", ""),
+            download_url=download_url,
+            created_at=data.get("created_at", datetime.now(UTC)),
+            created_by=data.get("created_by"),
+            is_public=is_public,
+        )
+
+    async def delete_report(self, report_id: str, user_id: str) -> None:
+        """Delete a QA report. Only the owner can delete."""
+        doc_ref = self.firestore.client.collection(self.QA_REPORTS_COLLECTION).document(report_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            raise ValueError(f"QA report not found: {report_id}")
+
+        data = doc.to_dict()
+        if data.get("created_by") != user_id:
+            raise PermissionError("Only the report owner can delete")
+
+        # Delete GCS file
+        gcs_path = data.get("gcs_path")
+        if gcs_path and self.storage:
+            try:
+                await self.storage.delete(gcs_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete GCS file {gcs_path}: {e}")
+
+        # Delete Firestore document
+        doc_ref.delete()
+        logger.info(f"Deleted QA report: {report_id}")

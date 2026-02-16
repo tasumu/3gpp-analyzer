@@ -314,6 +314,9 @@ export interface QAReportResponse {
   report_id: string;
   qa_result_id: string;
   download_url: string;
+  question: string;
+  is_public: boolean;
+  created_at: string;
 }
 
 // Attachment Types (user-uploaded supplementary files)

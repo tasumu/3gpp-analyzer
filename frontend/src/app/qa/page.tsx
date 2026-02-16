@@ -9,8 +9,10 @@ import {
   askQuestion,
   createQAStream,
   deleteAttachment,
+  deleteQAReport,
   generateQAReport,
   listAttachments,
+  publishQAReport,
   uploadAttachment,
 } from "@/lib/api";
 import type {
@@ -39,6 +41,8 @@ interface Message {
   steps?: ToolStep[];
   resultId?: string;
   reportUrl?: string;
+  reportId?: string;
+  isPublic?: boolean;
 }
 
 const toolDisplayNames: Record<string, string> = {
@@ -485,7 +489,9 @@ export default function QAPage() {
       const response = await generateQAReport(resultId);
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === messageId ? { ...m, reportUrl: response.download_url } : m
+          m.id === messageId
+            ? { ...m, reportUrl: response.download_url, reportId: response.report_id, isPublic: response.is_public }
+            : m
         )
       );
       window.open(response.download_url, "_blank");
@@ -495,6 +501,39 @@ export default function QAPage() {
       toast.error("Failed to save report");
     } finally {
       setGeneratingReportId(null);
+    }
+  };
+
+  const handlePublish = async (messageId: string, reportId: string, isPublic: boolean) => {
+    try {
+      await publishQAReport(reportId, isPublic);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, isPublic } : m
+        )
+      );
+      toast.success(isPublic ? "Report published" : "Report unpublished");
+    } catch (error) {
+      console.error("Failed to update report visibility:", error);
+      toast.error("Failed to update report visibility");
+    }
+  };
+
+  const handleDeleteReport = async (messageId: string, reportId: string) => {
+    if (!confirm("Delete this report? This cannot be undone.")) return;
+    try {
+      await deleteQAReport(reportId);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, reportUrl: undefined, reportId: undefined, isPublic: undefined }
+            : m
+        )
+      );
+      toast.success("Report deleted");
+    } catch (error) {
+      console.error("Failed to delete report:", error);
+      toast.error("Failed to delete report");
     }
   };
 
@@ -791,20 +830,54 @@ export default function QAPage() {
                   </div>
                 )}
 
-                {/* Save as Report / Re-download */}
+                {/* Save as Report / Re-download / Publish */}
                 {message.type === "assistant" && !message.isStreaming && message.resultId && (
                   <div className="mt-3 pt-2 border-t border-gray-200">
                     {message.reportUrl ? (
-                      <a
-                        href={message.reportUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm
-                                 border border-green-600 text-green-700 font-medium
-                                 rounded-md hover:bg-green-50"
-                      >
-                        Re-download Report
-                      </a>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <a
+                          href={message.reportUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm
+                                   border border-green-600 text-green-700 font-medium
+                                   rounded-md hover:bg-green-50"
+                        >
+                          Re-download Report
+                        </a>
+                        {message.reportId && (
+                          <>
+                            <button
+                              onClick={() => handlePublish(message.id, message.reportId!, !message.isPublic)}
+                              className="inline-flex items-center gap-2 text-sm text-gray-600"
+                              title={message.isPublic ? "Click to make private" : "Click to share with all users"}
+                            >
+                              <span
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                  message.isPublic ? "bg-green-500" : "bg-gray-300"
+                                }`}
+                              >
+                                <span
+                                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                                    message.isPublic ? "translate-x-4.5" : "translate-x-0.5"
+                                  }`}
+                                />
+                              </span>
+                              <span className={message.isPublic ? "text-green-700 font-medium" : "text-gray-500"}>
+                                {message.isPublic ? "Public" : "Private"}
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteReport(message.id, message.reportId!)}
+                              className="px-3 py-1.5 text-sm border border-red-300 text-red-600
+                                       font-medium rounded-md hover:bg-red-50"
+                              title="Delete this report"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
                     ) : (
                       <button
                         onClick={() => handleSaveAsReport(message.id, message.resultId!)}

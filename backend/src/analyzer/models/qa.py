@@ -132,6 +132,7 @@ class QAReport(BaseModel):
         description="Creation timestamp",
     )
     created_by: str | None = Field(default=None, description="User ID who created")
+    is_public: bool = Field(default=False, description="Whether report is visible to all users")
 
     def to_firestore(self) -> dict[str, Any]:
         """Convert to Firestore-compatible dictionary."""
@@ -141,6 +142,7 @@ class QAReport(BaseModel):
             "gcs_path": self.gcs_path,
             "created_at": self.created_at,
             "created_by": self.created_by,
+            "is_public": self.is_public,
         }
 
 
