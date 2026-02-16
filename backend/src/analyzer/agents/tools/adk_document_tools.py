@@ -185,7 +185,7 @@ async def get_document_content(
 
     For indexed documents, returns all chunks organized by sections.
     For non-indexed documents, falls back to direct text extraction from GCS.
-    Supports .docx, .doc (via normalized .docx), .xlsx, .xls, and .pptx.
+    Supports .docx, .doc (via normalized .docx), .xlsx, and .pptx.
 
     Args:
         document_id: The document ID to get content for.
@@ -271,7 +271,7 @@ async def _get_document_content_from_gcs(ctx: AgentToolContext, document_id: str
     if gcs_ext == "docx":
         # Covers both .docx originals and .doc files normalized to .docx
         extractor = _extract_docx_text
-    elif filename_ext in ("xlsx", "xls"):
+    elif filename_ext == "xlsx":
         extractor = _extract_xlsx_text
     elif filename_ext == "pptx":
         extractor = _extract_pptx_text
@@ -280,7 +280,7 @@ async def _get_document_content_from_gcs(ctx: AgentToolContext, document_id: str
         return {
             "error": (
                 f"Direct reading not supported for {filename} "
-                f"(supported: .docx, .doc, .xlsx, .xls, .pptx)"
+                f"(supported: .docx, .doc, .xlsx, .pptx)"
             ),
             "sections": [],
             "total_chunks": 0,
