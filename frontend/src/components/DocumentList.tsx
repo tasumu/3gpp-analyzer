@@ -199,8 +199,12 @@ export function DocumentList({
                       </span>
                     )}
                     {!doc.analyzable && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 shrink-0">
-                        DL Only
+                      <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
+                        doc.status === "downloaded"
+                          ? "bg-blue-100 text-blue-800"
+                          : "bg-orange-100 text-orange-800"
+                      }`}>
+                        {doc.status === "downloaded" ? "DL済" : "DL Only"}
                       </span>
                     )}
                   </div>

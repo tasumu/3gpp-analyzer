@@ -190,16 +190,9 @@ async def process_document(
     """
     force = request.force if request else False
 
-    # Check analyzability before processing
     doc = await processor.document_service.get(document_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if not doc.analyzable:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Document is not analyzable ({doc.source_file.filename}). "
-            f"Only .doc, .docx, and .zip files are supported for analysis.",
-        )
 
     try:
         doc = await processor.process_document(document_id, force=force)

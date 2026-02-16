@@ -106,17 +106,6 @@ class ProcessorService:
         if not doc:
             raise ValueError(f"Document not found: {document_id}")
 
-        # Guard: non-analyzable documents cannot be processed
-        if not doc.analyzable:
-            raise ValueError(
-                f"Document {document_id} ({doc.source_file.filename}) is not analyzable. "
-                f"Only .doc, .docx, and .zip files containing Word documents can be processed."
-            )
-
-        # Check if already processed
-        if doc.status == DocumentStatus.INDEXED and not force:
-            return doc
-
         def emit_status(status: DocumentStatus, progress: float, message: str | None = None):
             if status_callback:
                 status_callback(
@@ -127,6 +116,21 @@ class ProcessorService:
                         message=message,
                     )
                 )
+
+        # Non-analyzable documents: download only, skip processing pipeline
+        if not doc.analyzable:
+            if doc.status == DocumentStatus.DOWNLOADED and not force:
+                return doc
+            if not doc.source_file.gcs_original_path:
+                emit_status(DocumentStatus.DOWNLOADING, 0.0, "Downloading from FTP")
+                await self.ftp_sync.download_document(document_id)
+            doc = await self.document_service.get(document_id)
+            emit_status(DocumentStatus.DOWNLOADED, 1.0, "Download complete")
+            return doc
+
+        # Check if already processed
+        if doc.status == DocumentStatus.INDEXED and not force:
+            return doc
 
         try:
             # Step 1: Ensure file is downloaded
