@@ -488,7 +488,8 @@ export default function QAPage() {
           m.id === messageId ? { ...m, reportUrl: response.download_url } : m
         )
       );
-      toast.success("Report saved successfully");
+      window.open(response.download_url, "_blank");
+      toast.success("Report saved");
     } catch (error) {
       console.error("Failed to generate report:", error);
       toast.error("Failed to save report");
@@ -790,7 +791,7 @@ export default function QAPage() {
                   </div>
                 )}
 
-                {/* Save as Report / Download Report */}
+                {/* Save as Report / Re-download */}
                 {message.type === "assistant" && !message.isStreaming && message.resultId && (
                   <div className="mt-3 pt-2 border-t border-gray-200">
                     {message.reportUrl ? (
@@ -799,10 +800,10 @@ export default function QAPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 px-3 py-1.5 text-sm
-                                 bg-green-600 text-white font-medium rounded-md
-                                 hover:bg-green-700"
+                                 border border-green-600 text-green-700 font-medium
+                                 rounded-md hover:bg-green-50"
                       >
-                        Download Report
+                        Re-download Report
                       </a>
                     ) : (
                       <button
