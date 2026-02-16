@@ -849,23 +849,17 @@ export default function QAPage() {
                           <>
                             <button
                               onClick={() => handlePublish(message.id, message.reportId!, !message.isPublic)}
-                              className="inline-flex items-center gap-2 text-sm text-gray-600"
-                              title={message.isPublic ? "Click to make private" : "Click to share with all users"}
+                              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                              style={{ backgroundColor: message.isPublic ? "#22c55e" : "#d1d5db" }}
+                              role="switch"
+                              aria-checked={!!message.isPublic}
+                              aria-label={message.isPublic ? "Public: click to make private" : "Private: click to share with all users"}
                             >
                               <span
-                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                                  message.isPublic ? "bg-green-500" : "bg-gray-300"
-                                }`}
-                              >
-                                <span
-                                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                                    message.isPublic ? "translate-x-4.5" : "translate-x-0.5"
-                                  }`}
-                                />
-                              </span>
-                              <span className={message.isPublic ? "text-green-700 font-medium" : "text-gray-500"}>
-                                {message.isPublic ? "Public" : "Private"}
-                              </span>
+                                className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
+                                style={{ transform: message.isPublic ? "translateX(1.375rem)" : "translateX(0.25rem)" }}
+                              />
                             </button>
                             <button
                               onClick={() => handleDeleteReport(message.id, message.reportId!)}
