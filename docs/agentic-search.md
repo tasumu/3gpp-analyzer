@@ -1,5 +1,7 @@
 # Agentic Search 設計書
 
+> 会議分析機能の全体像（Summarize / Full Report / Q&A の関係）は [meeting-analysis.md](./meeting-analysis.md) を参照。
+
 ## 概要
 
 Q&A画面の新しいモード「Agentic Search」の設計。従来の RAG Search がベクトル検索の結果のみを基に回答するのに対し、Agentic Search ではAgent が能動的にドキュメント一覧の調査、関連寄書の特定、個別文書の深掘りなどを行い、より精度の高い調査・回答を生成する。

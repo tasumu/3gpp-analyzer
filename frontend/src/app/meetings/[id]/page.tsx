@@ -472,26 +472,54 @@ export default function MeetingDetailPage() {
           <h2 className="text-lg font-medium text-gray-900 mb-4">Analysis Settings</h2>
 
           {/* Settings Help Text */}
-          <div className="mb-4 p-3 bg-gray-50 rounded-md text-sm text-gray-600 space-y-2">
-            <p className="font-medium text-gray-700">プロンプト設定について:</p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>
-                <strong>Custom Report Prompt</strong>: ミーティング全体のサマリーとレポート生成時に使用されます。
-                設定すると、指定した観点（例: セキュリティ影響）に焦点を当てたレポートが生成されます。
-              </li>
-              <li>
-                <strong>Custom Analysis Prompt</strong>: 各個別文書の分析・要約時に使用されます。
-                設定すると、指定した観点で各文書が分析されます。
-              </li>
-              <li>
-                <strong>両方未設定</strong>: デフォルトのプロンプトで汎用的な分析・レポートが生成されます。
-              </li>
-              <li>
-                <strong>片方のみ設定</strong>: 設定した方のみカスタム観点が適用され、未設定の方はデフォルト動作になります。
-              </li>
-            </ul>
-            <p className="text-xs text-gray-500 mt-1">
-              ※ 異なるプロンプトで分析した結果は別々にキャッシュされます。
+          <div className="mb-4 p-3 bg-gray-50 rounded-md text-sm text-gray-600 space-y-3">
+            {/* Section 1: Button relationship */}
+            <div>
+              <p className="font-medium text-gray-700 mb-1">機能の関係:</p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>
+                  <strong>Summarize Meeting</strong>: 全寄書を個別にLLM要約し、全体サマリーを生成します。
+                </li>
+                <li>
+                  <strong>Generate Full Report</strong>: 上記の Summarize を内部で実行した後、AIエージェントが追加の深掘り調査を行い、構造化レポート（Markdown）を出力します。
+                </li>
+              </ul>
+              <p className="text-xs text-blue-600 mt-1.5 ml-2">
+                先に Summarize Meeting を実行しておくと、Generate Full Report の実行時間を大幅に短縮できます（個別要約がキャッシュから即取得されます）。
+              </p>
+            </div>
+
+            {/* Section 2: Prompt scope */}
+            <div>
+              <p className="font-medium text-gray-700 mb-1">プロンプトの影響範囲:</p>
+              <div className="ml-2 overflow-x-auto">
+                <table className="text-xs border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="text-left pr-4 pb-1 font-medium text-gray-700"></th>
+                      <th className="text-left pr-4 pb-1 font-medium text-gray-700">Summarize Meeting</th>
+                      <th className="text-left pb-1 font-medium text-gray-700">Generate Full Report</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="pr-4 py-0.5">Analysis Prompt</td>
+                      <td className="pr-4 py-0.5">各文書の個別要約</td>
+                      <td className="py-0.5">同左（Step 1で使用）</td>
+                    </tr>
+                    <tr>
+                      <td className="pr-4 py-0.5">Report Prompt</td>
+                      <td className="pr-4 py-0.5">全体サマリー</td>
+                      <td className="py-0.5">全体サマリー + Agent調査の観点</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Section 3: Cache note */}
+            <p className="text-xs text-gray-500">
+              ※ 異なるプロンプトで分析した結果は別々にキャッシュされます。プロンプトを変更すると全文書の再分析が必要になります。
             </p>
           </div>
 
@@ -559,13 +587,11 @@ export default function MeetingDetailPage() {
 
             {/* Force re-analyze explanation */}
             <p className="text-xs text-gray-500">
-              ※ Force re-analyze は <strong>Summarize Meeting</strong> ボタンにのみ影響します。
-              チェックすると、キャッシュを無視して再分析を実行します。
-              Process All Documents と Generate Full Report には影響しません。
+              ※ Force re-analyze: チェックすると個別文書の要約キャッシュを無視して再分析します。Summarize Meeting にのみ影響します（Generate Full Report は内部で Summarize を force=False で呼ぶため影響しません）。
             </p>
 
             {/* Action Buttons */}
-            <div className="flex flex-wrap gap-3 pt-2">
+            <div className="flex flex-wrap items-start gap-3 pt-2">
               {meetingInfo.unindexed_count > 0 && (
                 <button
                   onClick={handleBatchProcess}
@@ -579,23 +605,31 @@ export default function MeetingDetailPage() {
                 </button>
               )}
 
-              <button
-                onClick={handleSummarize}
-                disabled={isSummarizing || isGeneratingReport || isProcessing || !meetingInfo.ready_for_analysis}
-                className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md
-                         hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {isSummarizing ? "Summarizing..." : "Summarize Meeting"}
-              </button>
+              <div className="flex flex-col items-center">
+                <button
+                  onClick={handleSummarize}
+                  disabled={isSummarizing || isGeneratingReport || isProcessing || !meetingInfo.ready_for_analysis}
+                  className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md
+                           hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isSummarizing ? "Summarizing..." : "Summarize Meeting"}
+                </button>
+                <span className="text-xs text-gray-500 mt-1">全寄書を個別要約 → 全体サマリー</span>
+              </div>
 
-              <button
-                onClick={handleGenerateReport}
-                disabled={isSummarizing || isGeneratingReport || isProcessing || !meetingInfo.ready_for_analysis}
-                className="px-4 py-2 bg-green-600 text-white font-medium rounded-md
-                         hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {isGeneratingReport ? "Generating..." : "Generate Full Report"}
-              </button>
+              <span className="text-gray-400 self-center pt-1">→</span>
+
+              <div className="flex flex-col items-center">
+                <button
+                  onClick={handleGenerateReport}
+                  disabled={isSummarizing || isGeneratingReport || isProcessing || !meetingInfo.ready_for_analysis}
+                  className="px-4 py-2 bg-green-600 text-white font-medium rounded-md
+                           hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingReport ? "Generating..." : "Generate Full Report"}
+                </button>
+                <span className="text-xs text-gray-500 mt-1">Summarize + Agent深掘り → レポート</span>
+              </div>
             </div>
 
             {!meetingInfo.ready_for_analysis && (
