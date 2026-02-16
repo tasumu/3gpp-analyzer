@@ -31,6 +31,7 @@ import type {
   MultiMeetingSummary,
   ProcessRequest,
   QAMode,
+  QAReportResponse,
   QARequest,
   QAResult,
   QAScope,
@@ -601,6 +602,42 @@ export async function listQAResults(
   params.set("limit", limit.toString());
 
   return fetchApi<QAResult[]>(`/qa?${params.toString()}`);
+}
+
+// ============================================================================
+// QA Report APIs
+// ============================================================================
+
+export async function generateQAReport(
+  resultId: string,
+): Promise<QAReportResponse> {
+  return fetchApi<QAReportResponse>(`/qa/${resultId}/report`, {
+    method: "POST",
+  });
+}
+
+export async function listQAReports(
+  limit = 20,
+): Promise<QAReportResponse[]> {
+  const params = new URLSearchParams();
+  params.set("limit", limit.toString());
+  return fetchApi<QAReportResponse[]>(`/qa/reports?${params.toString()}`);
+}
+
+export async function publishQAReport(
+  reportId: string,
+  isPublic: boolean,
+): Promise<QAReportResponse> {
+  return fetchApi<QAReportResponse>(`/qa/reports/${reportId}/publish`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_public: isPublic }),
+  });
+}
+
+export async function deleteQAReport(reportId: string): Promise<void> {
+  await fetchApi<void>(`/qa/reports/${reportId}`, {
+    method: "DELETE",
+  });
 }
 
 // ============================================================================

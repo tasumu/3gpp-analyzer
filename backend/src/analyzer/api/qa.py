@@ -31,6 +31,23 @@ class QAResponse(BaseModel):
     created_at: str
 
 
+class QAReportResponse(BaseModel):
+    """Response model for QA report."""
+
+    report_id: str
+    qa_result_id: str
+    download_url: str
+    question: str = ""
+    is_public: bool = False
+    created_at: str = ""
+
+
+class PublishRequest(BaseModel):
+    """Request model for publishing/unpublishing a report."""
+
+    is_public: bool
+
+
 def qa_result_to_response(result: QAResult) -> QAResponse:
     """Convert QAResult to API response."""
     return QAResponse(
@@ -205,6 +222,117 @@ async def ask_question_stream(
             }
 
     return EventSourceResponse(event_generator())
+
+
+@router.get("/qa/reports", response_model=list[QAReportResponse])
+async def list_qa_reports(
+    current_user: CurrentUserDep,
+    qa_service: QAServiceDep,
+    limit: int = Query(20, ge=1, le=100, description="Maximum reports to return"),
+):
+    """List QA reports visible to the current user (own + public)."""
+    reports = await qa_service.list_reports(
+        user_id=current_user.uid,
+        limit=limit,
+    )
+    return [
+        QAReportResponse(
+            report_id=r.id,
+            qa_result_id=r.qa_result_id,
+            download_url=r.download_url,
+            question=r.question,
+            is_public=r.is_public,
+            created_at=r.created_at.isoformat(),
+        )
+        for r in reports
+    ]
+
+
+@router.patch("/qa/reports/{report_id}/publish", response_model=QAReportResponse)
+async def publish_qa_report(
+    report_id: str,
+    request: PublishRequest,
+    current_user: CurrentUserDep,
+    qa_service: QAServiceDep,
+):
+    """Toggle the public visibility of a QA report. Only the owner can publish."""
+    try:
+        report = await qa_service.publish_report(
+            report_id=report_id,
+            user_id=current_user.uid,
+            is_public=request.is_public,
+        )
+        return QAReportResponse(
+            report_id=report.id,
+            qa_result_id=report.qa_result_id,
+            download_url=report.download_url,
+            question=report.question,
+            is_public=report.is_public,
+            created_at=report.created_at.isoformat(),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error publishing QA report {report_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update report")
+
+
+@router.delete("/qa/reports/{report_id}", status_code=204)
+async def delete_qa_report(
+    report_id: str,
+    current_user: CurrentUserDep,
+    qa_service: QAServiceDep,
+):
+    """Delete a QA report. Only the owner can delete."""
+    try:
+        await qa_service.delete_report(
+            report_id=report_id,
+            user_id=current_user.uid,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting QA report {report_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete report")
+
+
+@router.post("/qa/{result_id}/report", response_model=QAReportResponse)
+async def generate_qa_report(
+    result_id: str,
+    current_user: CurrentUserDep,
+    qa_service: QAServiceDep,
+):
+    """
+    Generate a downloadable Markdown report from an existing QA result.
+
+    Takes the saved QA answer, formats it with question, answer, and evidence
+    citations as Markdown, uploads to GCS, and returns a signed download URL.
+    No LLM re-execution is performed.
+    """
+    try:
+        report = await qa_service.generate_report(
+            result_id=result_id,
+            user_id=current_user.uid,
+        )
+        return QAReportResponse(
+            report_id=report.id,
+            qa_result_id=report.qa_result_id,
+            download_url=report.download_url,
+            question=report.question,
+            is_public=report.is_public,
+            created_at=report.created_at.isoformat(),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error generating QA report for {result_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate report")
 
 
 @router.get("/qa/{result_id}", response_model=QAResponse)

@@ -191,6 +191,7 @@ def get_qa_service(
         document_service=document_service,
         attachment_service=attachment_service,
         storage=storage,
+        expiration_minutes=settings.review_sheet_expiration_minutes,
     )
 
 

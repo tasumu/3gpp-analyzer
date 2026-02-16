@@ -14,7 +14,7 @@ from analyzer.agents.adk_agents import (
 )
 from analyzer.agents.context import AgentToolContext
 from analyzer.models.evidence import Evidence
-from analyzer.models.qa import QAMode, QAResult, QAScope, QAStreamEvent
+from analyzer.models.qa import QAMode, QAReport, QAResult, QAScope, QAStreamEvent
 from analyzer.providers.base import EvidenceProvider
 from analyzer.providers.firestore_client import FirestoreClient
 from analyzer.providers.storage_client import StorageClient
@@ -37,6 +37,8 @@ class QAService:
     """
 
     QA_RESULTS_COLLECTION = "qa_results"
+    QA_REPORTS_COLLECTION = "qa_reports"
+    REPORTS_PREFIX = "outputs/qa-reports"
 
     def __init__(
         self,
@@ -49,6 +51,7 @@ class QAService:
         document_service: DocumentService | None = None,
         attachment_service: "AttachmentService | None" = None,
         storage: StorageClient | None = None,
+        expiration_minutes: int = 60,
     ):
         """
         Initialize QAService.
@@ -63,6 +66,7 @@ class QAService:
             document_service: Document service (required for agentic mode).
             attachment_service: Attachment service (for user-uploaded files).
             storage: Storage client (for GCS fallback in document reading).
+            expiration_minutes: Signed URL expiration time in minutes.
         """
         self.evidence_provider = evidence_provider
         self.firestore = firestore
@@ -73,6 +77,7 @@ class QAService:
         self.document_service = document_service
         self.storage = storage
         self.attachment_service = attachment_service
+        self.expiration_minutes = expiration_minutes
 
     async def answer(
         self,
@@ -441,3 +446,284 @@ class QAService:
         except Exception as e:
             logger.error(f"Error listing Q&A results: {e}")
             return []
+
+    async def generate_report(self, result_id: str, user_id: str | None = None) -> QAReport:
+        """
+        Generate a Markdown report from an existing QA result.
+
+        Retrieves the QAResult from Firestore, formats it as Markdown,
+        uploads to GCS, and saves metadata to Firestore.
+
+        Args:
+            result_id: ID of the QAResult to generate a report from.
+            user_id: User ID who requested the report.
+
+        Returns:
+            QAReport with download URL.
+
+        Raises:
+            ValueError: If QA result not found or storage not available.
+            PermissionError: If user is not the owner of the QA result.
+        """
+        if not self.storage:
+            raise ValueError("Storage client is not configured")
+
+        result = await self.get_result(result_id)
+        if not result:
+            raise ValueError(f"QA result not found: {result_id}")
+
+        if result.created_by != user_id:
+            raise PermissionError("Only the owner can generate a report from this result")
+
+        markdown_content = self._format_qa_report(result)
+
+        report_id = str(uuid.uuid4())
+        gcs_path = f"{self.REPORTS_PREFIX}/{result_id}/{report_id}.md"
+
+        await self.storage.upload_bytes(
+            data=markdown_content.encode("utf-8"),
+            gcs_path=gcs_path,
+            content_type="text/markdown",
+        )
+
+        download_url = await self.storage.generate_signed_url(
+            gcs_path=gcs_path,
+            expiration_minutes=self.expiration_minutes,
+        )
+
+        report = QAReport(
+            id=report_id,
+            qa_result_id=result_id,
+            question=result.question,
+            gcs_path=gcs_path,
+            download_url=download_url,
+            created_at=datetime.now(UTC),
+            created_by=user_id,
+        )
+
+        try:
+            await self._save_report(report)
+        except Exception:
+            # Clean up GCS file if Firestore save fails
+            try:
+                await self.storage.delete(gcs_path)
+            except Exception as cleanup_err:
+                logger.warning(f"Failed to clean up GCS file {gcs_path}: {cleanup_err}")
+            raise
+
+        return report
+
+    def _format_qa_report(self, result: QAResult) -> str:
+        """Format a QA result as a Markdown report."""
+        sections = [
+            "# Q&A Report",
+            "",
+            f"- **Generated**: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}",
+            f"- **Scope**: {result.scope.value}",
+        ]
+        if result.scope_id:
+            sections.append(f"- **Scope ID**: {result.scope_id}")
+        sections.append(f"- **Mode**: {result.mode.value}")
+        sections.extend(
+            [
+                "",
+                "---",
+                "",
+                "## Question",
+                "",
+                result.question,
+                "",
+                "## Answer",
+                "",
+                result.answer,
+                "",
+            ]
+        )
+
+        if result.evidences:
+            sections.extend(
+                [
+                    "## Evidence Citations",
+                    "",
+                ]
+            )
+            for i, ev in enumerate(result.evidences, 1):
+                contrib = ev.contribution_number or "N/A"
+                clause = f"Clause {ev.clause_number}" if ev.clause_number else ""
+                page = f"Page {ev.page_number}" if ev.page_number else ""
+                score = f"{ev.relevance_score * 100:.0f}%"
+
+                citation_parts = [p for p in [contrib, clause, page] if p]
+                citation = ", ".join(citation_parts)
+
+                sections.append(f"### [{i}] {citation}")
+                sections.append("")
+                sections.append(f"- **Relevance**: {score}")
+                if ev.clause_title:
+                    sections.append(f"- **Section**: {ev.clause_title}")
+                content = ev.content
+                if len(content) > 500:
+                    content = content[:500] + "..."
+                sections.append(f"- **Content**: {content}")
+                sections.append("")
+
+        sections.extend(
+            [
+                "---",
+                "",
+                "*This report was generated by 3GPP Analyzer.*",
+            ]
+        )
+
+        return "\n".join(sections)
+
+    async def _save_report(self, report: QAReport) -> None:
+        """Save QA report metadata to Firestore."""
+        doc_ref = self.firestore.client.collection(self.QA_REPORTS_COLLECTION).document(report.id)
+        doc_ref.set(report.to_firestore())
+        logger.info(f"Saved QA report metadata: {report.id}")
+
+    async def get_report(self, report_id: str, user_id: str | None = None) -> QAReport | None:
+        """Get a saved QA report by ID with access control."""
+        try:
+            doc_ref = self.firestore.client.collection(self.QA_REPORTS_COLLECTION).document(
+                report_id
+            )
+            doc = doc_ref.get()
+            if not doc.exists:
+                return None
+
+            data = doc.to_dict()
+
+            # Access control: owner or public
+            if not data.get("is_public") and data.get("created_by") != user_id:
+                return None
+
+            download_url = ""
+            if self.storage:
+                download_url = await self.storage.generate_signed_url(
+                    gcs_path=data["gcs_path"],
+                    expiration_minutes=self.expiration_minutes,
+                )
+
+            return QAReport(
+                id=doc.id,
+                qa_result_id=data.get("qa_result_id", ""),
+                question=data.get("question", ""),
+                gcs_path=data.get("gcs_path", ""),
+                download_url=download_url,
+                created_at=data.get("created_at", datetime.now(UTC)),
+                created_by=data.get("created_by"),
+                is_public=data.get("is_public", False),
+            )
+        except Exception as e:
+            logger.error(f"Error fetching QA report: {e}")
+            return None
+
+    async def list_reports(self, user_id: str, limit: int = 20) -> list[QAReport]:
+        """List QA reports visible to the user (own + public)."""
+        try:
+            collection = self.firestore.client.collection(self.QA_REPORTS_COLLECTION)
+
+            # Query own reports
+            own_query = (
+                collection.where("created_by", "==", user_id)
+                .order_by("created_at", direction="DESCENDING")
+                .limit(limit)
+            )
+            own_docs = {doc.id: doc for doc in own_query.stream()}
+
+            # Query public reports
+            public_query = (
+                collection.where("is_public", "==", True)
+                .order_by("created_at", direction="DESCENDING")
+                .limit(limit)
+            )
+            for doc in public_query.stream():
+                if doc.id not in own_docs:
+                    own_docs[doc.id] = doc
+
+            # Build reports with signed URLs
+            reports = []
+            for doc in own_docs.values():
+                data = doc.to_dict()
+                download_url = ""
+                if self.storage:
+                    download_url = await self.storage.generate_signed_url(
+                        gcs_path=data["gcs_path"],
+                        expiration_minutes=self.expiration_minutes,
+                    )
+                reports.append(
+                    QAReport(
+                        id=doc.id,
+                        qa_result_id=data.get("qa_result_id", ""),
+                        question=data.get("question", ""),
+                        gcs_path=data.get("gcs_path", ""),
+                        download_url=download_url,
+                        created_at=data.get("created_at", datetime.now(UTC)),
+                        created_by=data.get("created_by"),
+                        is_public=data.get("is_public", False),
+                    )
+                )
+
+            # Sort by created_at DESC
+            reports.sort(key=lambda r: r.created_at, reverse=True)
+            return reports[:limit]
+
+        except Exception as e:
+            logger.error(f"Error listing QA reports: {e}")
+            return []
+
+    async def publish_report(self, report_id: str, user_id: str, is_public: bool) -> QAReport:
+        """Toggle the public visibility of a QA report. Only the owner can publish."""
+        doc_ref = self.firestore.client.collection(self.QA_REPORTS_COLLECTION).document(report_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            raise ValueError(f"QA report not found: {report_id}")
+
+        data = doc.to_dict()
+        if data.get("created_by") != user_id:
+            raise PermissionError("Only the report owner can change visibility")
+
+        doc_ref.update({"is_public": is_public})
+
+        download_url = ""
+        if self.storage:
+            download_url = await self.storage.generate_signed_url(
+                gcs_path=data["gcs_path"],
+                expiration_minutes=self.expiration_minutes,
+            )
+
+        return QAReport(
+            id=doc.id,
+            qa_result_id=data.get("qa_result_id", ""),
+            question=data.get("question", ""),
+            gcs_path=data.get("gcs_path", ""),
+            download_url=download_url,
+            created_at=data.get("created_at", datetime.now(UTC)),
+            created_by=data.get("created_by"),
+            is_public=is_public,
+        )
+
+    async def delete_report(self, report_id: str, user_id: str) -> None:
+        """Delete a QA report. Only the owner can delete."""
+        doc_ref = self.firestore.client.collection(self.QA_REPORTS_COLLECTION).document(report_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            raise ValueError(f"QA report not found: {report_id}")
+
+        data = doc.to_dict()
+        if data.get("created_by") != user_id:
+            raise PermissionError("Only the report owner can delete")
+
+        # Delete GCS file
+        gcs_path = data.get("gcs_path")
+        if gcs_path and self.storage:
+            try:
+                await self.storage.delete(gcs_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete GCS file {gcs_path}: {e}")
+
+        # Delete Firestore document
+        doc_ref.delete()
+        logger.info(f"Deleted QA report: {report_id}")
