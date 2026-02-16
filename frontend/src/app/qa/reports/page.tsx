@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/AuthGuard";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 import {
   deleteQAReport,
   listQAReports,
@@ -15,6 +16,9 @@ export default function QAReportsPage() {
   const [reports, setReports] = useState<QAReportResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [previewContent, setPreviewContent] = useState<Record<string, string>>({});
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const loadReports = useCallback(async () => {
     try {
@@ -52,9 +56,34 @@ export default function QAReportsPage() {
     try {
       await deleteQAReport(reportId);
       setReports((prev) => prev.filter((r) => r.report_id !== reportId));
+      if (expandedId === reportId) setExpandedId(null);
       toast.success("Report deleted");
     } catch {
       toast.error("Failed to delete report");
+    }
+  };
+
+  const handlePreview = async (report: QAReportResponse) => {
+    if (expandedId === report.report_id) {
+      setExpandedId(null);
+      return;
+    }
+
+    setExpandedId(report.report_id);
+
+    if (previewContent[report.report_id]) return;
+
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(report.download_url);
+      if (!res.ok) throw new Error("Failed to fetch report");
+      const text = await res.text();
+      setPreviewContent((prev) => ({ ...prev, [report.report_id]: text }));
+    } catch {
+      toast.error("Failed to load preview");
+      setExpandedId(null);
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -92,9 +121,9 @@ export default function QAReportsPage() {
             {reports.map((report) => (
               <div
                 key={report.report_id}
-                className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm"
+                className="bg-white border border-gray-200 rounded-lg shadow-sm"
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-4 p-4">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {report.question}
@@ -118,6 +147,16 @@ export default function QAReportsPage() {
                         style={{ transform: report.is_public ? "translateX(1.375rem)" : "translateX(0.25rem)" }}
                       />
                     </button>
+                    <button
+                      onClick={() => handlePreview(report)}
+                      className={`px-3 py-1.5 text-sm border font-medium rounded-md ${
+                        expandedId === report.report_id
+                          ? "border-blue-500 text-blue-700 bg-blue-50"
+                          : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {expandedId === report.report_id ? "Close" : "Preview"}
+                    </button>
                     <a
                       href={report.download_url}
                       target="_blank"
@@ -136,6 +175,16 @@ export default function QAReportsPage() {
                     </button>
                   </div>
                 </div>
+
+                {expandedId === report.report_id && (
+                  <div className="border-t border-gray-200 p-4">
+                    {previewLoading && !previewContent[report.report_id] ? (
+                      <div className="text-center py-4 text-gray-500 text-sm">Loading preview...</div>
+                    ) : previewContent[report.report_id] ? (
+                      <MarkdownRenderer content={previewContent[report.report_id]} showCopyButton={true} />
+                    ) : null}
+                  </div>
+                )}
               </div>
             ))}
           </div>
