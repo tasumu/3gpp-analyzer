@@ -9,6 +9,7 @@ import {
   askQuestion,
   createQAStream,
   deleteAttachment,
+  generateQAReport,
   listAttachments,
   uploadAttachment,
 } from "@/lib/api";
@@ -36,6 +37,8 @@ interface Message {
   evidences?: QAEvidence[];
   isStreaming?: boolean;
   steps?: ToolStep[];
+  resultId?: string;
+  reportUrl?: string;
 }
 
 const toolDisplayNames: Record<string, string> = {
@@ -149,6 +152,7 @@ export default function QAPage() {
   const [sessionId, setSessionId] = useState<string>(generateSessionId);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [generatingReportId, setGeneratingReportId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -370,7 +374,13 @@ export default function QAPage() {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMessageId
-                  ? { ...m, content: fullAnswer || data.answer, evidences, isStreaming: false }
+                  ? {
+                      ...m,
+                      content: fullAnswer || data.answer,
+                      evidences,
+                      isStreaming: false,
+                      resultId: data.result_id,
+                    }
                   : m
               )
             );
@@ -440,6 +450,7 @@ export default function QAPage() {
             type: "assistant",
             content: result.answer,
             evidences: result.evidences,
+            resultId: result.id,
           },
         ]);
       }
@@ -465,6 +476,24 @@ export default function QAPage() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
+    }
+  };
+
+  const handleSaveAsReport = async (messageId: string, resultId: string) => {
+    setGeneratingReportId(messageId);
+    try {
+      const response = await generateQAReport(resultId);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, reportUrl: response.download_url } : m
+        )
+      );
+      toast.success("Report saved successfully");
+    } catch (error) {
+      console.error("Failed to generate report:", error);
+      toast.error("Failed to save report");
+    } finally {
+      setGeneratingReportId(null);
     }
   };
 
@@ -757,6 +786,36 @@ export default function QAPage() {
                       <div className="text-xs text-gray-500 italic">
                         No supporting documents were found for this query.
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Save as Report / Download Report */}
+                {message.type === "assistant" && !message.isStreaming && message.resultId && (
+                  <div className="mt-3 pt-2 border-t border-gray-200">
+                    {message.reportUrl ? (
+                      <a
+                        href={message.reportUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm
+                                 bg-green-600 text-white font-medium rounded-md
+                                 hover:bg-green-700"
+                      >
+                        Download Report
+                      </a>
+                    ) : (
+                      <button
+                        onClick={() => handleSaveAsReport(message.id, message.resultId!)}
+                        disabled={generatingReportId === message.id}
+                        className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700
+                                 font-medium rounded-md hover:bg-gray-50
+                                 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {generatingReportId === message.id
+                          ? "Saving..."
+                          : "Save as Report"}
+                      </button>
                     )}
                   </div>
                 )}

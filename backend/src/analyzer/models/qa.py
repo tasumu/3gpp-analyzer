@@ -119,6 +119,31 @@ class QAResult(BaseModel):
         )
 
 
+class QAReport(BaseModel):
+    """Generated QA report with download URL."""
+
+    id: str = Field(..., description="Unique identifier for this report")
+    qa_result_id: str = Field(..., description="ID of the source QAResult")
+    question: str = Field(..., description="Original question")
+    gcs_path: str = Field(..., description="GCS path where report is stored")
+    download_url: str = Field(..., description="Signed download URL")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Creation timestamp",
+    )
+    created_by: str | None = Field(default=None, description="User ID who created")
+
+    def to_firestore(self) -> dict[str, Any]:
+        """Convert to Firestore-compatible dictionary."""
+        return {
+            "qa_result_id": self.qa_result_id,
+            "question": self.question,
+            "gcs_path": self.gcs_path,
+            "created_at": self.created_at,
+            "created_by": self.created_by,
+        }
+
+
 class QAStreamEvent(BaseModel):
     """Event model for Q&A streaming responses."""
 

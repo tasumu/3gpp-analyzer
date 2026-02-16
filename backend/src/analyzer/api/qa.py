@@ -31,6 +31,14 @@ class QAResponse(BaseModel):
     created_at: str
 
 
+class QAReportResponse(BaseModel):
+    """Response model for QA report generation."""
+
+    report_id: str
+    qa_result_id: str
+    download_url: str
+
+
 def qa_result_to_response(result: QAResult) -> QAResponse:
     """Convert QAResult to API response."""
     return QAResponse(
@@ -205,6 +213,36 @@ async def ask_question_stream(
             }
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/qa/{result_id}/report", response_model=QAReportResponse)
+async def generate_qa_report(
+    result_id: str,
+    current_user: CurrentUserDep,
+    qa_service: QAServiceDep,
+):
+    """
+    Generate a downloadable Markdown report from an existing QA result.
+
+    Takes the saved QA answer, formats it with question, answer, and evidence
+    citations as Markdown, uploads to GCS, and returns a signed download URL.
+    No LLM re-execution is performed.
+    """
+    try:
+        report = await qa_service.generate_report(
+            result_id=result_id,
+            user_id=current_user.uid,
+        )
+        return QAReportResponse(
+            report_id=report.id,
+            qa_result_id=report.qa_result_id,
+            download_url=report.download_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error generating QA report for {result_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate report")
 
 
 @router.get("/qa/{result_id}", response_model=QAResponse)
