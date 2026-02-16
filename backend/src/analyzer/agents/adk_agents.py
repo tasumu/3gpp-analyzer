@@ -7,6 +7,8 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from google.adk.agents import LlmAgent
+from google.adk.agents.context_cache_config import ContextCacheConfig
+from google.adk.apps.app import App
 from google.adk.models.google_llm import Gemini
 from google.adk.runners import Runner
 from google.adk.tools.agent_tool import AgentTool
@@ -40,11 +42,12 @@ from analyzer.agents.tools.adk_document_tools import (
     get_document_summary,
 )
 from analyzer.agents.tools.adk_search_tool import search_evidence
+from analyzer.config import get_settings
 from analyzer.models.evidence import Evidence
 
 logger = logging.getLogger(__name__)
 
-APP_NAME = "3gpp-analyzer"
+APP_NAME = "gpp3_analyzer"
 
 
 class InvestigationInput(BaseModel):
@@ -593,6 +596,7 @@ class ADKAgentRunner:
         agent: LlmAgent,
         agent_context: AgentToolContext,
         timeout_seconds: int = AGENT_TIMEOUT_SECONDS,
+        enable_context_cache: bool | None = None,
     ):
         """
         Initialize the runner.
@@ -601,16 +605,38 @@ class ADKAgentRunner:
             agent: The LlmAgent to run.
             agent_context: Context with services and configuration.
             timeout_seconds: Maximum execution time in seconds.
+            enable_context_cache: Override context cache setting.
+                None = use config default, True = force enable, False = force disable.
         """
         self.agent = agent
         self.agent_context = agent_context
         self.timeout_seconds = timeout_seconds
         self.session_service = get_session_service()
-        self.runner = Runner(
-            agent=agent,
-            app_name=APP_NAME,
-            session_service=self.session_service,
+
+        settings = get_settings()
+        use_cache = (
+            enable_context_cache
+            if enable_context_cache is not None
+            else settings.context_cache_enabled
         )
+
+        if use_cache:
+            app = App(
+                name=APP_NAME,
+                root_agent=agent,
+                context_cache_config=ContextCacheConfig(
+                    ttl_seconds=settings.context_cache_ttl_seconds,
+                    min_tokens=settings.context_cache_min_tokens,
+                    cache_intervals=settings.context_cache_intervals,
+                ),
+            )
+            self.runner = Runner(app=app, session_service=self.session_service)
+        else:
+            self.runner = Runner(
+                agent=agent,
+                app_name=APP_NAME,
+                session_service=self.session_service,
+            )
 
     async def _ensure_session(
         self,
