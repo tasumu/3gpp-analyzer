@@ -6,7 +6,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, Query
 from sse_starlette.sse import EventSourceResponse
 
-from analyzer.dependencies import CurrentUserDep, FTPSyncServiceDep
+from analyzer.dependencies import CurrentUserDep, FTPSyncServiceDep, UserServiceDep
 from analyzer.models.api import (
     FTPBrowseResponse,
     FTPDirectoryEntry,
@@ -15,6 +15,7 @@ from analyzer.models.api import (
     SyncHistoryEntry,
     SyncHistoryResponse,
 )
+from analyzer.models.user import UserRole
 
 router = APIRouter(prefix="/ftp")
 
@@ -63,12 +64,26 @@ async def start_sync(
     current_user: CurrentUserDep,
     request: FTPSyncRequest,
     ftp_service: FTPSyncServiceDep,
+    user_service: UserServiceDep,
 ):
     """
     Start FTP sync operation.
 
-    Returns a sync_id that can be used to stream progress updates.
+    Re-sync of previously synced directories is allowed for all approved users.
+    Initial sync of new directories requires admin privileges.
     """
+    # Check if this is a re-sync (directory was synced before)
+    is_resync = await ftp_service.has_sync_history(request.path)
+
+    if not is_resync:
+        # New directory sync requires admin
+        user = await user_service.get_user(current_user.uid)
+        if not user or user.role != UserRole.ADMIN:
+            raise HTTPException(
+                status_code=403,
+                detail="Admin privileges required for initial directory sync",
+            )
+
     sync_id = str(uuid.uuid4())
 
     # Initialize sync state
@@ -100,9 +115,8 @@ async def stream_sync_progress(
     Stream sync progress via Server-Sent Events.
 
     Starts the actual sync operation and streams progress updates.
-    Requires Authorization header with Bearer token.
+    Authorization is enforced at the POST /sync endpoint.
     """
-    # Authentication handled by CurrentUserDep
 
     if sync_id not in _active_syncs:
         raise HTTPException(status_code=404, detail="Sync operation not found")

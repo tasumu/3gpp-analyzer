@@ -672,6 +672,13 @@ class FTPSyncService:
         doc_ref.set(history.to_firestore())
         logger.info(f"Recorded sync history for {directory_path}")
 
+    async def has_sync_history(self, directory_path: str) -> bool:
+        """Check if a directory has been synced before."""
+        doc_id = SyncHistory.generate_id(directory_path)
+        doc_ref = self.firestore.client.collection(self.SYNC_HISTORY_COLLECTION).document(doc_id)
+        doc = doc_ref.get()
+        return doc.exists
+
     async def get_sync_history(self, limit: int = 20) -> list[SyncHistory]:
         """
         Get list of previously synced directories.
