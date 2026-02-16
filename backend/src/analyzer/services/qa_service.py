@@ -51,6 +51,7 @@ class QAService:
         document_service: DocumentService | None = None,
         attachment_service: "AttachmentService | None" = None,
         storage: StorageClient | None = None,
+        expiration_minutes: int = 60,
     ):
         """
         Initialize QAService.
@@ -65,6 +66,7 @@ class QAService:
             document_service: Document service (required for agentic mode).
             attachment_service: Attachment service (for user-uploaded files).
             storage: Storage client (for GCS fallback in document reading).
+            expiration_minutes: Signed URL expiration time in minutes.
         """
         self.evidence_provider = evidence_provider
         self.firestore = firestore
@@ -75,6 +77,7 @@ class QAService:
         self.document_service = document_service
         self.storage = storage
         self.attachment_service = attachment_service
+        self.expiration_minutes = expiration_minutes
 
     async def answer(
         self,
@@ -485,7 +488,7 @@ class QAService:
 
         download_url = await self.storage.generate_signed_url(
             gcs_path=gcs_path,
-            expiration_minutes=60,
+            expiration_minutes=self.expiration_minutes,
         )
 
         report = QAReport(
@@ -600,7 +603,7 @@ class QAService:
             if self.storage:
                 download_url = await self.storage.generate_signed_url(
                     gcs_path=data["gcs_path"],
-                    expiration_minutes=60,
+                    expiration_minutes=self.expiration_minutes,
                 )
 
             return QAReport(
@@ -648,7 +651,7 @@ class QAService:
                 if self.storage:
                     download_url = await self.storage.generate_signed_url(
                         gcs_path=data["gcs_path"],
-                        expiration_minutes=60,
+                        expiration_minutes=self.expiration_minutes,
                     )
                 reports.append(
                     QAReport(
@@ -688,7 +691,7 @@ class QAService:
         if self.storage:
             download_url = await self.storage.generate_signed_url(
                 gcs_path=data["gcs_path"],
-                expiration_minutes=60,
+                expiration_minutes=self.expiration_minutes,
             )
 
         return QAReport(
