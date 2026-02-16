@@ -3,6 +3,7 @@
 Provides safety mechanisms including:
 - Iteration limits to prevent infinite tool-calling loops
 - Tool argument validation
+- Graceful degradation on rate limit errors
 """
 
 import logging
@@ -107,3 +108,46 @@ def validate_tool_args(
             args["top_k"] = 50
 
     return None
+
+
+def create_rate_limit_error_callback() -> "callable":
+    """Create an on_model_error_callback for graceful degradation on rate limit errors.
+
+    When ADK's built-in retry is exhausted for 429/RESOURCE_EXHAUSTED errors,
+    this callback returns a user-friendly message instead of crashing.
+
+    Returns:
+        A callback function compatible with LlmAgent.on_model_error_callback.
+    """
+
+    def _rate_limit_callback(
+        callback_context: CallbackContext,
+        llm_request: LlmRequest,
+        error: Exception,
+    ) -> LlmResponse | None:
+        error_str = str(error).lower()
+        is_rate_limit = "429" in error_str or "resource_exhausted" in error_str
+
+        if is_rate_limit:
+            logger.warning(
+                f"Agent '{callback_context.agent_name}' hit rate limit after retries. "
+                f"Gracefully terminating with partial results."
+            )
+            return LlmResponse(
+                content=Content(
+                    parts=[
+                        Part(
+                            text=(
+                                "APIのレート制限に達しました。"
+                                "これまでに収集した情報をもとに回答を提供します。"
+                            )
+                        )
+                    ],
+                    role="model",
+                ),
+                turn_complete=True,
+            )
+
+        return None  # Re-raise for other errors
+
+    return _rate_limit_callback
