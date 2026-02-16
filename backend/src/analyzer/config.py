@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     qa_model: str = "gemini-3-pro-preview"  # Model for Q&A agents
     meeting_summary_strategy_version: str = "v1"
 
+    # Context Caching (cost optimization for agentic search)
+    context_cache_enabled: bool = True
+    context_cache_ttl_seconds: int = 1800
+    context_cache_min_tokens: int = 4096
+    context_cache_intervals: int = 10
+
     # API
     api_prefix: str = "/api"
     # CORS_ORIGINS env var should be comma-separated list of allowed origins
