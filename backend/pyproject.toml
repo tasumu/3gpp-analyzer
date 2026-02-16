@@ -21,6 +21,7 @@ dependencies = [
     "python-magic>=0.4.27",
     "openpyxl>=3.1.0",
     "python-multipart>=0.0.9",
+    "python-pptx>=1.0.0",
 ]
 
 [dependency-groups]
