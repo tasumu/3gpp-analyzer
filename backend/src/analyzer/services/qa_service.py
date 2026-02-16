@@ -460,6 +460,7 @@ class QAService:
 
         Raises:
             ValueError: If QA result not found or storage not available.
+            PermissionError: If user is not the owner of the QA result.
         """
         if not self.storage:
             raise ValueError("Storage client is not configured")
@@ -467,6 +468,9 @@ class QAService:
         result = await self.get_result(result_id)
         if not result:
             raise ValueError(f"QA result not found: {result_id}")
+
+        if result.created_by != user_id:
+            raise PermissionError("Only the owner can generate a report from this result")
 
         markdown_content = self._format_qa_report(result)
 
@@ -494,7 +498,16 @@ class QAService:
             created_by=user_id,
         )
 
-        await self._save_report(report)
+        try:
+            await self._save_report(report)
+        except Exception:
+            # Clean up GCS file if Firestore save fails
+            try:
+                await self.storage.delete(gcs_path)
+            except Exception as cleanup_err:
+                logger.warning(f"Failed to clean up GCS file {gcs_path}: {cleanup_err}")
+            raise
+
         return report
 
     def _format_qa_report(self, result: QAResult) -> str:
@@ -563,14 +576,9 @@ class QAService:
 
     async def _save_report(self, report: QAReport) -> None:
         """Save QA report metadata to Firestore."""
-        try:
-            doc_ref = self.firestore.client.collection(self.QA_REPORTS_COLLECTION).document(
-                report.id
-            )
-            doc_ref.set(report.to_firestore())
-            logger.info(f"Saved QA report metadata: {report.id}")
-        except Exception as e:
-            logger.error(f"Error saving QA report: {e}")
+        doc_ref = self.firestore.client.collection(self.QA_REPORTS_COLLECTION).document(report.id)
+        doc_ref.set(report.to_firestore())
+        logger.info(f"Saved QA report metadata: {report.id}")
 
     async def get_report(self, report_id: str, user_id: str | None = None) -> QAReport | None:
         """Get a saved QA report by ID with access control."""
