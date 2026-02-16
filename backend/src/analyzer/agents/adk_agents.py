@@ -328,9 +328,8 @@ include_non_indexed=True to find TDoc List spreadsheets
 - Use **list_meeting_attachments** to check for user-uploaded supplementary files
 
 For documents found:
-- If the document is a .docx (indexed or not): use **investigate_document** to read and \
-understand the meeting structure. It works for both indexed and non-indexed .docx documents.
-- If the document is .xlsx or other non-.docx format: check user attachments for this data
+- Use **investigate_document** to read and understand the meeting structure. \
+It works for .docx, .doc, .pptx, and .xlsx documents (both indexed and non-indexed).
 - If user attachments exist: use **read_attachment** to read their content
 
 Use the Agenda information to identify which agenda items relate to the user's question.
@@ -394,6 +393,7 @@ and technical specifics found during investigation
    - Delegates to a specialized sub-agent
    - Provide a focused investigation_query
    - **Always pass contribution_number and document_title from list results**
+   - Supports .docx, .doc, .pptx, and .xlsx files (both indexed and non-indexed)
    - Use for documents requiring detailed analysis
 
 5. **list_meeting_attachments**: List user-uploaded supplementary files
@@ -502,7 +502,8 @@ Focus on extracting specific, relevant information.
 1. **get_document_content**: Read the full document content (organized by sections)
    - Use the document_id from the input message
    - For indexed documents, returns all chunks with clause/page metadata
-   - For non-indexed documents, falls back to reading the original .docx from storage
+   - For non-indexed documents, falls back to reading the original file from storage \
+(supports .docx, .doc, .pptx, .xlsx)
 
 ## Guidelines
 - Read the full document content with get_document_content using the document_id from your input

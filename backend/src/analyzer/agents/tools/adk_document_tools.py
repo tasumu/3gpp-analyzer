@@ -39,6 +39,73 @@ def _extract_docx_text(content: bytes) -> str:
     return "\n\n".join(parts)
 
 
+def _extract_pptx_text(content: bytes) -> str:
+    """Extract text from .pptx bytes using python-pptx.
+
+    Returns slide content formatted as markdown with slide numbers as headings.
+    """
+    from pptx import Presentation
+
+    prs = Presentation(io.BytesIO(content))
+    parts: list[str] = []
+
+    for i, slide in enumerate(prs.slides, 1):
+        slide_texts: list[str] = []
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    text = para.text.strip()
+                    if text:
+                        slide_texts.append(text)
+            if shape.has_table:
+                table = shape.table
+                rows_text: list[str] = []
+                for j, row in enumerate(table.rows):
+                    cells = [cell.text.strip() for cell in row.cells]
+                    rows_text.append("| " + " | ".join(cells) + " |")
+                    if j == 0:
+                        rows_text.append("| " + " | ".join(["---"] * len(cells)) + " |")
+                if rows_text:
+                    slide_texts.append("\n".join(rows_text))
+        if slide_texts:
+            parts.append(f"## Slide {i}\n\n" + "\n\n".join(slide_texts))
+
+    return "\n\n".join(parts)
+
+
+def _extract_xlsx_text(content: bytes) -> str:
+    """Extract text from .xlsx bytes using openpyxl.
+
+    Returns sheet content formatted as markdown tables.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    sections: list[str] = []
+
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            continue
+
+        section_parts: list[str] = [f"## Sheet: {sheet_name}\n"]
+
+        header = rows[0]
+        header_strs = [str(c) if c is not None else "" for c in header]
+        section_parts.append("| " + " | ".join(header_strs) + " |")
+        section_parts.append("| " + " | ".join(["---"] * len(header)) + " |")
+
+        for row in rows[1:]:
+            cells = [str(c) if c is not None else "" for c in row]
+            section_parts.append("| " + " | ".join(cells) + " |")
+
+        sections.append("\n".join(section_parts))
+
+    wb.close()
+    return "\n\n".join(sections)
+
+
 async def get_document_summary(
     document_id: str,
     tool_context: ToolContext = None,
@@ -117,8 +184,8 @@ async def get_document_content(
     Get the full content of a specific document.
 
     For indexed documents, returns all chunks organized by sections.
-    For non-indexed documents with a .docx file in GCS, falls back to
-    direct text extraction from the original file.
+    For non-indexed documents, falls back to direct text extraction from GCS.
+    Supports .docx, .doc (via normalized .docx), .xlsx, and .pptx.
 
     Args:
         document_id: The document ID to get content for.
@@ -196,16 +263,32 @@ async def _get_document_content_from_gcs(ctx: AgentToolContext, document_id: str
             "total_chunks": 0,
         }
 
-    if not filename.lower().endswith(".docx"):
+    # Determine extraction strategy based on actual file at gcs_path and original filename
+    gcs_ext = gcs_path.lower().rsplit(".", 1)[-1] if "." in gcs_path else ""
+    filename_ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+
+    extractor = None
+    if gcs_ext == "docx":
+        # Covers both .docx originals and .doc files normalized to .docx
+        extractor = _extract_docx_text
+    elif filename_ext == "xlsx":
+        extractor = _extract_xlsx_text
+    elif filename_ext == "pptx":
+        extractor = _extract_pptx_text
+
+    if extractor is None:
         return {
-            "error": f"Direct reading not supported for {filename} (only .docx)",
+            "error": (
+                f"Direct reading not supported for {filename} "
+                f"(supported: .docx, .doc, .xlsx, .pptx)"
+            ),
             "sections": [],
             "total_chunks": 0,
         }
 
-    logger.info(f"Reading non-indexed document from GCS: {gcs_path}")
+    logger.info(f"Reading non-indexed document from GCS: {gcs_path} (original: {filename})")
     content_bytes = await ctx.storage.download_bytes(gcs_path)
-    text = _extract_docx_text(content_bytes)
+    text = extractor(content_bytes)
 
     return {
         "document_id": document_id,
