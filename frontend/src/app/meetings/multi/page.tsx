@@ -11,6 +11,7 @@ import {
   getMultipleMeetingInfo,
   createMultiMeetingSummarizeStream,
 } from "@/lib/api";
+import { useAuth } from "@/lib/auth/AuthContext";
 import type {
   AnalysisLanguage,
   MultiMeetingInfo,
@@ -36,6 +37,8 @@ function MultiMeetingPageContent() {
     [searchParams]
   );
 
+  const { userInfo } = useAuth();
+  const isAdmin = userInfo?.role === "admin";
   const [meetingInfo, setMeetingInfo] = useState<MultiMeetingInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -221,7 +224,8 @@ function MultiMeetingPageContent() {
           </div>
         )}
 
-        {/* Settings Panel */}
+        {/* Settings Panel - admin only */}
+        {isAdmin && (
         <div className="bg-white shadow-sm rounded-lg p-6 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900">Analysis Settings</h2>
 
@@ -286,6 +290,7 @@ function MultiMeetingPageContent() {
             {isSummarizing ? "Summarizing..." : "Summarize Meetings"}
           </button>
         </div>
+        )}
 
         {/* Progress */}
         {summaryProgress && (

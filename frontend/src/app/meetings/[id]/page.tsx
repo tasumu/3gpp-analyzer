@@ -16,6 +16,7 @@ import {
   listMeetingSummaries,
   createBatchProcessStream,
 } from "@/lib/api";
+import { useAuth } from "@/lib/auth/AuthContext";
 import type {
   AnalysisLanguage,
   MeetingInfo,
@@ -35,6 +36,8 @@ interface SummaryProgress {
 export default function MeetingDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { userInfo } = useAuth();
+  const isAdmin = userInfo?.role === "admin";
   const meetingId = decodeURIComponent(params.id as string);
 
   const [meetingInfo, setMeetingInfo] = useState<MeetingInfo | null>(null);
@@ -467,7 +470,24 @@ export default function MeetingDetailPage() {
           </div>
         )}
 
-        {/* Settings Panel */}
+        {/* Process All Documents - available to all approved users */}
+        {meetingInfo.unindexed_count > 0 && (
+          <div className="bg-white shadow-sm rounded-lg p-4 border border-gray-200">
+            <button
+              onClick={handleBatchProcess}
+              disabled={isSummarizing || isGeneratingReport || isProcessing}
+              className="px-4 py-2 bg-purple-600 text-white font-medium rounded-md
+                       hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {isProcessing
+                ? "Processing..."
+                : `Process All Documents (${meetingInfo.unindexed_count})`}
+            </button>
+          </div>
+        )}
+
+        {/* Settings Panel - admin only */}
+        {isAdmin && (
         <div className="bg-white shadow-sm rounded-lg p-6 border border-gray-200">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Analysis Settings</h2>
 
@@ -592,19 +612,6 @@ export default function MeetingDetailPage() {
 
             {/* Action Buttons */}
             <div className="flex flex-wrap items-start gap-3 pt-2">
-              {meetingInfo.unindexed_count > 0 && (
-                <button
-                  onClick={handleBatchProcess}
-                  disabled={isSummarizing || isGeneratingReport || isProcessing}
-                  className="px-4 py-2 bg-purple-600 text-white font-medium rounded-md
-                           hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {isProcessing
-                    ? "Processing..."
-                    : `Process All Documents (${meetingInfo.unindexed_count})`}
-                </button>
-              )}
-
               <div className="flex flex-col items-center">
                 <button
                   onClick={handleSummarize}
@@ -639,6 +646,7 @@ export default function MeetingDetailPage() {
             )}
           </div>
         </div>
+        )}
 
         {/* Progress */}
         {summaryProgress && (
