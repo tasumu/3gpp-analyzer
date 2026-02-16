@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from analyzer.dependencies import (
+    AdminUserDep,
     CurrentUserDep,
     DocumentServiceDep,
     MeetingReportGeneratorDep,
@@ -117,7 +118,7 @@ def multi_meeting_summary_to_response(summary: MultiMeetingSummary) -> MultiMeet
 async def summarize_meeting(
     meeting_id: str,
     request: MeetingSummarizeRequest,
-    current_user: CurrentUserDep,
+    admin_user: AdminUserDep,
     meeting_service: MeetingServiceDep,
 ):
     """
@@ -132,6 +133,8 @@ async def summarize_meeting(
     (e.g., "Focus on security implications" or "Highlight UE power saving topics").
 
     Results are cached and reused unless force=true.
+
+    Requires admin privileges.
     """
     try:
         result = await meeting_service.summarize_meeting(
@@ -139,7 +142,7 @@ async def summarize_meeting(
             analysis_prompt=request.analysis_prompt,
             report_prompt=request.report_prompt,
             language=request.language,
-            user_id=current_user.uid,
+            user_id=admin_user.uid,
             force=request.force,
         )
         return meeting_summary_to_response(result)
@@ -153,7 +156,7 @@ async def summarize_meeting(
 @router.get("/{meeting_id}/summarize/stream")
 async def summarize_meeting_stream(
     meeting_id: str,
-    current_user: CurrentUserDep,
+    admin_user: AdminUserDep,
     meeting_service: MeetingServiceDep,
     analysis_prompt: str | None = Query(None, max_length=2000),
     report_prompt: str | None = Query(None, max_length=2000),
@@ -178,7 +181,7 @@ async def summarize_meeting_stream(
                 analysis_prompt=analysis_prompt,
                 report_prompt=report_prompt,
                 language=language,
-                user_id=current_user.uid,
+                user_id=admin_user.uid,
                 force=force,
             ):
                 if event.type == "progress":
@@ -437,7 +440,7 @@ async def batch_process_meeting_stream(
 async def generate_meeting_report(
     meeting_id: str,
     request: MeetingReportRequest,
-    current_user: CurrentUserDep,
+    admin_user: AdminUserDep,
     report_generator: MeetingReportGeneratorDep,
 ):
     """
@@ -454,6 +457,8 @@ async def generate_meeting_report(
     4. Saves to GCS and returns a signed download URL
 
     The custom_prompt parameter allows focusing the report on specific aspects.
+
+    Requires admin privileges.
     """
     try:
         report = await report_generator.generate(
@@ -461,7 +466,7 @@ async def generate_meeting_report(
             analysis_prompt=request.analysis_prompt,
             report_prompt=request.report_prompt,
             language=request.language,
-            user_id=current_user.uid,
+            user_id=admin_user.uid,
         )
         return MeetingReportResponse(
             report_id=report.id,
@@ -529,7 +534,7 @@ async def list_meeting_reports(
 @router.post("/multi/summarize", response_model=MultiMeetingSummaryResponse)
 async def summarize_multiple_meetings(
     request: MultiMeetingSummarizeRequest,
-    current_user: CurrentUserDep,
+    admin_user: AdminUserDep,
     meeting_service: MeetingServiceDep,
 ):
     """
@@ -542,6 +547,8 @@ async def summarize_multiple_meetings(
     4. Returns combined summary with cross-meeting insights
 
     Results are cached and reused unless force=true.
+
+    Requires admin privileges.
     """
     try:
         result = await meeting_service.summarize_meetings(
@@ -549,7 +556,7 @@ async def summarize_multiple_meetings(
             analysis_prompt=request.analysis_prompt,
             report_prompt=request.report_prompt,
             language=request.language,
-            user_id=current_user.uid,
+            user_id=admin_user.uid,
             force=request.force,
         )
         return multi_meeting_summary_to_response(result)
@@ -562,7 +569,7 @@ async def summarize_multiple_meetings(
 
 @router.get("/multi/summarize/stream")
 async def summarize_multiple_meetings_stream(
-    current_user: CurrentUserDep,
+    admin_user: AdminUserDep,
     meeting_service: MeetingServiceDep,
     meeting_ids: str = Query(..., description="Comma-separated list of meeting IDs"),
     analysis_prompt: str | None = Query(None, max_length=2000),
@@ -601,7 +608,7 @@ async def summarize_multiple_meetings_stream(
                 analysis_prompt=analysis_prompt,
                 report_prompt=report_prompt,
                 language=language,
-                user_id=current_user.uid,
+                user_id=admin_user.uid,
                 force=force,
             ):
                 if event.type == "meeting_start":

@@ -6,7 +6,7 @@ import { formatFileSize } from "@/lib/types";
 interface DirectoryEntryProps {
   entry: FTPDirectoryEntry;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect?: () => void;
   onNavigate: () => void;
 }
 
@@ -26,7 +26,7 @@ export function DirectoryEntry({
 
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isDirectory) {
+    if (isDirectory && onSelect) {
       onSelect();
     }
   };
@@ -39,7 +39,7 @@ export function DirectoryEntry({
       onClick={handleClick}
     >
       <div className="flex items-center space-x-3">
-        {isDirectory && (
+        {isDirectory && onSelect && (
           <input
             type="radio"
             checked={isSelected}

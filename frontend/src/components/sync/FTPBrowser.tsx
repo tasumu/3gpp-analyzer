@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { browseFTP, createFTPSyncStream, startFTPSync } from "@/lib/api";
+import { useAuth } from "@/lib/auth/AuthContext";
 import type { FTPBrowseResponse, FTPSyncProgress } from "@/lib/types";
 import { Breadcrumb } from "./Breadcrumb";
 import { DirectoryEntry } from "./DirectoryEntry";
@@ -18,6 +19,8 @@ export function FTPBrowser() {
     null
   );
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const { userInfo } = useAuth();
+  const isAdmin = userInfo?.role === "admin";
 
   const loadDirectory = useCallback(async (path: string) => {
     setIsLoading(true);
@@ -196,10 +199,11 @@ export function FTPBrowser() {
               key={entry.name}
               entry={entry}
               isSelected={
+                isAdmin &&
                 selectedPath ===
                 `${currentPath.replace(/\/$/, "")}/${entry.name}`
               }
-              onSelect={() => handleSelect(entry.name)}
+              onSelect={isAdmin ? () => handleSelect(entry.name) : undefined}
               onNavigate={() =>
                 handleNavigate(
                   `${currentPath.replace(/\/$/, "")}/${entry.name}`
@@ -210,8 +214,8 @@ export function FTPBrowser() {
         )}
       </div>
 
-      {/* Selected path and sync button */}
-      {selectedPath && !syncProgress && (
+      {/* Selected path and sync button - admin only */}
+      {isAdmin && selectedPath && !syncProgress && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>

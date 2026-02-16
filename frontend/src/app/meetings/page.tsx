@@ -6,10 +6,13 @@ import { useEffect, useState } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
 import { MultipleMeetingSelector } from "@/components/MultipleMeetingSelector";
 import { listMeetings } from "@/lib/api";
+import { useAuth } from "@/lib/auth/AuthContext";
 import type { Meeting } from "@/lib/types";
 
 export default function MeetingsPage() {
   const router = useRouter();
+  const { userInfo } = useAuth();
+  const isAdmin = userInfo?.role === "admin";
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [selectedMeetingIds, setSelectedMeetingIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,8 +49,8 @@ export default function MeetingsPage() {
           </p>
         </div>
 
-        {/* Filter */}
-        {!isLoading && meetings.length > 0 && (
+        {/* Filter - admin only (multi-meeting analysis) */}
+        {isAdmin && !isLoading && meetings.length > 0 && (
           <div className="bg-white shadow-sm rounded-lg p-4 space-y-4">
             <MultipleMeetingSelector
               selectedMeetingIds={selectedMeetingIds}
