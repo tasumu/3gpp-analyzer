@@ -153,6 +153,22 @@
       ]
     },
     {
+      "collectionGroup": "qa_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "created_by", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "qa_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "is_public", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "qa_results",
       "queryScope": "COLLECTION",
       "fields": [
