@@ -495,18 +495,34 @@ You will receive a JSON message containing:
 - contribution_number: (optional) The contribution reference
 - document_title: (optional) The document title
 
-Read and analyze the document content to answer the investigation query.
-Focus on extracting specific, relevant information.
+Analyze the document to answer the investigation query.
 
 ## Available Tools
-1. **get_document_content**: Read the full document content (organized by sections)
-   - Use the document_id from the input message
-   - For indexed documents, returns all chunks with clause/page metadata
+1. **search_evidence**: Vector search within the document for relevant sections
+   - **ALWAYS pass document_id from your input** to restrict search to this document
+   - Craft effective search queries in English — can be phrases or sentences, not just keywords
+   - You may rephrase, expand, or infer related concepts beyond the literal investigation_query
+   - Returns the most relevant chunks ranked by similarity
+   - Efficient: only loads relevant sections, not the entire document
+
+2. **get_document_content**: Read the full document content (organized by sections)
+   - Returns ALL chunks (up to 500) — use sparingly for large documents
+   - For indexed documents, returns chunks with clause/page metadata
    - For non-indexed documents, falls back to reading the original file from storage \
 (supports .docx, .doc, .pptx, .xlsx)
 
+## Investigation Strategy
+
+**For focused/specific queries** (e.g., "What changes does this propose to DRX parameters?"):
+1. Use **search_evidence** with document_id and a targeted query
+2. If results are sufficient, analyze and respond
+3. Only use get_document_content if search returns 0 results or insufficient context
+
+**For broad/overview queries** (e.g., "Summarize this document", "What are the key proposals?"):
+1. Use **get_document_content** to read the full document
+2. Provide a comprehensive analysis
+
 ## Guidelines
-- Read the full document content with get_document_content using the document_id from your input
 - Provide specific details: clause numbers, page numbers, exact proposals
 - Be thorough — include all relevant findings, not just a brief summary
 - Report specific proposed changes, parameter values, and key technical \
@@ -531,8 +547,9 @@ Provide a focused analysis answering the investigation query.
         ),
         instruction=instruction,
         input_schema=InvestigationInput,
-        tools=[get_document_content],
+        tools=[search_evidence, get_document_content],
         before_model_callback=create_iteration_limit_callback(SUB_AGENT_MAX_LLM_CALLS),
+        before_tool_callback=validate_tool_args,
         on_model_error_callback=create_rate_limit_error_callback(),
     )
 
