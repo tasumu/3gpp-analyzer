@@ -42,6 +42,12 @@ export function Header() {
               Q&A
             </Link>
             <Link
+              href="/qa/reports"
+              className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+            >
+              Reports
+            </Link>
+            <Link
               href="/sync"
               className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
             >

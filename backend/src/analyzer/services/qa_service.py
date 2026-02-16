@@ -543,7 +543,7 @@ class QAService:
         if result.evidences:
             sections.extend(
                 [
-                    "## Evidence Citations",
+                    "### Evidence Citations",
                     "",
                 ]
             )
@@ -556,7 +556,7 @@ class QAService:
                 citation_parts = [p for p in [contrib, clause, page] if p]
                 citation = ", ".join(citation_parts)
 
-                sections.append(f"### [{i}] {citation}")
+                sections.append(f"#### [{i}] {citation}")
                 sections.append("")
                 sections.append(f"- **Relevance**: {score}")
                 if ev.clause_title:
