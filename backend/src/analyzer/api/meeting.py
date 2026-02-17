@@ -324,7 +324,7 @@ async def get_meeting_info(
     download_only_count = total - analyzable_count
     indexed = sum(1 for d in all_docs if d.status == DocumentStatus.INDEXED)
     downloaded_dl_only = sum(
-        1 for d in all_docs if not d.analyzable and d.status != DocumentStatus.METADATA_ONLY
+        1 for d in all_docs if not d.analyzable and d.status == DocumentStatus.DOWNLOADED
     )
     undownloaded_count = download_only_count - downloaded_dl_only
     unindexed_count = analyzable_count - indexed
@@ -399,7 +399,7 @@ async def batch_process_meeting_stream(
                     doc
                     for doc in all_docs
                     if (doc.analyzable and doc.status != DocumentStatus.INDEXED)
-                    or (not doc.analyzable and doc.status == DocumentStatus.METADATA_ONLY)
+                    or (not doc.analyzable and doc.status != DocumentStatus.DOWNLOADED)
                 ]
 
             if not documents:
