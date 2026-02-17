@@ -331,6 +331,7 @@ export interface Attachment {
   file_size_bytes: number;
   uploaded_by: string;
   created_at: string;
+  session_id?: string;
 }
 
 // Meeting Summary Types (P3-02)

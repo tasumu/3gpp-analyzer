@@ -682,7 +682,19 @@ class ADKAgentRunner:
         Returns:
             The session_id (same as input).
         """
-        await cleanup_expired_sessions()
+        expired_session_ids = await cleanup_expired_sessions()
+        if expired_session_ids and self.agent_context.attachment_service:
+            for expired_id in expired_session_ids:
+                try:
+                    count = await self.agent_context.attachment_service.delete_by_session(
+                        expired_id
+                    )
+                    if count:
+                        logger.info(
+                            f"Cleaned up {count} attachments for expired session {expired_id}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to clean up attachments for session {expired_id}: {e}")
 
         existing_session = await self.session_service.get_session(
             app_name=APP_NAME,

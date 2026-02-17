@@ -125,7 +125,9 @@ async def list_meeting_attachments(
     logger.info(f"Listing attachments for meeting: {meeting_id}")
 
     try:
-        attachments = await ctx.attachment_service.list_by_meeting(meeting_id)
+        attachments = await ctx.attachment_service.list_by_meeting(
+            meeting_id, session_id=ctx.session_id
+        )
         results = [
             {
                 "attachment_id": a.id,

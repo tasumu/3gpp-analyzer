@@ -68,12 +68,12 @@ def touch_session(session_id: str) -> None:
         _session_timestamps[session_id] = datetime.now(UTC)
 
 
-async def cleanup_expired_sessions() -> int:
+async def cleanup_expired_sessions() -> list[str]:
     """
     Remove sessions that have exceeded the TTL.
 
     Returns:
-        Number of sessions cleaned up.
+        List of expired session IDs that were cleaned up.
     """
     global _last_cleanup
 
@@ -81,7 +81,7 @@ async def cleanup_expired_sessions() -> int:
 
     # Skip if cleanup was done recently
     if _last_cleanup and now - _last_cleanup < CLEANUP_INTERVAL:
-        return 0
+        return []
 
     _last_cleanup = now
     expired_sessions = []
@@ -100,7 +100,7 @@ async def cleanup_expired_sessions() -> int:
             # The memory will be reclaimed when the service is reset or
             # when we implement a custom session service with proper deletion.
 
-    return len(expired_sessions)
+    return expired_sessions
 
 
 def get_active_session_count() -> int:
