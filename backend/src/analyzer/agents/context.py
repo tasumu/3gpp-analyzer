@@ -78,7 +78,7 @@ class AgentToolContext:
         """Reset used evidences for a new run."""
         self.used_evidences = []
 
-    def get_unique_evidences(self, limit: int = 20) -> list[Evidence]:
+    def get_unique_evidences(self, limit: int = 50) -> list[Evidence]:
         """Get deduplicated evidences sorted by relevance."""
         seen_chunks: set[str] = set()
         unique: list[Evidence] = []
