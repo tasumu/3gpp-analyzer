@@ -10,6 +10,7 @@ from google.adk.agents import LlmAgent
 from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps.app import App
 from google.adk.models.google_llm import Gemini
+from google.adk.planners import BuiltInPlanner
 from google.adk.runners import Runner
 from google.adk.tools.agent_tool import AgentTool
 from google.genai import types as genai_types
@@ -255,6 +256,7 @@ def create_agentic_search_agent(
     meeting_id: str,
     model: str = "gemini-3-pro-preview",
     language: str = "ja",
+    enable_thinking: bool = False,
 ) -> LlmAgent:
     """
     Create an agentic search agent for multi-step document investigation.
@@ -444,11 +446,21 @@ valuable. Avoid being overly brief.
     )
     investigation_tool = AgentTool(agent=investigation_agent, skip_summarization=False)
 
+    planner = None
+    if enable_thinking:
+        planner = BuiltInPlanner(
+            thinking_config=genai_types.ThinkingConfig(
+                include_thoughts=True,
+                thinking_budget=2048,
+            )
+        )
+
     return LlmAgent(
         model=_create_gemini_model(model),
         name="agentic_search_agent",
         description="Agentic search agent for multi-step document investigation",
         instruction=instruction,
+        planner=planner,
         tools=[
             list_meeting_documents_enhanced,
             search_evidence,
@@ -787,9 +799,12 @@ class ADKAgentRunner:
                 session_id=session_id,
                 new_message=user_message,
             ):
-                # Detect function call events (tool invocations)
+                # Detect thinking, function call, and function response events
                 if event.content and event.content.parts:
                     for part in event.content.parts:
+                        # Yield model thinking/reasoning (BuiltInPlanner thoughts)
+                        if getattr(part, "thought", False) and part.text:
+                            yield {"type": "thinking", "content": part.text}
                         if hasattr(part, "function_call") and part.function_call:
                             fc = part.function_call
                             # Summarize args to avoid flooding the stream
