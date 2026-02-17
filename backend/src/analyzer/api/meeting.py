@@ -323,6 +323,11 @@ async def get_meeting_info(
     analyzable_count = sum(1 for d in all_docs if d.analyzable)
     download_only_count = total - analyzable_count
     indexed = sum(1 for d in all_docs if d.status == DocumentStatus.INDEXED)
+    downloaded_dl_only = sum(
+        1 for d in all_docs if not d.analyzable and d.status == DocumentStatus.DOWNLOADED
+    )
+    undownloaded_count = download_only_count - downloaded_dl_only
+    unindexed_count = analyzable_count - indexed
 
     # Parse meeting_id to get working group
     parts = meeting_id.split("#")
@@ -337,7 +342,8 @@ async def get_meeting_info(
         "indexed_documents": indexed,
         "analyzable_documents": analyzable_count,
         "download_only_documents": download_only_count,
-        "unindexed_count": analyzable_count - indexed,
+        "unindexed_count": unindexed_count,
+        "unprocessed_count": unindexed_count + undownloaded_count,
         "ready_for_analysis": indexed > 0,
     }
 
@@ -385,14 +391,15 @@ async def batch_process_meeting_stream(
                     break
                 page += 1
 
-            # Filter documents to process
+            # Filter documents to process (analyzable + non-analyzable needing download)
             if force:
-                documents = [doc for doc in all_docs if doc.analyzable]
+                documents = list(all_docs)
             else:
                 documents = [
                     doc
                     for doc in all_docs
-                    if doc.analyzable and doc.status != DocumentStatus.INDEXED
+                    if (doc.analyzable and doc.status != DocumentStatus.INDEXED)
+                    or (not doc.analyzable and doc.status != DocumentStatus.DOWNLOADED)
                 ]
 
             if not documents:

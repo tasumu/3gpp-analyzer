@@ -185,21 +185,15 @@ async def process_document(
     """
     Trigger document processing.
 
-    Starts the processing pipeline: normalize → chunk → vectorize → index.
-    Use the SSE endpoint to monitor progress.
+    For analyzable documents (.doc, .docx, .zip): runs the full pipeline
+    (normalize → chunk → vectorize → index).
+    For non-analyzable documents (.xlsx, .pptx, .pdf, etc.): downloads to GCS only.
     """
     force = request.force if request else False
 
-    # Check analyzability before processing
     doc = await processor.document_service.get(document_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if not doc.analyzable:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Document is not analyzable ({doc.source_file.filename}). "
-            f"Only .doc, .docx, and .zip files are supported for analysis.",
-        )
 
     try:
         doc = await processor.process_document(document_id, force=force)

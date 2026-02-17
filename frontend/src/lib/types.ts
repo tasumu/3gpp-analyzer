@@ -109,7 +109,10 @@ export function isProcessing(status: DocumentStatus): boolean {
 }
 
 export function isProcessable(status: DocumentStatus, analyzable: boolean = true): boolean {
-  if (!analyzable) return false;
+  if (!analyzable) {
+    // Non-analyzable: can trigger download if still at metadata_only
+    return status === "metadata_only";
+  }
   return [
     "metadata_only",
     "downloaded",
@@ -384,6 +387,7 @@ export interface MeetingInfo {
   analyzable_documents: number;
   download_only_documents: number;
   unindexed_count: number;
+  unprocessed_count: number;
   ready_for_analysis: boolean;
 }
 

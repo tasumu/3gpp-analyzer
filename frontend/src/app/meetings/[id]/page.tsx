@@ -232,7 +232,7 @@ export default function MeetingDetailPage() {
 
     setIsProcessing(true);
     setProcessProgress({
-      total: meetingInfo?.unindexed_count || 0,
+      total: meetingInfo?.unprocessed_count ?? meetingInfo?.unindexed_count ?? 0,
       processed: 0,
       current_document: null,
       current_status: null,
@@ -471,7 +471,7 @@ export default function MeetingDetailPage() {
         )}
 
         {/* Process All Documents - available to all approved users */}
-        {meetingInfo.unindexed_count > 0 && (
+        {(meetingInfo.unprocessed_count ?? meetingInfo.unindexed_count) > 0 && (
           <div className="bg-white shadow-sm rounded-lg p-4 border border-gray-200">
             <button
               onClick={handleBatchProcess}
@@ -481,7 +481,7 @@ export default function MeetingDetailPage() {
             >
               {isProcessing
                 ? "Processing..."
-                : `Process All Documents (${meetingInfo.unindexed_count})`}
+                : `Process All Documents (${meetingInfo.unprocessed_count ?? meetingInfo.unindexed_count})`}
             </button>
           </div>
         )}
