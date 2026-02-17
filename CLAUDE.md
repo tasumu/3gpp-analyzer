@@ -36,9 +36,10 @@ npm run lint     # Lint
 
 1. **RAG Abstraction**: Analysis code depends on `EvidenceProvider` interface, NOT on RAG implementation details. RAG backend is swappable (Firestore, Dify, LangGraph, Elastic).
 
-2. **Tool Security**: Internal tools are NOT public APIs:
-   - Private: FTP access, ZIP extraction, doc→docx conversion, embedding, DB operations
-   - Public: Analysis APIs, document listing, downloads
+2. **Tool Security**: Internal tools must NOT be exposed as standalone public APIs:
+   - Internal (used only within backend services): FTP access, ZIP extraction, doc→docx conversion, embedding, DB operations
+   - Public-facing: Analysis APIs, document listing, downloads
+   - Note: Authenticated endpoints (e.g. `/process`) may invoke internal tools as part of their pipeline
 
 3. **Evidence Traceability**: All analysis results MUST include citations with contribution_number, clause_number, page_number, and relevance score.
 
