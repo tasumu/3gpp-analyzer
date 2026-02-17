@@ -185,8 +185,9 @@ async def process_document(
     """
     Trigger document processing.
 
-    Starts the processing pipeline: normalize → chunk → vectorize → index.
-    Use the SSE endpoint to monitor progress.
+    For analyzable documents (.doc, .docx, .zip): runs the full pipeline
+    (normalize → chunk → vectorize → index).
+    For non-analyzable documents (.xlsx, .pptx, .pdf, etc.): downloads to GCS only.
     """
     force = request.force if request else False
 
