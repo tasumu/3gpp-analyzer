@@ -86,6 +86,7 @@ UIには2つのカスタムプロンプト入力欄がある。
 │                                                             │
 │  2. agentic_search_agent                                    │
 │     Model: gemini-3-pro-preview                             │
+│     Planner: BuiltInPlanner (opt-in, thinking_budget=2048)  │
 │     用途: Agentic QA / Generate Full Report                 │
 │     呼出元: QAService (mode=AGENTIC) /                      │
 │            MeetingReportGenerator                           │
@@ -100,7 +101,8 @@ UIには2つのカスタムプロンプト入力欄がある。
 │     3. investigate_document (Sub-Agent)      │                │
 │        Model: gemini-3-flash-preview        │                │
 │        Input: InvestigationInput (Pydantic) │                │
-│        Tools: get_document_content のみ      │                │
+│        Tools: search_evidence,              │                │
+│               get_document_content          │                │
 │                                                             │
 └────────────────────────────────────────────────────────────┘
 ```

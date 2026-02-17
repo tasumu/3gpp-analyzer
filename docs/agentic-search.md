@@ -42,6 +42,8 @@ Q&A画面の新しいモード「Agentic Search」の設計。従来の RAG Sear
 │  │   └─ 事前計算済みサマリー取得                     │
 │  ├── investigate_document (AgentTool)            │
 │  │   └── Document Investigation Agent            │
+│  │       ├── search_evidence (document_id指定)    │
+│  │       │   └─ ベクトル検索で関連セクションのみ取得  │
 │  │       └── get_document_content                │
 │  │           ├─ indexed: 全チャンク読み(max 500)   │
 │  │           └─ 非indexed: GCS .docxフォールバック  │
@@ -63,8 +65,10 @@ Q&A画面の新しいモード「Agentic Search」の設計。従来の RAG Sear
 ```
 Frontend (SSE) ← Backend (EventSourceResponse)
     │
+    ├── event: thinking     {"content": "ユーザーの質問を分析すると..."}  ※opt-in
     ├── event: tool_call    {"tool": "list_meeting_documents", "args": {...}}
     ├── event: tool_result  {"tool": "list_meeting_documents", "summary": "Found 45 documents"}
+    ├── event: thinking     {"content": "45件の寄書が見つかった。次に..."}
     ├── event: tool_call    {"tool": "search_evidence", "args": {...}}
     ├── event: tool_result  {"tool": "search_evidence", "summary": "5 relevant results"}
     ├── event: tool_call    {"tool": "investigate_document", "args": {...}}
@@ -126,13 +130,13 @@ async def investigate_document(
 
 内部動作:
 1. `create_document_investigation_agent()` でサブAgent 生成
-2. サブAgent は `get_document_content` で文書全体を読み取り・分析
-   - indexed 文書: 全チャンク取得（max_chunks=500、clause/page メタデータ付き）
-   - 非indexed .docx文書: GCS から原本をダウンロードし python-docx でテキスト抽出
-3. サブAgent の応答テキスト（分析結果）のみを返却
-
-**設計判断**: サブAgent にはRAG検索（`search_evidence`）を持たせない。
-全文読解に専念し、RAG検索は親Agent 側で meeting 横断の補完・検証用途に使う。
+2. サブAgent はクエリ種別に応じて2つの戦略を使い分ける:
+   - **Focused query**（特定トピック調査）: `search_evidence` に `document_id` を指定してベクトル検索 → 関連セクションのみ取得。結果が不十分な場合のみ `get_document_content` にフォールバック
+   - **Broad query**（文書概要・全体把握）: `get_document_content` で文書全体を読み取り・分析
+     - indexed 文書: 全チャンク取得（max_chunks=500、clause/page メタデータ付き）
+     - 非indexed .docx文書: GCS から原本をダウンロードし python-docx でテキスト抽出
+3. `validate_tool_args` コールバックで `search_evidence` の `top_k` を最大50に制限
+4. サブAgent の応答テキスト（分析結果）のみを返却
 
 返却値:
 ```json
@@ -206,6 +210,15 @@ Settings Bar に切替ボタンを追加:
 - Agentic Search 選択時は scope を自動的に `meeting` に制限
 - RAG Search 選択時は全スコープ（document, meeting, global）選択可
 
+### Thinking トグル（Agentic Search 専用）
+
+Agentic Search モード選択時、ツールバーに「Thinking」トグルスイッチを表示。
+有効にすると、Agent のツール選択前の推論過程（BuiltInPlanner の思考）がステップ一覧にリアルタイム表示される。
+
+- デフォルト: OFF（思考表示はレイテンシ・トークンコスト増のため opt-in）
+- 表示スタイル: 灰色イタリック、line-clamp-2（長文は2行で省略）
+- RAG Search モード時はトグル非表示
+
 ### 中間ステップ表示
 
 Agentic Search の応答中、ツール呼び出しと結果を逐次表示:
@@ -242,9 +255,15 @@ class QARequest(BaseModel):
 
 `GET /qa/stream` に `mode` パラメータ追加:
 ```
-GET /qa/stream?question=...&scope=meeting&scope_id=SA2%23162&mode=agentic
+GET /qa/stream?question=...&scope=meeting&scope_id=SA2%23162&mode=agentic&show_thinking=true
 ```
 
+| パラメータ | 型 | デフォルト | 説明 |
+|-----------|---|----------|------|
+| mode | string | rag | `rag` or `agentic` |
+| show_thinking | bool | false | AI思考プロセスをストリーミング表示（agentic モード時のみ有効） |
+
 新ストリームイベント:
+- `thinking`: `{"content": "思考内容テキスト"}` — `show_thinking=true` 時のみ送信。BuiltInPlanner (ThinkingConfig) による推論過程
 - `tool_call`: `{"tool": "tool_name", "args": {"key": "value"}}`
 - `tool_result`: `{"tool": "tool_name", "summary": "result summary"}`
