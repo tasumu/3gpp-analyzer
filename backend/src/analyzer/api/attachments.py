@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from analyzer.dependencies import (
@@ -25,6 +25,7 @@ class AttachmentResponse(BaseModel):
     file_size_bytes: int
     uploaded_by: str
     created_at: str
+    session_id: str | None = None
 
 
 class AttachmentContentResponse(BaseModel):
@@ -41,6 +42,7 @@ async def upload_attachment(
     current_user: CurrentUserDep,
     attachment_service: AttachmentServiceDep,
     file: UploadFile = File(...),
+    session_id: str | None = Form(None),
 ):
     """Upload a supplementary file for a meeting."""
     content = await file.read()
@@ -55,6 +57,7 @@ async def upload_attachment(
             content=content,
             content_type=file.content_type or "application/octet-stream",
             uploaded_by=current_user.uid,
+            session_id=session_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -67,6 +70,7 @@ async def upload_attachment(
         file_size_bytes=attachment.file_size_bytes,
         uploaded_by=attachment.uploaded_by,
         created_at=attachment.created_at.isoformat(),
+        session_id=attachment.session_id,
     )
 
 
@@ -75,9 +79,10 @@ async def list_attachments(
     meeting_id: str,
     current_user: CurrentUserDep,
     attachment_service: AttachmentServiceDep,
+    session_id: str | None = Query(None),
 ):
-    """List all attachments for a meeting."""
-    attachments = await attachment_service.list_by_meeting(meeting_id)
+    """List all attachments for a meeting, optionally filtered by session."""
+    attachments = await attachment_service.list_by_meeting(meeting_id, session_id=session_id)
     return [
         AttachmentResponse(
             id=a.id,
@@ -87,6 +92,7 @@ async def list_attachments(
             file_size_bytes=a.file_size_bytes,
             uploaded_by=a.uploaded_by,
             created_at=a.created_at.isoformat(),
+            session_id=a.session_id,
         )
         for a in attachments
     ]

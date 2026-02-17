@@ -161,6 +161,7 @@ class QAService:
                 storage=self.storage,
                 attachment_service=self.attachment_service,
                 meeting_id=effective_scope_id,
+                session_id=session_id,
             )
         else:
             agent_scope = "global" if multi_meeting_mode else scope.value
@@ -303,6 +304,7 @@ class QAService:
                 storage=self.storage,
                 attachment_service=self.attachment_service,
                 meeting_id=effective_scope_id,
+                session_id=session_id,
             )
         else:
             agent_scope = "global" if multi_meeting_mode else scope.value

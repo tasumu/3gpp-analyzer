@@ -180,16 +180,16 @@ export default function QAPage() {
     scrollToBottom();
   }, [messages]);
 
-  // Load attachments when meeting changes in agentic mode
+  // Load attachments when meeting or session changes in agentic mode
   useEffect(() => {
     if (mode === "agentic" && scopeIds.length === 1) {
-      listAttachments(scopeIds[0])
+      listAttachments(scopeIds[0], sessionId)
         .then(setAttachments)
         .catch(() => setAttachments([]));
     } else {
       setAttachments([]);
     }
-  }, [mode, scopeIds]);
+  }, [mode, scopeIds, sessionId]);
 
   const toggleEvidences = (messageId: string) => {
     setExpandedEvidences((prev) => ({
@@ -235,7 +235,7 @@ export default function QAPage() {
     if (!file || scopeIds.length !== 1) return;
     setIsUploading(true);
     try {
-      const attachment = await uploadAttachment(scopeIds[0], file);
+      const attachment = await uploadAttachment(scopeIds[0], file, sessionId);
       setAttachments((prev) => [attachment, ...prev]);
       toast.success(`Uploaded: ${file.name}`);
     } catch {
@@ -572,6 +572,7 @@ export default function QAPage() {
 
   const clearChat = () => {
     setMessages([]);
+    setAttachments([]);
     setSessionId(generateSessionId());
   };
 
