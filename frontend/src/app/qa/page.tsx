@@ -167,6 +167,7 @@ export default function QAPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [generatingReportId, setGeneratingReportId] = useState<string | null>(null);
   const [showThinking, setShowThinking] = useState(false);
+  const [useSummary, setUseSummary] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -301,6 +302,7 @@ export default function QAPage() {
           sessionId,
           mode,
           showThinking,
+          mode === "agentic" ? useSummary : false,
         );
 
         let fullAnswer = "";
@@ -478,6 +480,7 @@ export default function QAPage() {
           language,
           session_id: sessionId,
           mode,
+          use_summary: mode === "agentic" ? useSummary : undefined,
         });
 
         setMessages((prev) => [
@@ -641,6 +644,27 @@ export default function QAPage() {
                 <span
                   className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
                     showThinking ? "translate-x-[18px]" : "translate-x-[3px]"
+                  }`}
+                />
+              </button>
+            </label>
+          )}
+
+          {mode === "agentic" && (
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <span className="text-sm text-gray-500">Use Summary</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={useSummary}
+                onClick={() => setUseSummary(!useSummary)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                  useSummary ? "bg-purple-500" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                    useSummary ? "translate-x-[18px]" : "translate-x-[3px]"
                   }`}
                 />
               </button>

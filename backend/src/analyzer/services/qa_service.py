@@ -90,6 +90,7 @@ class QAService:
         user_id: str | None = None,
         session_id: str | None = None,
         mode: QAMode = QAMode.RAG,
+        use_summary: bool = False,
     ) -> QAResult:
         """
         Answer a question using RAG or agentic search.
@@ -149,6 +150,7 @@ class QAService:
                 meeting_id=effective_scope_id,
                 model=self.model,
                 language=language,
+                use_summary=use_summary,
             )
             agent_context = AgentToolContext(
                 evidence_provider=self.evidence_provider,
@@ -223,6 +225,7 @@ class QAService:
         session_id: str | None = None,
         mode: QAMode = QAMode.RAG,
         enable_thinking: bool = False,
+        use_summary: bool = False,
     ) -> AsyncGenerator[QAStreamEvent, None]:
         """
         Answer a question with streaming response.
@@ -292,6 +295,7 @@ class QAService:
                 model=self.model,
                 language=language,
                 enable_thinking=enable_thinking,
+                use_summary=use_summary,
             )
             agent_context = AgentToolContext(
                 evidence_provider=self.evidence_provider,
