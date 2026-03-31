@@ -652,12 +652,16 @@ export async function deleteQAReport(reportId: string): Promise<void> {
 export async function uploadAttachment(
   meetingId: string,
   file: File,
+  sessionId?: string,
 ): Promise<Attachment> {
   const token = await getAuthToken();
   if (!token) throw new Error("Authentication required");
 
   const formData = new FormData();
   formData.append("file", file);
+  if (sessionId) {
+    formData.append("session_id", sessionId);
+  }
 
   const response = await fetch(
     `${API_BASE}/meetings/${encodeURIComponent(meetingId)}/attachments`,
@@ -676,9 +680,15 @@ export async function uploadAttachment(
 
 export async function listAttachments(
   meetingId: string,
+  sessionId?: string,
 ): Promise<Attachment[]> {
+  const params = new URLSearchParams();
+  if (sessionId) {
+    params.set("session_id", sessionId);
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
   return fetchApi<Attachment[]>(
-    `/meetings/${encodeURIComponent(meetingId)}/attachments`,
+    `/meetings/${encodeURIComponent(meetingId)}/attachments${query}`,
   );
 }
 

@@ -31,6 +31,7 @@ class AttachmentService:
         content: bytes,
         content_type: str,
         uploaded_by: str,
+        session_id: str | None = None,
     ) -> Attachment:
         """
         Upload a file, extract text, and store metadata.
@@ -85,6 +86,7 @@ class AttachmentService:
             extracted_text_gcs_path=text_gcs_path,
             file_size_bytes=len(content),
             uploaded_by=uploaded_by,
+            session_id=session_id,
         )
         self.firestore.client.collection(ATTACHMENTS_COLLECTION).document(attachment_id).set(
             attachment.to_firestore()
@@ -163,13 +165,16 @@ class AttachmentService:
         wb.close()
         return "\n\n".join(sections)
 
-    async def list_by_meeting(self, meeting_id: str) -> list[Attachment]:
-        """List all attachments for a meeting."""
-        query = (
-            self.firestore.client.collection(ATTACHMENTS_COLLECTION)
-            .where("meeting_id", "==", meeting_id)
-            .order_by("created_at", direction="DESCENDING")
+    async def list_by_meeting(
+        self, meeting_id: str, session_id: str | None = None
+    ) -> list[Attachment]:
+        """List all attachments for a meeting, optionally filtered by session."""
+        query = self.firestore.client.collection(ATTACHMENTS_COLLECTION).where(
+            "meeting_id", "==", meeting_id
         )
+        if session_id:
+            query = query.where("session_id", "==", session_id)
+        query = query.order_by("created_at", direction="DESCENDING")
         results = []
         for doc in query.stream():
             results.append(Attachment.from_firestore(doc.id, doc.to_dict()))
@@ -237,3 +242,36 @@ class AttachmentService:
 
         logger.info(f"Deleted attachment {attachment_id}: {attachment.filename}")
         return True
+
+    async def delete_by_session(self, session_id: str) -> int:
+        """Delete all attachments belonging to a session.
+
+        Args:
+            session_id: Session ID whose attachments should be deleted.
+
+        Returns:
+            Number of attachments deleted.
+        """
+        query = self.firestore.client.collection(ATTACHMENTS_COLLECTION).where(
+            "session_id", "==", session_id
+        )
+        deleted_count = 0
+        for doc in query.stream():
+            attachment = Attachment.from_firestore(doc.id, doc.to_dict())
+            try:
+                await self.storage.delete(attachment.gcs_path)
+            except Exception:
+                logger.warning(f"Failed to delete GCS file: {attachment.gcs_path}")
+            if attachment.extracted_text_gcs_path:
+                try:
+                    await self.storage.delete(attachment.extracted_text_gcs_path)
+                except Exception:
+                    logger.warning(
+                        f"Failed to delete GCS text: {attachment.extracted_text_gcs_path}"
+                    )
+            doc.reference.delete()
+            deleted_count += 1
+
+        if deleted_count:
+            logger.info(f"Deleted {deleted_count} attachments for expired session {session_id}")
+        return deleted_count

@@ -74,6 +74,9 @@ class AgentToolContext:
     # Meeting ID for meeting-scoped agents
     meeting_id: str | None = None
 
+    # Session ID for session-scoped attachment filtering
+    session_id: str | None = None
+
     def reset_evidences(self) -> None:
         """Reset used evidences for a new run."""
         self.used_evidences = []

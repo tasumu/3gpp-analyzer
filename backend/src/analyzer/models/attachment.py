@@ -20,6 +20,7 @@ class Attachment(BaseModel):
     file_size_bytes: int = Field(..., description="File size in bytes")
     uploaded_by: str = Field(..., description="User ID who uploaded the file")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    session_id: str | None = Field(None, description="QA session ID this attachment belongs to")
 
     def to_firestore(self) -> dict[str, Any]:
         """Convert to Firestore-compatible dictionary."""
