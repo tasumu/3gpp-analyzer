@@ -47,7 +47,7 @@ class MeetingService:
         firestore: FirestoreClient,
         project_id: str,
         location: str = "asia-northeast1",
-        pro_model: str = "gemini-3-pro-preview",
+        pro_model: str = "gemini-3.1-pro-preview",
         pro_model_location: str = "global",
         strategy_version: str = "v1",
     ):

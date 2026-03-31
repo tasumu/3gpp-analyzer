@@ -46,7 +46,7 @@ class QAService:
         firestore: FirestoreClient,
         project_id: str,
         location: str = "asia-northeast1",
-        model: str = "gemini-3-pro-preview",
+        model: str = "gemini-3.1-pro-preview",
         save_results: bool = True,
         document_service: DocumentService | None = None,
         attachment_service: "AttachmentService | None" = None,

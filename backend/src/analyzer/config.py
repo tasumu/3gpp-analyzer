@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     ftp_mock_mode: bool = False  # Use mock data for development
 
     # Vertex AI - Unified global location for all services
-    # Note: All Gemini models (embedding, 2.5-flash, 3-pro-preview) are available in global region
+    # Note: All Gemini models (embedding, 2.5-flash, 3.1-pro-preview) are available in global region
     # Global region provides better availability and reduces 429 errors
     vertex_ai_location: str = "global"
     embedding_model: str = "gemini-embedding-001"
@@ -58,8 +58,8 @@ class Settings(BaseSettings):
 
     # Phase 3: Meeting Analysis & Q&A
     meeting_flash_model: str = "gemini-2.5-flash"  # Lightweight model for individual summaries
-    meeting_pro_model: str = "gemini-3-pro-preview"  # High-performance model for overall reports
-    qa_model: str = "gemini-3-pro-preview"  # Model for Q&A agents
+    meeting_pro_model: str = "gemini-3.1-pro-preview"  # High-performance model for overall reports
+    qa_model: str = "gemini-3.1-pro-preview"  # Model for Q&A agents
     meeting_summary_strategy_version: str = "v1"
 
     # Context Caching (cost optimization for agentic search)

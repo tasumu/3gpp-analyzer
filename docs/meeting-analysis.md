@@ -80,12 +80,12 @@ UIには2つのカスタムプロンプト入力欄がある。
 ├────────────────────────────────────────────────────────────┤
 │                                                             │
 │  1. qa_agent                                                │
-│     Model: gemini-3-pro-preview                             │
+│     Model: gemini-3.1-pro-preview                           │
 │     用途: RAG QA (search_evidence のみ)                     │
 │     呼出元: QAService (mode=RAG)                            │
 │                                                             │
 │  2. agentic_search_agent                                    │
-│     Model: gemini-3-pro-preview                             │
+│     Model: gemini-3.1-pro-preview                           │
 │     Planner: BuiltInPlanner (opt-in, thinking_budget=2048)  │
 │     用途: Agentic QA / Generate Full Report                 │
 │     呼出元: QAService (mode=AGENTIC) /                      │

@@ -97,7 +97,7 @@ def _create_gemini_model(model_name: str) -> Gemini:
 
 
 def create_qa_agent(
-    model: str = "gemini-3-pro-preview",
+    model: str = "gemini-3.1-pro-preview",
     scope: str = "global",
     scope_id: str | None = None,
     language: str = "ja",
@@ -254,7 +254,7 @@ Structure your response as:
 
 def create_agentic_search_agent(
     meeting_id: str,
-    model: str = "gemini-3-pro-preview",
+    model: str = "gemini-3.1-pro-preview",
     language: str = "ja",
     enable_thinking: bool = False,
 ) -> LlmAgent:
