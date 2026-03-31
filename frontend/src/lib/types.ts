@@ -291,6 +291,7 @@ export interface QARequest {
   language: AnalysisLanguage;
   session_id?: string | null;
   mode?: QAMode;
+  use_summary?: boolean;
 }
 
 export interface QAEvidence {

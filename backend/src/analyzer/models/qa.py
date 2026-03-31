@@ -62,6 +62,10 @@ class QARequest(BaseModel):
         default=QAMode.RAG,
         description="Q&A mode: rag (RAG-only) or agentic (multi-tool exploration)",
     )
+    use_summary: bool = Field(
+        default=False,
+        description="Use document summaries in agentic search mode",
+    )
 
 
 class QAResult(BaseModel):

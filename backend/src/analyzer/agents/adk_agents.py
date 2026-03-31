@@ -257,6 +257,7 @@ def create_agentic_search_agent(
     model: str = "gemini-3.1-pro-preview",
     language: str = "ja",
     enable_thinking: bool = False,
+    use_summary: bool = False,
 ) -> LlmAgent:
     """
     Create an agentic search agent for multi-step document investigation.
@@ -269,6 +270,7 @@ def create_agentic_search_agent(
         meeting_id: Target meeting ID (e.g., 'SA2#162').
         model: LLM model name.
         language: Response language (ja or en).
+        use_summary: Whether to use get_document_summary for quick checks.
 
     Returns:
         Configured LlmAgent instance with planning capabilities.
@@ -301,6 +303,18 @@ def create_agentic_search_agent(
 
     lang_text = lang_instructions.get(language, lang_instructions["ja"])
     refusal_text = lang_refusal.get(language, lang_refusal["ja"])
+
+    if use_summary:
+        summary_step_text = (
+            "- First use **get_document_summary** to quickly check the overview. "
+            "If `has_analysis` is false or you need deeper investigation, use "
+            "**investigate_document** for detailed analysis"
+        )
+    else:
+        summary_step_text = (
+            "- Skip **get_document_summary** and go directly to "
+            "**investigate_document** when you need detailed analysis"
+        )
 
     instruction = f"""You are an expert investigative analyst for 3GPP standardization \
 documents in meeting {meeting_id}.
@@ -351,9 +365,8 @@ Use **list_meeting_documents_enhanced** to explore the meeting's contributions:
 
 ### 5. Investigate Key Documents
 For documents you've identified as highly relevant:
-- First use **get_document_summary** to quickly check the overview. If `has_analysis` is false
-  or you need deeper investigation, use **investigate_document** for detailed analysis
-  (this delegates to a specialized sub-agent that reads the full content).
+{summary_step_text}
+    (this delegates to a specialized sub-agent that reads the full content).
 
 ### 6. Supplement with RAG Search
 Use **search_evidence** to:
@@ -461,14 +474,24 @@ valuable. Avoid being overly brief.
         description="Agentic search agent for multi-step document investigation",
         instruction=instruction,
         planner=planner,
-        tools=[
-            list_meeting_documents_enhanced,
-            search_evidence,
-            get_document_summary,
-            investigation_tool,
-            list_meeting_attachments,
-            read_attachment,
-        ],
+        tools=(
+            [
+                list_meeting_documents_enhanced,
+                search_evidence,
+                get_document_summary,
+                investigation_tool,
+                list_meeting_attachments,
+                read_attachment,
+            ]
+            if use_summary
+            else [
+                list_meeting_documents_enhanced,
+                search_evidence,
+                investigation_tool,
+                list_meeting_attachments,
+                read_attachment,
+            ]
+        ),
         before_model_callback=create_iteration_limit_callback(MAIN_AGENT_MAX_LLM_CALLS),
         before_tool_callback=validate_tool_args,
         on_model_error_callback=create_rate_limit_error_callback(),

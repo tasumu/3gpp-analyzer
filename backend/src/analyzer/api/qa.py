@@ -100,6 +100,7 @@ async def ask_question(
             user_id=current_user.uid,
             session_id=request.session_id,
             mode=QAMode(request.mode),
+            use_summary=request.use_summary,
         )
         return qa_result_to_response(result)
     except ValueError as e:
@@ -121,6 +122,7 @@ async def ask_question_stream(
     session_id: str | None = Query(None, description="Session ID for conversation continuity"),
     mode: str = Query("rag", pattern="^(rag|agentic)$", description="Q&A mode"),
     show_thinking: bool = Query(False, description="Show AI thinking process (agentic mode)"),
+    use_summary: bool = Query(False, description="Use document summaries (agentic mode)"),
 ):
     """
     Answer a question with streaming response (SSE).
@@ -169,6 +171,7 @@ async def ask_question_stream(
                 session_id=session_id,
                 mode=qa_mode,
                 enable_thinking=show_thinking,
+                use_summary=use_summary,
             ):
                 if event.type == "chunk":
                     yield {

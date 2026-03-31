@@ -38,7 +38,7 @@ Q&A画面の新しいモード「Agentic Search」の設計。従来の RAG Sear
 │  │   └─ Agenda/TDoc_List ファイル名部分検索         │
 │  ├── search_evidence (既存)                      │
 │  │   └─ RAGベクトル検索（meeting横断）              │
-│  ├── get_document_summary (既存)                  │
+│  ├── get_document_summary (既存, Use Summary時のみ) │
 │  │   └─ 事前計算済みサマリー取得                     │
 │  ├── investigate_document (AgentTool)            │
 │  │   └── Document Investigation Agent            │
@@ -217,6 +217,14 @@ Agentic Search モード選択時、ツールバーに「Thinking」トグルス
 
 - デフォルト: OFF（思考表示はレイテンシ・トークンコスト増のため opt-in）
 - 表示スタイル: 灰色イタリック、line-clamp-2（長文は2行で省略）
+- RAG Search モード時はトグル非表示
+
+### Use Summary トグル（Agentic Search 専用）
+
+Agentic Search モード選択時、ツールバーに「Use Summary」トグルスイッチを表示。
+有効にすると、メインAgentが `get_document_summary` を使って事前サマリーを確認できる。
+
+- デフォルト: OFF（コンテキスト使用量を抑えるため）
 - RAG Search モード時はトグル非表示
 
 ### 中間ステップ表示
